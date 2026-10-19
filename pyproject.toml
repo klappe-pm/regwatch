@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "regwatch"
+dynamic = ["version"]
+description = "Monitor regulatory sources for changes and flag candidate impacts on your own register of obligations, for human review."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Kevin Lappe" }]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy"]
+
+[project.scripts]
+regwatch = "regwatch.cli:main"
+
+[project.urls]
+Repository = "https://github.com/klappe-pm/regwatch"
+
+[tool.hatch.version]
+path = "regwatch/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["regwatch"]
+
+[tool.hatch.build.targets.sdist]
+include = ["regwatch", "tests", "examples", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["regwatch"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+# The formatter wraps code to 100 columns but cannot split long string literals,
+# so the line-length lint rule is left to the formatter.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S314"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["regwatch"]

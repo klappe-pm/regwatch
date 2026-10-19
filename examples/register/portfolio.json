@@ -1,0 +1,9 @@
+{
+  "name": "Example Pantry Co.",
+  "disclaimer": "Synthetic example data. Product attributes are invented and must be replaced with your own confirmed specifications.",
+  "products": [
+    {"product_id": "berry-spread", "name": "Berry Fruit Spread", "kind": "spread", "categories": ["colorants", "sweeteners"], "terms": ["carmine"], "claims": ["low-sugar"], "markets": ["nl"], "scopes": ["retail"], "confidence": "internal-model"},
+    {"product_id": "oat-bar", "name": "Oat Granola Bar", "kind": "snack", "categories": ["allergens"], "terms": ["milk", "peanut"], "claims": ["high-fiber"], "markets": ["nl-east", "sv"], "scopes": ["retail"], "confidence": "internal-model"},
+    {"product_id": "cinnamon-cereal", "name": "Cinnamon Breakfast Cereal", "kind": "cereal", "categories": ["sweeteners"], "terms": ["sucralose"], "claims": [], "markets": ["nl", "sv"], "scopes": ["retail", "school-channel"], "confidence": "internal-model"}
+  ]
+}

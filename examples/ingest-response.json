@@ -1,0 +1,35 @@
+{
+  "count": 3,
+  "results": [
+    {
+      "title": "Allergen labeling update for packaged snacks",
+      "abstract": "Proposes clearer allergen statements on packaged snack labels.",
+      "publication_date": "2026-10-12",
+      "html_url": "https://www.example.gov/documents/2026-20001",
+      "document_number": "2026-20001",
+      "type": "Proposed Rule",
+      "cfr_references": [{"title": 21, "part": 101}],
+      "agencies": [{"name": "Example Food Agency"}]
+    },
+    {
+      "title": "Notice of a public meeting on colour additives",
+      "abstract": "Announces a public meeting on colour additive petitions.",
+      "publication_date": "2026-10-09",
+      "html_url": "https://www.example.gov/documents/2026-20002",
+      "document_number": "2026-20002",
+      "type": "Notice",
+      "cfr_references": [{"title": 21, "part": 172}],
+      "agencies": [{"name": "Example Food Agency"}]
+    },
+    {
+      "title": "Facility registration fee schedule",
+      "abstract": "Sets fees for facility registration.",
+      "publication_date": "2026-10-07",
+      "html_url": "https://www.example.gov/documents/2026-20003",
+      "document_number": "2026-20003",
+      "type": "Rule",
+      "cfr_references": [{"title": 21, "part": 1}],
+      "agencies": [{"name": "Example Food Agency"}]
+    }
+  ]
+}
