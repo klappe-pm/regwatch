@@ -1,8 +1,10 @@
 # Publish to PyPI through trusted publishing when a version tag is pushed.
-# Three jobs: build checks the tag and builds the distributions, test installs the
-# built wheel and runs the suite against it, and publish uploads. The publish job
-# runs in the "pypi" environment, which requires an approval, and holds the only
-# id-token permission. No token is stored anywhere. Every pip install uses hashes.
+#
+# Three jobs, each with the least it needs:
+#   build    installs only the hash pinned build tools, checks the tag, builds the distributions.
+#   test     installs hash pinned test tools and the wheel that build made, then runs the suite.
+#   publish  needs both, runs in the "pypi" environment, and alone may request a PyPI token.
+# No PyPI token is stored anywhere.
 name: release
 
 on:
@@ -19,36 +21,36 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - name: tag is on main
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          git rev-parse --verify --quiet origin/main > /dev/null || { echo "origin/main was not fetched"; exit 1; }
-          git merge-base --is-ancestor HEAD origin/main || { echo "tag ${TAG} is not on main"; exit 1; }
+          fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+      - name: tagged commit is on main
+        run: |
+          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main || {
+            echo "the tagged commit ${GITHUB_SHA} is not an ancestor of origin/main"
+            exit 1
+          }
       - name: install the build tools
         run: python -m pip install --require-hashes -r requirements/build.txt
       - name: tag matches version
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          version="$(python -m hatchling version)"
+          version="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' regwatch/__init__.py)"
           test "v${version}" = "${TAG}" || { echo "tag ${TAG} does not match version ${version}"; exit 1; }
       - name: build
         run: python -m build --no-isolation
-      - name: checksums
+      - name: record checksums
         run: |
           {
-            echo "### Checksums"
+            echo '### Checksums'
             echo
             echo '```text'
             sha256sum dist/*
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } >> "${GITHUB_STEP_SUMMARY}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
@@ -73,11 +75,13 @@ jobs:
         run: python -m pip install --require-hashes -r requirements/ci.txt
       - name: install the built wheel
         run: python -m pip install --no-deps dist/*.whl
-      - name: the wheel is what gets tested
-        run: |
-          python -P -c 'import pathlib, regwatch; assert "site-packages" in pathlib.Path(regwatch.__file__).parts, regwatch.__file__'
+      - name: put the checkout's package out of the way
+        # The tests must import the wheel that will ship, not the source tree beside them.
+        run: rm -r regwatch
+      - name: the wheel is what the tests import
+        run: python -c "import pathlib, regwatch; assert 'site-packages' in pathlib.Path(regwatch.__file__).parts, regwatch.__file__"
       - name: test
-        run: python -P -m pytest -q
+        run: python -m pytest -q
 
   publish:
     needs: [build, test]
