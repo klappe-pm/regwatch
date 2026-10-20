@@ -206,3 +206,117 @@ def test_write_tree_does_not_follow_a_link_to_a_new_file(tmp_path: Path) -> None
     with pytest.raises(AlreadyExistsError):
         write_tree(tmp_path / "p", {"a.txt": "x"}, replace=False)
     assert outside.read_text(encoding="utf-8") == "precious"
+
+
+# --- the branches that guard against a name clash, a failed rename and a failed open ---------
+
+
+def _fixed_names(monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
+    """Make the random part of a temporary name come from ``names``, then repeat the last."""
+    import regwatch.state as state_module
+
+    queue = list(names)
+
+    def token_hex(_size: int = 16) -> str:
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(state_module.secrets, "token_hex", token_hex)
+
+
+def test_write_tree_replace_skips_a_temporary_name_that_is_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".regwatch-aaaa.tmp").write_text("someone else's", encoding="utf-8")
+    _fixed_names(monkeypatch, "aaaa", "bbbb")
+    write_tree(tmp_path, {"out.txt": "new"}, replace=True)
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "new"
+    assert (tmp_path / ".regwatch-aaaa.tmp").read_text(encoding="utf-8") == "someone else's"
+    assert sorted(p.name for p in tmp_path.iterdir()) == [".regwatch-aaaa.tmp", "out.txt"]
+
+
+def test_write_tree_replace_gives_up_when_every_temporary_name_is_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".regwatch-aaaa.tmp").write_text("someone else's", encoding="utf-8")
+    _fixed_names(monkeypatch, "aaaa")
+    with pytest.raises(StateError, match="cannot write in"):
+        write_tree(tmp_path, {"out.txt": "new"}, replace=True)
+    assert not (tmp_path / "out.txt").exists()
+    assert (tmp_path / ".regwatch-aaaa.tmp").read_text(encoding="utf-8") == "someone else's"
+
+
+def test_write_tree_replace_removes_its_temporary_file_when_the_rename_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "out.txt").write_text("keep", encoding="utf-8")
+
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(13, "denied")
+
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(StateError, match="cannot write in"):
+        write_tree(tmp_path, {"out.txt": "new"}, replace=True)
+    assert [p.name for p in tmp_path.iterdir()] == ["out.txt"]
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "keep"
+
+
+def test_write_tree_reports_a_folder_it_cannot_open_as_a_state_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_open = os.open
+
+    def deny_directories(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        if flags & os.O_DIRECTORY:
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "open", deny_directories)
+    with pytest.raises(StateError, match="Permission denied"):
+        write_tree(tmp_path, {"out.txt": "x"}, replace=False)
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("leaf", ["..", "."])
+def test_a_path_that_names_a_folder_through_a_dot_name_is_refused(
+    tmp_path: Path, leaf: str
+) -> None:
+    (tmp_path / "sub").mkdir()
+    with pytest.raises(StateError, match="is a directory"):
+        safe_write_text(tmp_path / "sub" / leaf, "x", [])
+
+
+def test_safe_write_gives_up_when_every_temporary_name_is_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".regwatch-aaaa.tmp").write_text("someone else's", encoding="utf-8")
+    _fixed_names(monkeypatch, "aaaa")
+    with pytest.raises(StateError, match="cannot write"):
+        safe_write_text(tmp_path / "out.txt", "x", [])
+    assert not (tmp_path / "out.txt").exists()
+
+
+def test_safe_write_skips_a_temporary_name_that_is_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".regwatch-aaaa.tmp").write_text("someone else's", encoding="utf-8")
+    _fixed_names(monkeypatch, "aaaa", "bbbb")
+    safe_write_text(tmp_path / "out.txt", "x", [])
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "x"
+    assert (tmp_path / ".regwatch-aaaa.tmp").exists()
+
+
+def test_a_protected_file_that_cannot_be_compared_does_not_block_a_different_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    protected = tmp_path / "register.csv"
+    protected.write_text("keep", encoding="utf-8")
+    target = tmp_path / "out.txt"
+    target.write_text("old", encoding="utf-8")
+
+    def broken(_a: object, _b: object) -> bool:
+        raise OSError(5, "input/output error")
+
+    monkeypatch.setattr(os.path, "samefile", broken)
+    safe_write_text(target, "new", [protected])
+    assert target.read_text(encoding="utf-8") == "new"
+    assert protected.read_text(encoding="utf-8") == "keep"
