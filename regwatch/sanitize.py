@@ -29,12 +29,20 @@ _URL_FORBIDDEN = re.compile("[\\s()\\[\\]<>`\"'\\\\{}|^]")
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>&#~|!])")
 _BULLET_START = re.compile(r"^(\s*)([-+])(\s)")
 _ORDERED_START = re.compile(r"^(\s*)(\d{1,9})([.)])(\s)")
-# A renderer that links bare text turns "https://host", "www.host", "host.com" and
-# "name@host" into links. Escaping the colon of "://", every "@", and every dot
-# between a letter or digit and a letter breaks all of those without changing how
-# the text reads.
+# A renderer that links bare text turns "https://host", "www.host", "host.com",
+# "name@host" and "xmpp:name@host/r" into links. The text is split at whitespace and
+# each token is made safe on its own:
+#
+# - a token that holds an "@" or a "scheme:" prefix is shown in a code span, where
+#   no renderer links anything and no backslash escape is needed;
+# - in any other token the dot after a "www" (whatever follows it) and every dot
+#   between two word characters (letters and digits of any script) are escaped,
+#   and so is the colon of "://".
 _AUTOLINK_COLON = re.compile(r":(?=//)")
-_AUTOLINK_DOT = re.compile(r"(?<=[A-Za-z0-9])\.(?=[A-Za-z])")
+_AUTOLINK_DOT = re.compile(r"(?:www)\.|(?<=\w)\.(?=\w)", re.IGNORECASE)
+_NEEDS_CODE_SPAN = re.compile(r"@|[A-Za-z][A-Za-z0-9+.\-]*:[^\s:]")
+_BACKTICK_RUN = re.compile(r"`+")
+_WHITESPACE = re.compile(r"(\s+)")
 _RULE_ONLY = re.compile(r"[-=\s]+")
 
 
@@ -110,6 +118,25 @@ def safe_https_url(value: object) -> str:
     return text
 
 
+def _escape_dot(match: re.Match[str]) -> str:
+    return match.group(0)[:-1] + "\\."
+
+
+def _code_span(token: str) -> str:
+    """``token`` as a code span whose fence is longer than any backtick run inside it."""
+    fence = "`" * (max((len(run) for run in _BACKTICK_RUN.findall(token)), default=0) + 1)
+    pad = " " if token.startswith("`") or token.endswith("`") else ""
+    return f"{fence}{pad}{token}{pad}{fence}"
+
+
+def _escape_token(token: str) -> str:
+    if _NEEDS_CODE_SPAN.search(token):
+        return _code_span(token)
+    escaped = _MD_SPECIAL.sub(r"\\\1", token)
+    escaped = _AUTOLINK_COLON.sub(r"\\:", escaped)
+    return _AUTOLINK_DOT.sub(_escape_dot, escaped)
+
+
 def escape_markdown(text: str) -> str:
     """Escape Markdown metacharacters in ``text`` so it renders as literal text.
 
@@ -117,16 +144,21 @@ def escape_markdown(text: str) -> str:
     ampersand, hash, tilde, bar and exclamation mark are backslash-escaped, and a
     leading list marker is escaped, so a value can never become a link, an image,
     raw HTML, a heading or a list item. A value made only of hyphens or equals
-    signs (which would be a horizontal rule) has them escaped. The colon of ``://``,
-    every ``@`` and every dot between a letter or digit and a letter are escaped
-    too, so a renderer that links bare text cannot turn a web address, a ``www.``
-    name, a bare domain or an email address in a value into a link.
+    signs (which would be a horizontal rule) has them escaped.
+
+    The text is split at whitespace so that a renderer that links bare text cannot
+    link anything in it. A word that holds an ``@`` or starts with a ``scheme:``
+    (an email address, ``mailto:``, ``xmpp:``) is put in a code span, with a fence
+    longer than any run of backticks inside it, so it shows exactly as written. In
+    every other word the dot after ``www`` (whatever follows) and every dot between
+    two word characters, of any script, and the colon of ``://`` are escaped, so a
+    web address, a ``www.`` name or a bare domain stays text.
     """
-    escaped = _MD_SPECIAL.sub(r"\\\1", text)
+    escaped = "".join(
+        part if not part or part.isspace() else _escape_token(part)
+        for part in _WHITESPACE.split(text)
+    )
     if _RULE_ONLY.fullmatch(text):
         escaped = escaped.replace("-", "\\-").replace("=", "\\=")
-    escaped = _AUTOLINK_COLON.sub(r"\\:", escaped)
-    escaped = _AUTOLINK_DOT.sub(r"\\.", escaped)
-    escaped = escaped.replace("@", "\\@")
     escaped = _BULLET_START.sub(r"\1\\\2\3", escaped)
     return _ORDERED_START.sub(r"\1\2\\\3\4", escaped)

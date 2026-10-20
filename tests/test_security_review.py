@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+import re
 import stat
 from collections.abc import Callable
 from pathlib import Path
@@ -503,11 +504,12 @@ RULE_VALUES = ["---", "- - -", "===", "***", "___", "* * *", "-- -", "= = ="]
 def test_escaped_text_cannot_be_autolinked(value: str) -> None:
     from regwatch.sanitize import escape_markdown
 
-    escaped = escape_markdown(value)
-    assert "://" not in escaped.replace("\\://", "")
-    assert "@" not in escaped.replace("\\@", "")
+    # What is outside a code span (where nothing is linked) holds no bare address.
+    outside = re.sub(r"`[^`]*`", "", escape_markdown(value))
+    assert "://" not in outside.replace("\\://", "")
+    assert "@" not in outside
     for word in ("www.", "evil.com", "evil.example"):
-        assert word not in escaped.lower().replace("\\.", "\x00")
+        assert word not in outside.lower().replace("\\.", "\x00")
 
 
 @pytest.mark.parametrize("value", RULE_VALUES)
@@ -523,7 +525,11 @@ def test_a_value_of_only_rule_characters_is_escaped(value: str) -> None:
 def test_ordinary_text_keeps_its_numbers_and_sentences() -> None:
     from regwatch.sanitize import escape_markdown
 
-    assert escape_markdown("Section 101.9 applies from 2027.") == "Section 101.9 applies from 2027."
+    # A dot between two digits is escaped like any dot between word characters; it still
+    # renders as a dot.
+    assert (
+        escape_markdown("Section 101.9 applies from 2027.") == "Section 101\\.9 applies from 2027."
+    )
     assert escape_markdown("a - b") == "a - b"
 
 
@@ -540,6 +546,69 @@ def test_rendered_markdown_has_no_link_and_only_the_documents_own_rule() -> None
     assert html.count("<hr") == 1
     assert "<ol" not in html
     assert html.count("<blockquote") == 1  # the disclaimer at the end
+
+
+# --- rw2-01: GitHub's renderer (cmark-gfm) must not link any value ---------------------------
+
+GFM_VALUES = [
+    "mail security@evil.example now",
+    "security@evil.example",
+    "Visit www.пример.рф/login to confirm",
+    "Visit www.мойсайт.рф now",
+    "Visit www.évil.com now",
+    "Visit www.0day.co now",
+    "Visit www.10.0.0.1/admin now",
+    "Visit www.1.2.3.4.nip.io now",
+    "www.xn--e1afmkfd.xn--p1ai",
+    "WWW.EVIL.COM and wWw.Evil.Com/x",
+    "www.-evil.com www./x www.",
+    "(www.evil.com) *www.evil.com* _www.evil.com_ ~www.evil.com~",
+    "xmpp:a@b.co/r and mailto:a@b.co",
+    "tel:+15551234567 and javascript:alert(1) and data:text/html,x",
+    "ftp://files.evil.example/a and https://evil.example/reset and HTTP://EVIL.EXAMPLE",
+    "см. https://пример.рф/страница",
+    "a`b@c.example and a``b@c.example and `@c.example`",
+    "<evil@x.example> and <https://evil.example>",
+    "user@例え.jp and пример@evil.example",
+    "evil.example/path and evil。example",
+]
+
+
+@pytest.mark.parametrize("value", GFM_VALUES)
+def test_github_flavoured_rendering_has_no_link(value: str) -> None:
+    cmarkgfm = pytest.importorskip("cmarkgfm")
+    from cmarkgfm.cmark import Options
+
+    from regwatch.document import Document, Section
+    from regwatch.render import render_markdown
+
+    doc = Document("T", "2026-10-20", sections=[Section("S", paragraphs=[value], bullets=[value])])
+    html = cmarkgfm.github_flavored_markdown_to_html(
+        render_markdown(doc), options=Options.CMARK_OPT_UNSAFE
+    )
+    assert "<a" not in html, html
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("mail security@evil.example now", "mail `security@evil.example` now"),
+        ("xmpp:a@b.co/r", "`xmpp:a@b.co/r`"),
+        ("mailto:x", "`mailto:x`"),
+        ("a`b@c.example", "``a`b@c.example``"),
+        ("a``b@c.example", "```a``b@c.example```"),
+        ("`@c.example", "`` `@c.example ``"),
+        ("c.example@`", "`` c.example@` ``"),
+        ("www.пример.рф/login", "www\\.пример\\.рф/login"),
+        ("www.10.0.0.1/admin", "www\\.10\\.0\\.0\\.1/admin"),
+        ("WWW.Evil.com www./x", "WWW\\.Evil\\.com www\\./x"),
+        ("Note: nothing here.", "Note: nothing here."),
+    ],
+)
+def test_escape_markdown_for_autolinks(value: str, expected: str) -> None:
+    from regwatch.sanitize import escape_markdown
+
+    assert escape_markdown(value) == expected
 
 
 # --- rw-06: output paths written through symbolic links ----------------------------------

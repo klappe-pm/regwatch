@@ -182,12 +182,14 @@ def test_markdown_and_web_output_render_hostile_candidates_as_literal_text(
     for output in (render_markdown(doc), render_webpost(doc, ["regulatory"])):
         assert ESC not in output and "\x07" not in output
         assert "<script>" not in output
+        # A word with a "scheme:" prefix is shown whole in a code span, where nothing is linked.
+        assert "`[click](javascript:alert(1))`" in output
+        assert "`![pixel](https://tracker.example/p.png)`" in output
         body = "\n".join(line for line in output.splitlines() if not line.startswith("> "))
-        assert not re.search(r"(?<!\\)[\[\]<>`]", body)  # every bracket and tag is escaped
+        body = re.sub(r"(?<!\\)`.*?(?<!\\)`", "", body)  # code spans link nothing
+        assert not re.search(r"(?<!\\)[\[\]<>`]", body)  # every other bracket and tag is escaped
         assert not re.search(r"(?<!\\)!\\\[", body)
         assert "\\<script\\>" in output
-        assert "\\[click\\]" in output
-        assert "\\!\\[pixel\\]" in output
 
 
 def test_html_text_and_docx_output_of_hostile_text() -> None:
