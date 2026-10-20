@@ -20,8 +20,10 @@ from pathlib import Path
 
 __all__ = [
     "SOURCE_ID_RE",
+    "AlreadyExistsError",
     "SeenState",
     "StateError",
+    "create_text_file",
     "load_seen",
     "read_snapshot",
     "safe_write_bytes",
@@ -39,6 +41,10 @@ SeenState = dict[str, dict[str, str]]
 
 class StateError(Exception):
     """A state file is unreadable or a write was refused."""
+
+
+class AlreadyExistsError(StateError):
+    """A file that was to be created exclusively already exists."""
 
 
 def safe_write_text(path: Path, text: str, protected: Iterable[Path]) -> None:
@@ -79,6 +85,26 @@ def safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None
             raise
     except OSError as exc:
         raise StateError(f"cannot write {path}: {exc.strerror or exc}") from exc
+
+
+def create_text_file(path: Path, text: str) -> None:
+    """Create ``path`` with ``text`` as UTF-8, failing if anything is already there.
+
+    The file is created with ``O_EXCL`` and without following a link, so a file or a
+    link that appeared after an earlier check is never replaced or followed. The
+    mode is 0o644 as limited by the umask. Raises AlreadyExistsError when the path
+    is taken and StateError for any other failure.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(path, flags, 0o644)
+    except FileExistsError as exc:
+        raise AlreadyExistsError(f"{path} already exists") from exc
+    except OSError as exc:
+        raise StateError(f"cannot write {path}: {exc.strerror or exc}") from exc
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(text.encode("utf-8", errors="replace"))
 
 
 def _literal_target(path: Path) -> Path:

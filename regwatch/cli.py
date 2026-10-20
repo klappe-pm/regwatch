@@ -80,7 +80,9 @@ from regwatch.render import (
 from regwatch.sanitize import clean_line, clean_text
 from regwatch.state import (
     MAX_STATE_BYTES,
+    AlreadyExistsError,
     StateError,
+    create_text_file,
     load_seen,
     safe_write_bytes,
     safe_write_text,
@@ -691,26 +693,16 @@ def _refuse_existing(directory: Path, force: bool) -> list[str]:
 
 
 def _write_scaffold_file(path: Path, text: str, *, replace: bool) -> None:
-    """Write one scaffold file. Without ``replace`` it must not exist yet and is created exclusively.
-
-    ``O_EXCL`` makes the creation fail if anything, a file or a link, is already at the
-    path, and ``O_NOFOLLOW`` refuses a link in the last part, so no check can be raced.
-    """
+    """Write one scaffold file. Without ``replace`` it must not exist yet and is created exclusively."""
     if replace:
         safe_write_text(path, text, ())
         return
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor = os.open(path, flags, 0o644)
-    except FileExistsError as exc:
+        create_text_file(path, text)
+    except AlreadyExistsError as exc:
         raise CommandError(
             f"{path} appeared while init was running and was left unchanged; add --force to replace it"
         ) from exc
-    except OSError as exc:
-        raise CommandError(f"cannot write {path}: {exc.strerror or exc}") from exc
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(text.encode("utf-8", errors="replace"))
 
 
 def _ask_focus(args: argparse.Namespace) -> tuple[str, ...]:
