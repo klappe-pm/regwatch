@@ -133,7 +133,8 @@ _V6_REFUSED = tuple(
     )
 )
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
-_ISATAP_IDS = (0x00005EFE, 0x02005EFE)  # the high half of an ISATAP interface identifier
+_ISATAP_IDS = (0x00005EFE, 0x01005EFE, 0x02005EFE, 0x03005EFE)
+"""The high half of an ISATAP interface identifier, with the universal and group bits."""
 
 
 def _embedded_ipv4(ip: ipaddress.IPv6Address) -> list[ipaddress.IPv4Address] | None:
@@ -161,7 +162,8 @@ def is_public_address(address: str) -> bool:
     multicast and unspecified addresses are all not public. An IPv6 address that
     embeds an IPv4 address (an IPv4-mapped address, a NAT64 address in
     ``64:ff9b::/96``, a 6to4 address in ``2002::/16`` or a Teredo address in
-    ``2001::/32``) or an ISATAP interface identifier (``0:5efe`` or ``200:5efe``) is
+    ``2001::/32``) or an ISATAP interface identifier (``0:5efe``, ``100:5efe``,
+    ``200:5efe`` or ``300:5efe``, the universal and group bits each set or clear) is
     judged by the IPv4 addresses it carries, and every one of them must be public
     (a 6to4 prefix with an ISATAP identifier carries two). The whole range ``::/8``
     (which holds the IPv4-compatible, SIIT and loopback addresses), the deprecated

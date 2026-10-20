@@ -418,6 +418,10 @@ def test_allow_private_hosts_opts_in() -> None:
         "2600::5efe:7f00:1",  # ISATAP interface id carrying 127.0.0.1
         "2600::200:5efe:7f00:1",  # ISATAP with the global-scope bit set
         "2600::5efe:a00:1",  # ISATAP carrying 10.0.0.1
+        "2600::100:5efe:7f00:1",  # ISATAP with the group bit set, carrying 127.0.0.1
+        "2600::300:5efe:7f00:1",  # ISATAP with both bits set, carrying 127.0.0.1
+        "2600::100:5efe:a9fe:a9fe",  # ISATAP with the group bit set, carrying 169.254.169.254
+        "2600::300:5efe:a01:203",  # ISATAP with both bits set, carrying 10.1.2.3
         "64:ff9b::7f00:1",  # NAT64 /96 carrying 127.0.0.1
     ],
 )
@@ -430,6 +434,8 @@ def test_isatap_with_a_public_ipv4_and_plain_addresses_still_pass() -> None:
     assert is_public_address("64:ff9b::5db8:d822")  # NAT64 /96 carrying 93.184.216.34
     assert is_public_address("2600::1234:5678")
     assert is_public_address("2a00:1450:4001::200e")
+    assert is_public_address("2600::100:5efe:808:808")  # group bit set, carrying 8.8.8.8
+    assert is_public_address("2600::300:5efe:808:808")  # both bits set, carrying 8.8.8.8
 
 
 def test_an_internationalised_host_and_a_non_ascii_path_are_encoded_for_the_wire() -> None:
