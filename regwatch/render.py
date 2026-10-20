@@ -7,7 +7,8 @@ parts and is built here directly, so no document library is needed.
 
 HTML and Word output escape every piece of text. Markdown output backslash-escapes
 every Markdown metacharacter, so a value renders as literal text and can never
-become a link, an image, raw HTML, a heading or a list item. Plain text carries
+become a link, an image, raw HTML, a heading, a list item or a horizontal rule, and
+the punctuation that makes a renderer link bare text is escaped too. Plain text carries
 text as it is. Every value first loses its control characters, which removes
 terminal escape sequences. Every format ends with the disclaimer.
 """

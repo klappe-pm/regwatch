@@ -29,6 +29,13 @@ _URL_FORBIDDEN = re.compile("[\\s()\\[\\]<>`\"'\\\\{}|^]")
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>&#~|!])")
 _BULLET_START = re.compile(r"^(\s*)([-+])(\s)")
 _ORDERED_START = re.compile(r"^(\s*)(\d{1,9})([.)])(\s)")
+# A renderer that links bare text turns "https://host", "www.host", "host.com" and
+# "name@host" into links. Escaping the colon of "://", every "@", and every dot
+# between a letter or digit and a letter breaks all of those without changing how
+# the text reads.
+_AUTOLINK_COLON = re.compile(r":(?=//)")
+_AUTOLINK_DOT = re.compile(r"(?<=[A-Za-z0-9])\.(?=[A-Za-z])")
+_RULE_ONLY = re.compile(r"[-=\s]+")
 
 
 def _drop_invisible(text: str) -> str:
@@ -109,8 +116,17 @@ def escape_markdown(text: str) -> str:
     Backslash, backtick, asterisk, underscore, brackets, angle brackets,
     ampersand, hash, tilde, bar and exclamation mark are backslash-escaped, and a
     leading list marker is escaped, so a value can never become a link, an image,
-    raw HTML, a heading or a list item.
+    raw HTML, a heading or a list item. A value made only of hyphens or equals
+    signs (which would be a horizontal rule) has them escaped. The colon of ``://``,
+    every ``@`` and every dot between a letter or digit and a letter are escaped
+    too, so a renderer that links bare text cannot turn a web address, a ``www.``
+    name, a bare domain or an email address in a value into a link.
     """
     escaped = _MD_SPECIAL.sub(r"\\\1", text)
+    if _RULE_ONLY.fullmatch(text):
+        escaped = escaped.replace("-", "\\-").replace("=", "\\=")
+    escaped = _AUTOLINK_COLON.sub(r"\\:", escaped)
+    escaped = _AUTOLINK_DOT.sub(r"\\.", escaped)
+    escaped = escaped.replace("@", "\\@")
     escaped = _BULLET_START.sub(r"\1\\\2\3", escaped)
     return _ORDERED_START.sub(r"\1\2\\\3\4", escaped)

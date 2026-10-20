@@ -479,3 +479,62 @@ def test_a_slow_name_lookup_hits_the_total_deadline() -> None:
     finally:
         release.set()
     assert network.connected == []
+
+
+# --- rw-05: Markdown autolinks and horizontal rules ----------------------------------------
+
+AUTOLINK_VALUES = [
+    "Reset at https://evil.example/reset now",
+    "HTTP://EVIL.EXAMPLE/A",
+    "Click www.evil.example/login to confirm",
+    "WWW.EVIL.EXAMPLE",
+    "//evil.example/x",
+    "visit evil.com/path",
+    "mail security@evil.example",
+    "mailto:security@evil.example",
+    "ftp://files.evil.example/a",
+]
+RULE_VALUES = ["---", "- - -", "===", "***", "___", "* * *", "-- -", "= = ="]
+
+
+@pytest.mark.parametrize("value", AUTOLINK_VALUES)
+def test_escaped_text_cannot_be_autolinked(value: str) -> None:
+    from regwatch.sanitize import escape_markdown
+
+    escaped = escape_markdown(value)
+    assert "://" not in escaped.replace("\\://", "")
+    assert "@" not in escaped.replace("\\@", "")
+    for word in ("www.", "evil.com", "evil.example"):
+        assert word not in escaped.lower().replace("\\.", "\x00")
+
+
+@pytest.mark.parametrize("value", RULE_VALUES)
+def test_a_value_of_only_rule_characters_is_escaped(value: str) -> None:
+    from regwatch.sanitize import escape_markdown
+
+    escaped = escape_markdown(value)
+    assert escaped.replace("\\", "").strip() == value.strip()
+    for char in "-=*_":
+        assert char not in escaped.replace("\\" + char, "")
+
+
+def test_ordinary_text_keeps_its_numbers_and_sentences() -> None:
+    from regwatch.sanitize import escape_markdown
+
+    assert escape_markdown("Section 101.9 applies from 2027.") == "Section 101.9 applies from 2027."
+    assert escape_markdown("a - b") == "a - b"
+
+
+def test_rendered_markdown_has_no_link_and_only_the_documents_own_rule() -> None:
+    markdown_it = pytest.importorskip("markdown_it")
+    pytest.importorskip("linkify_it")
+    from regwatch.document import Document, Section
+    from regwatch.render import render_markdown
+
+    values = [*AUTOLINK_VALUES, *RULE_VALUES, "1. ordered", "> quote"]
+    doc = Document("T", "2026-10-20", sections=[Section("S", paragraphs=values, bullets=values)])
+    html = markdown_it.MarkdownIt("gfm-like").render(render_markdown(doc))
+    assert "<a " not in html
+    assert html.count("<hr") == 1
+    assert "<ol" not in html
+    assert html.count("<blockquote") == 1  # the disclaimer at the end
