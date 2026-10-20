@@ -150,9 +150,9 @@ Delivery formats. HTML and Word output escape all text.
 
 - `RECORD_COLUMNS: tuple[str, ...]`: the export columns.
 - `FORMULA_STARTS: tuple[str, ...]`: the characters that make a spreadsheet read a cell as a formula.
-- `neutralise_cell(value: str) -> str`: prefix an apostrophe to a cell that starts with one of them.
+- `neutralise_cell(value: str) -> str`: prefix an apostrophe to a cell, and to each part of it that follows a `;`, a `,`, a tab or a line break, that starts with one of them, also after leading whitespace or invisible format characters and in the fullwidth forms.
 - `build_records(register: Register) -> list[dict[str, str]]`: one normalized record per obligation.
-- `records_csv(records: list[dict[str, str]]) -> str`: CSV text with a header row, with formula cells neutralised.
+- `records_csv(records: list[dict[str, str]]) -> str`: CSV text with a header row, every field quoted and formula cells neutralised.
 
 ## focus
 

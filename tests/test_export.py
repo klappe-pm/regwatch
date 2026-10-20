@@ -49,7 +49,7 @@ def test_topics_use_the_register_delimiter(register: Register) -> None:
 def test_csv_has_header_and_roundtrips(register: Register) -> None:
     records = build_records(register)
     text = records_csv(records)
-    assert text.splitlines()[0] == ",".join(RECORD_COLUMNS)
+    assert next(csv.reader(io.StringIO(text))) == list(RECORD_COLUMNS)
     assert "\r" not in text
     assert list(csv.DictReader(io.StringIO(text))) == records
 

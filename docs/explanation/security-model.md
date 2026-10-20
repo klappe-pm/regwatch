@@ -61,7 +61,7 @@ Rendered output is meant to be opened by other people, so it is treated as an at
 - HTML output escapes every piece of text, so a page title with markup in it appears as text.
 - Word output escapes text and strips characters that are invalid in XML, so the file stays a valid package whatever it contains.
 - Web post front matter writes titles as quoted strings, and a tag must match `[A-Za-z0-9_-]{1,40}`.
-- CSV and JSON exports: any CSV cell that begins with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, so a spreadsheet shows text instead of running a formula. The apostrophe is visible to a program that reads the CSV; JSON output is not changed.
+- CSV and JSON exports: every CSV field is quoted. A part of a cell that would run as a formula gets a leading apostrophe, so a spreadsheet shows text instead. That covers a cell starting with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed, also after leading whitespace or invisible format characters, and in the fullwidth forms such as `＝`. Spreadsheet programs in many locales split a line on `;` as well as `,`, and a tab or a line break can start a new cell, so the same test is applied to the text after each of those separators; `x;=1+1;y` is written as `x;'=1+1;y`. The apostrophe is visible to a program that reads the CSV; JSON output is not changed.
 - Every format ends with the disclaimer. A document model cannot remove it, because loading a model always restores it. A model is limited to 2,000 sections, 5,000 items per list and 20,000 characters per value.
 
 ## change-detection-that-cannot-be-hidden

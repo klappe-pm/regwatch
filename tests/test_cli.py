@@ -424,7 +424,9 @@ def test_export(run, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     result = run("export", "--csv", str(csv_path), "--json", str(json_path))
     assert result.code == 0
     assert "(7 records)" in result.out
-    assert csv_path.read_text(encoding="utf-8").startswith("obligation_id,jurisdiction,status")
+    assert csv_path.read_text(encoding="utf-8").startswith(
+        '"obligation_id","jurisdiction","status"'
+    )
     assert len(json.loads(json_path.read_text(encoding="utf-8"))) == 7
 
 

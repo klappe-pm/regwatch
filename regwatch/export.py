@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import io
+import re
+import unicodedata
 
 from regwatch.register import Register
 
@@ -49,23 +51,56 @@ def build_records(register: Register) -> list[dict[str, str]]:
     return records
 
 
-FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
+FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r", "\n")
+_FORMULA_CHARS = frozenset("=+-@")
+_SEPARATORS = ";,\t\r\n"
+_SPLIT = re.compile(f"([{re.escape(_SEPARATORS)}])")
+
+
+def _starts_formula(segment: str) -> bool:
+    """True when a spreadsheet would read ``segment`` as a formula.
+
+    Leading whitespace and invisible format characters are skipped, because a
+    spreadsheet skips them too. A fullwidth ``=`` and its relatives count, because
+    they fold to the ASCII character under NFKC.
+    """
+    for char in segment:
+        if char.isspace() or unicodedata.category(char) == "Cf":
+            continue
+        return unicodedata.normalize("NFKC", char) in _FORMULA_CHARS
+    return False
 
 
 def neutralise_cell(value: str) -> str:
-    """Prefix an apostrophe to a cell a spreadsheet would read as a formula.
+    """Prefix an apostrophe to every part of a cell a spreadsheet would read as a formula.
 
-    A cell that starts with ``=``, ``+``, ``-``, ``@``, a tab or a carriage return
-    would be executed by a spreadsheet program, so it gets a leading apostrophe,
-    which the program hides and treats as text.
+    A cell is read as a formula when it starts with ``=``, ``+``, ``-``, ``@``, a
+    tab, a carriage return or a line feed, also after leading whitespace or
+    invisible format characters, and also in the fullwidth forms. Spreadsheet
+    programs in many locales split a line on ``;`` as well as ``,``, and a tab or
+    a line break can start a new cell too, so the same test is applied to the text
+    after each of those separators. A part that would be a formula gets a leading
+    apostrophe, which the program hides and treats as text.
     """
-    return "'" + value if value.startswith(FORMULA_STARTS) else value
+    if value.startswith(("\t", "\r", "\n")):
+        value = "'" + value
+    parts = _SPLIT.split(value)
+    for index in range(0, len(parts), 2):
+        if _starts_formula(parts[index]):
+            parts[index] = "'" + parts[index]
+    return "".join(parts)
 
 
 def records_csv(records: list[dict[str, str]]) -> str:
-    """Return ``records`` as CSV text with a header row, with formula cells neutralised."""
+    """Return ``records`` as CSV text with a header row.
+
+    Every field is quoted, and formula cells are neutralised, including the parts
+    of a cell that follow a ``;``, a ``,``, a tab or a line break.
+    """
     buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=list(RECORD_COLUMNS), lineterminator="\n")
+    writer = csv.DictWriter(
+        buffer, fieldnames=list(RECORD_COLUMNS), lineterminator="\n", quoting=csv.QUOTE_ALL
+    )
     writer.writeheader()
     writer.writerows(
         {key: neutralise_cell(value) for key, value in record.items()} for record in records

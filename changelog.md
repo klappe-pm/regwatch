@@ -27,3 +27,7 @@ All notable changes to this project are documented in this file. The format foll
 - A `[profile]` table in `regwatch.toml` that records the chosen focus areas, custom terms and an optional catalogue path. Impact analysis, the tiered briefing and the daily and weekly briefs rank candidates that match a focus area first, and list the rest under an outside-your-focus-areas heading. Nothing is dropped.
 - `regwatch config show`, which prints the effective configuration, including focus areas, the catalogue in use and the allowed file roots.
 - A how-to guide, [set your focus areas](docs/how-to-guides/set-your-focus-areas.md), and a getting started tutorial that begins with `regwatch init`.
+
+### security
+
+- CSV export: every field is quoted, and a part of a cell that would run as a formula is neutralised after a `;`, a `,`, a tab or a line break, after leading whitespace or invisible format characters, and in the fullwidth forms, so a spreadsheet that splits on semicolons cannot be made to run a formula.
