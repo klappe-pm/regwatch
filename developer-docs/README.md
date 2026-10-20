@@ -8,7 +8,7 @@ Lessons that take you through a task from start to finish, for someone new to th
 
 ## how-to-guides
 
-Recipes for a specific development goal. [run the tests](how-to-guides/run-the-tests.md) covers the suite, coverage, lint, formatting and type checking, and [add a source mechanism](how-to-guides/add-a-source-mechanism.md) covers teaching `check` to read a new kind of source. Index: [how-to guides](how-to-guides/README.md).
+Recipes for a specific development goal. [run the tests](how-to-guides/run-the-tests.md) covers the suite, coverage, lint, formatting and type checking, and [add a source mechanism](how-to-guides/add-a-source-mechanism.md) covers teaching `check` to read a new kind of source, and [release](how-to-guides/release.md) publishes a version to PyPI through trusted publishing. Index: [how-to guides](how-to-guides/README.md).
 
 ## reference
 

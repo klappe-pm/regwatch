@@ -276,7 +276,10 @@ def test_required_repository_files_exist() -> None:
     ):
         assert (ROOT / name).is_file(), name
     assert "Copyright (c) 2026 Kevin Lappe" in (ROOT / "LICENSE").read_text(encoding="utf-8")
-    assert not (ROOT / ".github").exists()
+    github = ROOT / ".github"
+    assert sorted(str(p.relative_to(github)) for p in github.rglob("*") if p.is_file()) == [
+        "workflows/release.yml"
+    ]
 
 
 def test_filenames_are_lowercase_kebab_case() -> None:
