@@ -16,6 +16,9 @@ An obligation is flagged against a product only when all three gates pass:
    term or a claim.
 
 A flagged pair is a candidate for review, never a determination.
+
+When the user has chosen focus areas, a flagged pair that mentions none of them is
+still returned, ranked after the pairs that do and marked as outside the focus.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ import datetime as dt
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from regwatch.focus import FocusProfile
 from regwatch.register import Obligation, Product, Register, Theme, ancestors
 
 __all__ = [
@@ -61,6 +65,8 @@ class Impact:
     effective_date: str
     reasons: tuple[str, ...]
     severity: str
+    focus: tuple[str, ...] = ()
+    in_focus: bool = True
 
 
 @dataclass(frozen=True)
@@ -121,7 +127,12 @@ def _severity(score: int) -> str:
 
 
 def _impact_for(
-    obligation: Obligation, product: Product, parents: dict[str, str], today: dt.date
+    obligation: Obligation,
+    product: Product,
+    parents: dict[str, str],
+    today: dt.date,
+    focus: FocusProfile,
+    register: Register,
 ) -> Impact | None:
     if not jurisdiction_applies(obligation.jurisdiction, product.markets, parents):
         return None
@@ -142,6 +153,15 @@ def _impact_for(
     if claim_match:
         reasons.append("claim: " + ", ".join(claim_match))
 
+    matched = tuple(
+        dict.fromkeys(
+            focus.match_obligation(obligation, register.detail.get(obligation.obligation_id))
+            + focus.match_product(product)
+        )
+    )
+    if matched:
+        reasons.append("focus: " + ", ".join(matched))
+
     score = STATUS_WEIGHT.get(obligation.status, 0)
     score += _near_term(obligation.effective_date, obligation.status, today)
     score += 1 if term_match else 0
@@ -155,21 +175,37 @@ def _impact_for(
         effective_date=obligation.effective_date,
         reasons=tuple(reasons),
         severity=_severity(score),
+        focus=matched,
+        in_focus=matched != () or not focus.active,
     )
 
 
-def assess_impacts(register: Register, today: dt.date | None = None) -> list[Impact]:
-    """Flag candidate impacts of every obligation on every product, worst first."""
+def assess_impacts(
+    register: Register, today: dt.date | None = None, focus: FocusProfile | None = None
+) -> list[Impact]:
+    """Flag candidate impacts of every obligation on every product.
+
+    The result is ranked: candidates that match one of the profile's focus areas
+    come first, then the rest, and each group is ordered worst first. A candidate
+    that matches no focus area is kept and marked ``in_focus=False``, never dropped.
+    Without a profile, or with an inactive one, every candidate is in focus.
+    """
     today = today or dt.date.today()
+    focus = focus or FocusProfile()
     parents = {j.jurisdiction_id: j.parent for j in register.jurisdictions}
     impacts: list[Impact] = []
     for product in register.portfolio.products:
         for obligation in register.obligations:
-            impact = _impact_for(obligation, product, parents, today)
+            impact = _impact_for(obligation, product, parents, today, focus, register)
             if impact is not None:
                 impacts.append(impact)
     impacts.sort(
-        key=lambda i: (SEVERITY_RANK[i.severity], i.effective_date or "9999", i.product_id)
+        key=lambda i: (
+            not i.in_focus,
+            SEVERITY_RANK[i.severity],
+            i.effective_date or "9999",
+            i.product_id,
+        )
     )
     return impacts
 

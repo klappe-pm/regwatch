@@ -30,10 +30,11 @@ Every arrow between stages that matter is a file or an immutable value. `check` 
 The modules form layers, and each imports only from the ones below it.
 
 1. `config`, `fetch`, `extract`: no dependency on the rest of the package. These are the modules that touch the outside world, and they are small on purpose.
-2. `register`, `state`: the data model and the one write path.
-3. `check`, `ingest`, `impact`: the engine's analysis. They take loaded data and return values.
+2. `register`, `focus`, `state`: the data model, the focus catalogue and profile, and the one write path.
+3. `check`, `ingest`, `impact`: the engine's analysis. They take loaded data and return values. `impact` ranks by the focus profile it is given and never drops a candidate.
 4. `document`, `synthesis`, `briefing`, `render`, `export`: turning analysis into output. `synthesis` and `briefing` build a `Document`; `render` turns a `Document` into text or bytes.
-5. `cli`: the only module that prints, parses arguments or sets an exit status.
+5. `onboarding`: the files `regwatch init` writes and the checks on its answers. Pure functions; the questions and the printing stay in `cli`.
+6. `cli`: the only module that prints, asks questions, parses arguments or sets an exit status.
 
 Analysis and output functions are pure. They take loaded data and an explicit date and return a value, with no clock reads, no file access and no printing. That is what makes them testable with plain dataclasses and what lets a script call them.
 

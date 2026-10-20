@@ -48,6 +48,18 @@ Optional table. Limits that apply to every fetch.
 | `allow_private_hosts` | boolean | false | when true, a host may resolve to a loopback, link-local, private or other non-public address; leave it false unless a source is on your own network |
 | `allowed_file_roots` | list of paths | none | directories that `file` sources may read from; with none listed, every `file` source is refused |
 
+## profile
+
+Optional table, written by `regwatch init`. It records what matters to your business so that results can be ranked by relevance; see [set your focus areas](../how-to-guides/set-your-focus-areas.md).
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `focus_areas` | list of strings | none | identifiers from the focus catalogue, each lowercase letters, digits and hyphens; repeats are dropped. An id that is not in the catalogue is an error when a command uses the profile. |
+| `custom_terms` | list of strings | none | extra words that count as a focus, matched without regard to case; repeats are dropped |
+| `catalogue` | path, optional | the catalogue shipped with regwatch | a catalogue file that replaces the shipped one; see [focus catalogue](focus-catalogue.md). It is never overwritten by an output path you name. |
+
+With no areas and no custom terms nothing is ranked and every candidate counts as in focus.
+
 ## ingest
 
 Optional table. Filters for `ingest`, which reads a Federal Register style API.

@@ -55,6 +55,26 @@ The signal for that source contains something that changes on every request, suc
 
 `ingest` has no default source of data. Pass `--fetch` to call the API, or `--from-file PATH` to parse a response you saved earlier.
 
+## init-says-these-files-already-exist
+
+`regwatch init` found some of the files it would write and changed none of them. The message lists them. Either choose another folder with `--dir`, or add `--force` to replace them, which discards your edits to those files. Back them up first if they hold work.
+
+## init-says-this-is-your-home-directory
+
+You ran `regwatch init --yes` from your home directory without `--dir`. regwatch will not assume a project folder there. Name one, for example `regwatch init --yes --dir ~/my-regwatch`. Without `--yes` it asks for the folder.
+
+## init-says-no-answer-is-available
+
+`regwatch init` asked a question and its input was closed, as happens in a script or a scheduled job. Give every answer as a flag, or add `--yes` to take the defaults. The flags are listed in the [cli reference](../reference/cli.md).
+
+## unknown-focus-areas
+
+The `focus_areas` in your `[profile]` name an id that is not in the catalogue in use. The message lists the ids on offer. Fix the spelling, or add the area to your catalogue file as described in [set your focus areas](set-your-focus-areas.md). If the profile has no `catalogue` key, the shipped catalogue is used and cannot be extended.
+
+## everything-is-listed-outside-your-focus-areas
+
+No candidate mentions a word of your focus areas, which usually means the words do not match how your rules are written. Run `regwatch config show` to see the areas in use, then add the words your rules use as `custom_terms`, or to your copy of the catalogue. Matching is by whole word, so `soda` does not match `sodium`. Nothing is hidden in the meantime; the candidates are all listed.
+
 ## refusing-to-overwrite-protected-file
 
 You pointed an output option such as `--out`, `--csv` or `--json` at a file regwatch protects: one listed under `[register]`, `regwatch.toml` itself, or `seen.json` or `ingest-candidates.json` in the state directory. regwatch compares files by identity, so a hard link or a different spelling of the name (including a different case) does not get around it. Choose a different output path. A path inside the state or snapshots directory is refused with `is inside regwatch's state directory`.

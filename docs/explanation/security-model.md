@@ -81,6 +81,18 @@ A path you name is refused if it is any of these: a register file, `regwatch.tom
 
 A source id becomes a file name only if it matches `^[a-z0-9-]+$`, so an id cannot point outside the snapshots directory. `brief --name` must match `[A-Za-z0-9_][A-Za-z0-9._-]{0,99}`, so it cannot contain a path separator. Register files and state files are read only up to 20,000,000 bytes, and the configuration file only up to 256,000.
 
+## the-setup-command
+
+`regwatch init` is the one command that creates a configuration, so it applies the same care to files that the rest of regwatch applies to content.
+
+- It writes seven named files inside the project folder and nothing else. It refuses to replace any of them unless `--force` is given, and checks before it asks anything but the folder, so a refusal costs the user no answers.
+- It never writes through a symbolic link, even with `--force`, whether the link is a file or a folder of the scaffold. A link planted in a project folder cannot redirect a write to another place.
+- Every file is written atomically through the same function as every other write.
+- It does not assume the home directory is a project and refuses to scaffold into it, so a stray run cannot fill a home folder with registers.
+- Local file sources stay off. The default is no folders. A folder is accepted only if it is not the root of a file system or the home directory, because either would make almost any file readable; see [why file sources are opt in](#why-file-sources-are-opt-in).
+- Every answer is checked before it is written: control and invisible characters are refused, the User-Agent contact is limited to printable ASCII, and the generated configuration is parsed again before any file is written, so an answer cannot break the file or add a setting.
+- Answers are never read from the environment. The only inputs are flags and what the user types.
+
 ## what-regwatch-does-not-protect-against
 
 - A compromised source. If a publisher serves misleading content over a valid certificate, regwatch reports the change faithfully. A person has to read it.

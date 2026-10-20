@@ -5,6 +5,7 @@ How-to guides are recipes. Each one solves a specific problem for a reader who a
 ## pages
 
 - [install](install.md): every supported way to install, upgrade and uninstall the command.
+- [set your focus areas](set-your-focus-areas.md): choose the focus areas that match your business, add words of your own, and read results ranked by relevance.
 - [add a source](add-a-source.md): watch a new feed, web page, API or mailing list archive, and choose its mechanism.
 - [review flagged changes](review-flagged-changes.md): what to do, in order, when regwatch flags a source change, an ingest candidate or a candidate impact.
 - [troubleshooting](troubleshooting.md): known failure modes matched to their fixes.

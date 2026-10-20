@@ -36,6 +36,25 @@ def _due_line(obligation: Obligation) -> str:
     return f"{obligation.effective_date}, {obligation.jurisdiction}: {obligation.title} ({obligation.status})"
 
 
+def _product_sections(impacts: list[Impact]) -> list[Section]:
+    """One level 3 section per product, products with the worst candidate first."""
+    by_product: dict[str, list[Impact]] = {}
+    for impact in impacts:
+        by_product.setdefault(impact.product_name, []).append(impact)
+    sections = []
+    for name in sorted(
+        by_product, key=lambda n: min(SEVERITY_RANK[i.severity] for i in by_product[n])
+    ):
+        bullets = [
+            f"{i.obligation_title}, {i.jurisdiction}, {i.severity}"
+            + (f", effective {i.effective_date}" if i.effective_date else "")
+            + (f" [{'; '.join(i.reasons)}]" if i.reasons else "")
+            for i in by_product[name]
+        ]
+        sections.append(Section(name, level=3, bullets=bullets))
+    return sections
+
+
 def daily_brief(
     register: Register,
     results: Iterable[SourceResult],
@@ -72,17 +91,25 @@ def daily_brief(
         )
     )
 
-    priority = [i for i in impact_list if i.severity in ("act-now", "high")][:6]
+    urgent = [i for i in impact_list if i.severity in ("act-now", "high")]
+    priority = [i for i in urgent if i.in_focus][:6]
+    outside = [i for i in urgent if not i.in_focus][:6]
+
+    def flagged(items: list[Impact]) -> list[str]:
+        return [
+            f"{i.product_name}: {i.obligation_title} ({i.jurisdiction}, {i.severity})"
+            for i in items
+        ]
+
     sections.append(
         Section(
             "Flagged For Review",
             paragraphs=[] if priority else ["No act-now or high severity candidate impacts today."],
-            bullets=[
-                f"{i.product_name}: {i.obligation_title} ({i.jurisdiction}, {i.severity})"
-                for i in priority
-            ],
+            bullets=flagged(priority),
         )
     )
+    if outside:
+        sections.append(Section("Flagged Outside Your Focus Areas", bullets=flagged(outside)))
     return Document(
         title=f"{register.portfolio.name} regulatory daily brief",
         subtitle="Change detection and near-term obligations",
@@ -138,19 +165,19 @@ def weekly_synthesis(
             ],
         )
     )
-    by_product: dict[str, list[Impact]] = {}
-    for impact in impact_list:
-        by_product.setdefault(impact.product_name, []).append(impact)
-    for name in sorted(
-        by_product, key=lambda n: min(SEVERITY_RANK[i.severity] for i in by_product[n])
-    ):
-        bullets = [
-            f"{i.obligation_title}, {i.jurisdiction}, {i.severity}"
-            + (f", effective {i.effective_date}" if i.effective_date else "")
-            + (f" [{'; '.join(i.reasons)}]" if i.reasons else "")
-            for i in by_product[name]
-        ]
-        sections.append(Section(name, level=3, bullets=bullets))
+    sections += _product_sections([i for i in impact_list if i.in_focus])
+    outside = [i for i in impact_list if not i.in_focus]
+    if outside:
+        sections.append(
+            Section(
+                "Candidate Impact Outside Your Focus Areas",
+                paragraphs=[
+                    f"{len(outside)} candidate(s) mention none of your focus areas. They are listed "
+                    "after the ones that do, and each one still needs human confirmation."
+                ],
+            )
+        )
+        sections += _product_sections(outside)
 
     if finding_list:
         sections.append(
@@ -177,6 +204,7 @@ def weekly_synthesis(
         f"{i.product_name} against {i.obligation_title} ({i.jurisdiction}"
         + (f", effective {i.effective_date}" if i.effective_date else "")
         + ")."
+        + ("" if i.in_focus else " Outside your focus areas.")
         for i in impact_list
         if i.severity == "act-now"
     ]

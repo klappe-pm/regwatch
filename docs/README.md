@@ -6,15 +6,15 @@ regwatch flags candidates for human review. It never edits your register or chan
 
 ## tutorials
 
-Lessons that take you through a task from start to finish, for someone who has not done it before. Start with [getting started](tutorials/getting-started.md), which goes from an install to a validated register, a first change check, flagged impacts and a rendered briefing. Index: [tutorials](tutorials/README.md).
+Lessons that take you through a task from start to finish, for someone who has not done it before. Start with [getting started](tutorials/getting-started.md), which goes from an install and `regwatch init` to a validated register, a first change check, flagged impacts focused on your business and a rendered briefing. Index: [tutorials](tutorials/README.md).
 
 ## how-to-guides
 
-Recipes for a specific goal, for someone who already knows the basics and wants the steps. [install](how-to-guides/install.md) covers every install method, [add a source](how-to-guides/add-a-source.md) covers watching a new feed, page or API, [review flagged changes](how-to-guides/review-flagged-changes.md) covers what to do with a change that regwatch flags, and [troubleshooting](how-to-guides/troubleshooting.md) matches a failure to its fix. Index: [how-to guides](how-to-guides/README.md).
+Recipes for a specific goal, for someone who already knows the basics and wants the steps. [install](how-to-guides/install.md) covers every install method, [set your focus areas](how-to-guides/set-your-focus-areas.md) covers ranking results by what matters to your business, [add a source](how-to-guides/add-a-source.md) covers watching a new feed, page or API, [review flagged changes](how-to-guides/review-flagged-changes.md) covers what to do with a change that regwatch flags, and [troubleshooting](how-to-guides/troubleshooting.md) matches a failure to its fix. Index: [how-to guides](how-to-guides/README.md).
 
 ## reference
 
-Lookup pages that describe the machinery as it is, with no instruction attached. [cli](reference/cli.md) lists every subcommand, option and exit status, [configuration](reference/configuration.md) lists every key in `regwatch.toml`, [data files](reference/data-files.md) lists every field of every register file, and [python api](reference/python-api.md) lists every public function and class. Index: [reference](reference/README.md).
+Lookup pages that describe the machinery as it is, with no instruction attached. [cli](reference/cli.md) lists every subcommand, option and exit status, [configuration](reference/configuration.md) lists every key in `regwatch.toml`, [data files](reference/data-files.md) lists every field of every register file, [focus catalogue](reference/focus-catalogue.md) describes the focus areas and how candidates are matched, and [python api](reference/python-api.md) lists every public function and class. Index: [reference](reference/README.md).
 
 ## explanation
 

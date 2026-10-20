@@ -9,7 +9,7 @@ regwatch/
   README.md  LICENSE  changelog.md  contributing.md  security.md  support.md
   pyproject.toml  .editorconfig  .gitattributes  .gitignore
   regwatch/            the package
-    data/schema.json   field rules, packaged data
+    data/              packaged data: schema.json, focus-areas.json, example-jurisdictions.json
     py.typed           marks the package as typed
   tests/               the test suite
     fixtures/          small hostile and ordinary inputs
@@ -29,15 +29,17 @@ Modules are listed from the bottom of the dependency order to the top. A module 
 | `sanitize.py` | cleaning of untrusted text, link validation and Markdown escaping; imports nothing else from the package |
 | `extract.py` | reducing untrusted content to a signal and hashing it; imports nothing else from the package |
 | `register.py` | the register data model, reading the files, validating them against `data/schema.json`, and building immutable objects |
+| `focus.py` | the focus catalogue, focus profiles and whole-word matching of candidate text; imports `config` and `register` |
 | `state.py` | snapshots, the last-seen state, and `safe_write_text` and `safe_write_bytes`, the only functions that write files |
 | `check.py` | change detection and capture, built from `fetch`, `extract`, `register` and `state` |
 | `ingest.py` | building the API query and turning a response into unconfirmed candidates |
-| `impact.py` | exposure, scope and attribute gates, severity scoring and theme findings |
+| `impact.py` | exposure, scope and attribute gates, severity scoring, focus ranking and theme findings |
 | `document.py` | the document model and the standard disclaimer |
 | `synthesis.py` | the daily and weekly briefings |
 | `briefing.py` | the tiered briefing |
 | `render.py` | Markdown, web post, newsletter and Word output from a document |
 | `export.py` | flat records and CSV |
+| `onboarding.py` | the files `regwatch init` writes and the checks on its answers, as pure functions; it asks and prints nothing |
 | `cli.py` | argument parsing, command handlers and exit statuses; the only module that prints |
 
 ## rules-by-module
@@ -52,7 +54,7 @@ Modules are listed from the bottom of the dependency order to the top. A module 
 
 ## tests-by-module
 
-Each module has a test file named for it, apart from `synthesis.py` and `briefing.py`, which share `test_briefs.py`, and `fetch.py`, whose `https` path is tested through a fake opener. `test_hardening.py` holds the regression tests for the security review findings. `test_cli.py` runs every command through `main` with a fake fetcher and a fixed clock. `test_repository_hygiene.py` checks the whole tree. See [run the tests](../how-to-guides/run-the-tests.md).
+Each module has a test file named for it, apart from `synthesis.py` and `briefing.py`, which share `test_briefs.py`, and `fetch.py`, whose `https` path is tested through a fake opener. `test_focus.py` covers the catalogue, matching, ranking and the focus split in every briefing, and `test_onboarding.py` covers `regwatch init`, `regwatch config show` and the profile table, driving the real prompts through a scripted `input`. `test_hardening.py` holds the regression tests for the security review findings. `test_cli.py` runs every command through `main` with a fake fetcher and a fixed clock. `test_repository_hygiene.py` checks the whole tree. See [run the tests](../how-to-guides/run-the-tests.md).
 
 ## examples
 

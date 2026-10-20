@@ -4,4 +4,4 @@ Tutorials are lessons. Each one takes a reader who has not done the task before 
 
 ## pages
 
-- [getting started](getting-started.md): from an install to a validated register, a first change check, flagged candidate impacts and a rendered briefing.
+- [getting started](getting-started.md): from an install and `regwatch init` to a validated register, a first change check, flagged candidate impacts focused on your business, and a rendered briefing.

@@ -16,6 +16,8 @@ Each subcommand is one stage of the engine:
     digest    write a Markdown digest of the register
     report    write a change-and-due alert
     export    write one flat record per obligation as CSV and JSON
+    init      create a project: configuration, an empty register and your focus areas
+    config    show the effective configuration
 
 Exit status: 0 success, 1 the register is invalid or nothing could be captured,
 2 a usage, configuration, network or file error, 3 changes were detected and
@@ -27,12 +29,13 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from regwatch import __version__
 from regwatch.briefing import TIERS, build_briefing
@@ -41,8 +44,23 @@ from regwatch.config import DEFAULT_CONFIG_NAME, Config, ConfigError, load_confi
 from regwatch.document import DISCLAIMER, Document, DocumentError, Section, make_disclaimer
 from regwatch.export import build_records, records_csv
 from regwatch.fetch import Fetcher, FetchError, SafeFetcher
-from regwatch.impact import SEVERITIES, assess_impacts, theme_findings
+from regwatch.focus import FocusError, FocusProfile, build_profile, load_catalogue
+from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.ingest import IngestError, build_query_url, candidates_document, parse_candidates
+from regwatch.onboarding import (
+    SCAFFOLD_NAMES,
+    InitPlan,
+    OnboardingError,
+    check_contact,
+    check_directory,
+    check_file_root,
+    clean_terms,
+    example_jurisdictions,
+    jurisdiction_records,
+    parse_focus_choice,
+    scaffold_files,
+    user_agent_for,
+)
 from regwatch.register import (
     Register,
     RegisterError,
@@ -109,6 +127,10 @@ class _Context:
 
     def register(self) -> Register:
         return load_register(self.config)
+
+    def focus(self) -> FocusProfile:
+        """The focus profile named in the configuration; inactive when none is set."""
+        return build_profile(self.config.profile)
 
     def protected(self) -> list[Path]:
         """Files that a user-named output path must never overwrite.
@@ -320,22 +342,34 @@ def _cmd_ingest(ctx: _Context, args: argparse.Namespace) -> int:
 
 def _cmd_impact(ctx: _Context, args: argparse.Namespace) -> int:
     register = ctx.register()
-    impacts = assess_impacts(register, ctx.today)
+    focus = ctx.focus()
+    impacts = assess_impacts(register, ctx.today, focus)
     if args.product:
         impacts = [i for i in impacts if i.product_id == args.product]
     if args.severity:
         impacts = [i for i in impacts if i.severity == args.severity]
+    in_focus = [i for i in impacts if i.in_focus]
+    outside = [i for i in impacts if not i.in_focus]
+    _print_impacts(in_focus)
+    if outside:
+        print()
+        print(f"Outside your focus areas ({len(outside)}, listed after the items above):")
+        _print_impacts(outside)
+    summary = f"regwatch impact: {len(impacts)} candidate impacts across {len(register.portfolio.products)} products"
+    if focus.active:
+        summary += f"; {len(in_focus)} in your focus areas, {len(outside)} outside"
+    print(summary)
+    print(NOTICE)
+    return EXIT_OK
+
+
+def _print_impacts(impacts: list[Impact]) -> None:
     for i in impacts:
         print(
             f"{i.severity:<8} {i.product_id:<24} {i.jurisdiction:<14} {i.effective_date or 'no date':<11} "
             f"{i.obligation_title}"
         )
         print(f"{'':<8} {'; '.join(i.reasons)}")
-    print(
-        f"regwatch impact: {len(impacts)} candidate impacts across {len(register.portfolio.products)} products"
-    )
-    print(NOTICE)
-    return EXIT_OK
 
 
 def _cmd_themes(ctx: _Context, args: argparse.Namespace) -> int:
@@ -380,7 +414,8 @@ def _write_document(ctx: _Context, doc: Document, out_dir: str | None, stem: str
 
 def _cmd_brief(ctx: _Context, args: argparse.Namespace) -> int:
     register = ctx.register()
-    impacts = assess_impacts(register, ctx.today)
+    focus = ctx.focus()
+    impacts = assess_impacts(register, ctx.today, focus)
     if args.kind == "daily":
         results = _run_check(ctx, register, args.fetch)
         doc = daily_brief(register, results, impacts, ctx.today)
@@ -398,6 +433,7 @@ def _cmd_brief(ctx: _Context, args: argparse.Namespace) -> int:
             recent_count=args.recent,
             since_days=args.since_days,
             candidates=_load_candidates(ctx),
+            focus=focus,
         )
         stem = f"regwatch-briefing-{args.tier}"
     name = args.name if args.name is not None else stem
@@ -572,6 +608,241 @@ def _cmd_export(ctx: _Context, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# --- onboarding commands -----------------------------------------------------
+
+_T = TypeVar("_T")
+YES = ("y", "yes")
+
+
+def _prompt(question: str) -> str:
+    try:
+        return input(question).strip()
+    except EOFError as exc:
+        raise CommandError(
+            "no answer is available on standard input; give each answer as a flag, or add --yes"
+        ) from exc
+
+
+def _ask(question: str, parse: Callable[[str], _T]) -> _T:
+    """Ask until ``parse`` accepts the answer, explaining each refusal."""
+    while True:
+        answer = _prompt(question)
+        try:
+            return parse(answer)
+        except OnboardingError as exc:
+            print(f"  {exc}", file=sys.stderr)
+
+
+def _comma_list(answer: str) -> list[str]:
+    return [item.strip() for item in answer.split(",") if item.strip()]
+
+
+def _init_directory(args: argparse.Namespace) -> Path:
+    home = Path.home()
+    if args.dir is not None:
+        return check_directory(args.dir, home)
+    here = Path.cwd().resolve()
+    if here == home.resolve():
+        if args.yes:
+            raise CommandError("this is your home directory; name the project folder with --dir")
+        print("You are in your home directory, so regwatch will not assume a project folder.")
+        return _ask(
+            "Project folder (created if it does not exist): ", lambda a: check_directory(a, home)
+        )
+    if args.yes:
+        return here
+    return _ask(f"Project folder [{here}]: ", lambda a: check_directory(a or str(here), home))
+
+
+def _refuse_existing(directory: Path, force: bool) -> list[str]:
+    """Names of scaffold files that already exist. Raises unless ``force`` allows replacing them."""
+    existing: list[str] = []
+    for name in SCAFFOLD_NAMES:
+        path = directory / name
+        for part in (path, path.parent):
+            if part != directory and part.is_symlink():
+                raise CommandError(f"{part} is a symbolic link; init will not write through it")
+        if os.path.lexists(path):
+            existing.append(name)
+    if existing and not force:
+        raise CommandError(
+            f"these files already exist in {directory} and were left unchanged: "
+            f"{', '.join(existing)}; add --force to replace them"
+        )
+    return existing
+
+
+def _ask_focus(args: argparse.Namespace) -> tuple[str, ...]:
+    catalogue = load_catalogue(None)
+    if args.focus is not None:
+        return parse_focus_choice(args.focus, catalogue)
+    if args.yes:
+        return ()
+    print("Focus areas in the catalogue:")
+    for number, area in enumerate(catalogue, start=1):
+        print(f"  {number}. {area.focus_id}: {area.label}. {area.description}")
+    return _ask(
+        "Which apply to your business? Numbers or ids, separated by commas; Enter for none: ",
+        lambda a: parse_focus_choice(_comma_list(a), catalogue),
+    )
+
+
+def _ask_terms(args: argparse.Namespace) -> tuple[str, ...]:
+    if args.term is not None:
+        return clean_terms(args.term)
+    if args.yes:
+        return ()
+    return _ask(
+        "Extra words that matter to you, separated by commas; Enter for none: ",
+        lambda a: clean_terms(_comma_list(a)),
+    )
+
+
+def _ask_jurisdictions(args: argparse.Namespace) -> tuple[dict[str, str], ...]:
+    offered = example_jurisdictions() if args.example else ()
+    if args.jurisdiction is not None:
+        return jurisdiction_records(args.jurisdiction)
+    if args.yes:
+        return offered
+    hint = "Enter for none"
+    if offered:
+        hint = "Enter for the invented example set: " + ", ".join(j["name"] for j in offered)
+    return _ask(
+        f"Jurisdictions to watch, separated by commas; {hint}: ",
+        lambda a: jurisdiction_records(_comma_list(a)) if a else offered,
+    )
+
+
+def _ask_file_roots(args: argparse.Namespace, directory: Path) -> tuple[str, ...]:
+    home = Path.home()
+
+    def roots(answer: str) -> tuple[str, ...]:
+        found = tuple(check_file_root(item, directory, home) for item in _comma_list(answer))
+        if not found:
+            raise OnboardingError("name at least one folder")
+        return found
+
+    if args.allow_file_root is not None:
+        return tuple(check_file_root(item, directory, home) for item in args.allow_file_root)
+    if args.yes:
+        return ()
+    answer = _prompt("Allow regwatch to read local files as sources? Default is no. [y/N]: ")
+    if answer.lower() not in YES:
+        return ()
+    return _ask("Folders it may read from, separated by commas: ", roots)
+
+
+def _ask_contact(args: argparse.Namespace) -> str:
+    if args.contact is not None:
+        return check_contact(args.contact)
+    if args.yes:
+        return ""
+    return _ask(
+        "Contact for the User-Agent header, an email address or web page that tells site owners "
+        "who runs this; Enter keeps the default: ",
+        lambda a: check_contact(a) if a else "",
+    )
+
+
+def _summary(plan: InitPlan, names: Sequence[str], existing: Sequence[str]) -> list[str]:
+    catalogue = {area.focus_id: area.label for area in load_catalogue(None)}
+    areas = [catalogue.get(focus_id, focus_id) for focus_id in plan.focus_areas]
+    lines = [f"regwatch init will write {len(names)} files in {plan.directory}:"]
+    lines += [
+        f"  {name}" + ("  (replaces an existing file)" if name in existing else "")
+        for name in names
+    ]
+    lines += [
+        f"Focus areas: {', '.join(areas) or 'none'}",
+        f"Custom terms: {', '.join(plan.custom_terms) or 'none'}",
+        f"Jurisdictions: {', '.join(j['name'] for j in plan.jurisdictions) or 'none'}",
+        f"Local file sources: {', '.join(plan.file_roots) if plan.file_roots else 'not allowed'}",
+        f"User agent: {user_agent_for(plan.contact) if plan.contact else 'the default'}",
+    ]
+    return lines
+
+
+def _cmd_init(ctx: _Context, args: argparse.Namespace) -> int:
+    directory = _init_directory(args)
+    existing = _refuse_existing(directory, args.force)
+    plan = InitPlan(
+        directory=directory,
+        focus_areas=_ask_focus(args),
+        custom_terms=_ask_terms(args),
+        jurisdictions=_ask_jurisdictions(args),
+        file_roots=_ask_file_roots(args, directory),
+        contact=_ask_contact(args),
+    )
+    files = scaffold_files(plan)
+    print()
+    for line in _summary(plan, list(files), existing):
+        print(line)
+    if not args.yes and _prompt("Create these files? [y/N]: ").lower() not in YES:
+        raise CommandError("cancelled; nothing was written")
+    for name, text in files.items():
+        safe_write_text(directory / name, text, ())
+    print(f"regwatch init: wrote {len(files)} files in {directory}")
+    print("Next, describe your products in register/portfolio.json and add sources to")
+    print("register/sources.json, then check the register:")
+    print(f"  regwatch --config {directory / SCAFFOLD_NAMES[0]} validate")
+    print(NOTICE)
+    return EXIT_OK
+
+
+def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
+    config = ctx.config
+    focus = build_profile(config.profile)
+
+    def text(value: object) -> str:
+        return json.dumps(value if not isinstance(value, Path) else str(value))
+
+    def row(key: str, value: object) -> None:
+        print(f"{key} = {text(value)}")
+
+    print(f"# effective configuration from {config.config_path}")
+    print("[register]")
+    for key in ("obligations", "jurisdictions", "categories", "sources", "portfolio"):
+        row(key, getattr(config.register, key))
+    for key in ("detail", "changelog", "enforcement", "themes"):
+        if getattr(config.register, key) is not None:
+            row(key, getattr(config.register, key))
+    print("[state]")
+    row("dir", config.state_dir)
+    row("snapshots", config.snapshots_dir)
+    print("[fetch]")
+    fetch = config.fetch
+    row("timeout_seconds", fetch.timeout_seconds)
+    row("total_timeout_seconds", fetch.total_timeout_seconds)
+    row("max_bytes", fetch.max_bytes)
+    row("user_agent", fetch.user_agent)
+    row("allow_private_hosts", fetch.allow_private_hosts)
+    row("allowed_file_roots", [str(root) for root in fetch.allowed_file_roots])
+    if not fetch.allowed_file_roots:
+        print("# no folders are listed, so every file source is refused")
+    print("[ingest]")
+    settings = config.ingest
+    row("api_url", settings.api_url)
+    row("agencies", list(settings.agencies))
+    row("types", list(settings.types))
+    row("cfr_title", settings.cfr_title if settings.cfr_title is not None else "none")
+    row("cfr_parts", list(settings.cfr_parts))
+    row("terms", list(settings.terms))
+    row("jurisdiction", settings.jurisdiction)
+    row("per_page", settings.per_page)
+    print("[profile]")
+    row("focus_areas", list(config.profile.focus_areas))
+    row("custom_terms", list(config.profile.custom_terms))
+    row(
+        "catalogue",
+        config.profile.catalogue if config.profile.catalogue else "shipped with regwatch",
+    )
+    for area in focus.areas:
+        print(f"# focus area {area.focus_id}: {area.label}, {len(area.terms)} terms")
+    if not focus.active:
+        print("# no focus areas are set, so every candidate counts as in focus")
+    return EXIT_OK
+
+
 # --- parser ------------------------------------------------------------------
 
 _Handler = Callable[[_Context, argparse.Namespace], int]
@@ -689,6 +960,54 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
     p = add("export", _cmd_export, "write one flat record per obligation")
     p.add_argument("--csv", required=True, help="CSV output path")
     p.add_argument("--json", help="also write the records as JSON here")
+
+    p = add(
+        "init",
+        _cmd_init,
+        "create a project: configuration, an empty register and your focus areas",
+    )
+    p.epilog = (
+        "Every question has a flag. A question whose flag is given is not asked. " + DISCLAIMER
+    )
+    p.add_argument(
+        "--dir",
+        help="the project folder; default the current folder, never assumed in your home folder",
+    )
+    p.add_argument(
+        "--focus", action="append", metavar="ID", help="a focus area id or number; repeat for more"
+    )
+    p.add_argument(
+        "--term", action="append", metavar="TERM", help="an extra word that matters to you; repeat"
+    )
+    p.add_argument(
+        "--jurisdiction", action="append", metavar="NAME", help="a jurisdiction to watch; repeat"
+    )
+    p.add_argument(
+        "--allow-file-root",
+        action="append",
+        metavar="FOLDER",
+        help="allow file sources under this folder; repeat. Without it local files are refused",
+    )
+    p.add_argument("--contact", help="email address or web page placed in the User-Agent header")
+    p.add_argument(
+        "--example",
+        action="store_true",
+        help="offer the invented example jurisdictions as the default answer",
+    )
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="use the default for every question that has no flag, and do not ask to confirm",
+    )
+    p.add_argument("--force", action="store_true", help="replace files that already exist")
+
+    p = add("config", _cmd_config, "show the effective configuration")
+    actions = p.add_subparsers(dest="config_command", required=True, metavar="action")
+    actions.add_parser(
+        "show",
+        help="print every setting, resolved, including focus areas and file roots",
+        epilog=DISCLAIMER,
+    )
     return parser, handlers
 
 
@@ -726,6 +1045,7 @@ def main(
         ConfigError,
         StateError,
         FetchError,
+        FocusError,
         IngestError,
         DocumentError,
         ValueError,

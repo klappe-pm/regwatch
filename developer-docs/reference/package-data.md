@@ -1,6 +1,6 @@
 # package-data
 
-This page describes how non-Python files ship inside the package and how code finds them. Today there is one: the field rules in `regwatch/data/schema.json`. It covers the rule for locating data, how the build includes it, and how to add another file. It is a reference page, so it states how things are and not how to change them.
+This page describes how non-Python files ship inside the package and how code finds them. Today there are three: the field rules in `regwatch/data/schema.json`, the focus catalogue in `regwatch/data/focus-areas.json`, and the invented example jurisdictions in `regwatch/data/example-jurisdictions.json`. It covers the rule for locating data, how the build includes it, and how to add another file. It is a reference page, so it states how things are and not how to change them.
 
 ## the-rule
 
@@ -19,11 +19,13 @@ A path built from `__file__` breaks when the package is installed from a zip, a 
 | file | read by | holds |
 | --- | --- | --- |
 | `regwatch/data/schema.json` | `register.load_schema` | the field rules for every register file: required fields, allowed values, patterns, types and references |
+| `regwatch/data/focus-areas.json` | `focus.shipped_catalogue_text`, `focus.load_catalogue` | the shipped focus catalogue; `regwatch init` copies it into each project so the user can edit it. The format is in the [focus catalogue reference](../../docs/reference/focus-catalogue.md). |
+| `regwatch/data/example-jurisdictions.json` | `onboarding.example_jurisdictions` | the invented jurisdictions that `regwatch init --example` offers; a valid `jurisdictions` list with every coverage set to `tracked` or `aggregate` so a new project has no empty confirmed jurisdiction |
 | `regwatch/py.typed` | type checkers | marks the package as typed |
 
 ## how-the-build-includes-it
 
-The wheel target in `pyproject.toml` lists `packages = ["regwatch"]`. The hatchling backend includes every file under the package directory that is not excluded by `.gitignore`, so `data/schema.json` and `py.typed` ship without further configuration. The source distribution includes `regwatch`, `tests`, `examples`, `README.md`, `LICENSE` and `pyproject.toml`.
+The wheel target in `pyproject.toml` lists `packages = ["regwatch"]`. The hatchling backend includes every file under the package directory that is not excluded by `.gitignore`, so every file under `data/` and `py.typed` ship without further configuration. Check a new data file from an installed wheel, as described below. The source distribution includes `regwatch`, `tests`, `examples`, `README.md`, `LICENSE` and `pyproject.toml`.
 
 ## the-schema-format
 

@@ -15,7 +15,8 @@ Reads `regwatch.toml`. See [configuration](configuration.md) for the keys.
 - `DEFAULT_CONFIG_NAME: str`: `"regwatch.toml"`.
 - `load_config(path: Path) -> Config`: parse and validate a configuration file. Raises `ConfigError`.
 - `ConfigError`: the configuration file is missing, unreadable or invalid.
-- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest` and `config_path`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file and the two state files, which a user-named output must never overwrite.
+- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path` and `profile`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files and the focus catalogue when one is configured, which a user-named output must never overwrite.
+- `ProfileSettings`: frozen dataclass with `focus_areas`, `custom_terms` and `catalogue`, the `[profile]` table.
 - `RegisterPaths`: frozen dataclass of the register file paths: `obligations`, `jurisdictions`, `categories`, `sources`, `portfolio`, and the optional `detail`, `changelog`, `enforcement` and `themes`. `all_paths()` returns every configured path, resolved, for write protection.
 - `FetchSettings`: frozen dataclass with `timeout_seconds`, `total_timeout_seconds`, `max_bytes`, `user_agent`, `allow_private_hosts` and `allowed_file_roots`.
 - `IngestSettings`: frozen dataclass with `api_url`, `agencies`, `types`, `cfr_title`, `cfr_parts`, `terms`, `jurisdiction` and `per_page`.
@@ -93,11 +94,11 @@ Candidate events from a Federal Register style API response.
 Candidate impact analysis.
 
 - `SEVERITIES: tuple[str, ...]`: `("act-now", "high", "watch", "info")`, worst first.
-- `assess_impacts(register: Register, today: date | None = None) -> list[Impact]`: flag every obligation and product pair that passes the exposure, scope and attribute gates, worst first.
+- `assess_impacts(register: Register, today: date | None = None, focus: FocusProfile | None = None) -> list[Impact]`: flag every obligation and product pair that passes the exposure, scope and attribute gates. Pairs that match the focus profile come first, then the rest, and each group is worst first. Nothing is dropped: a pair that matches no focus area has `in_focus` false. With no profile, or an inactive one, every pair is in focus.
 - `jurisdiction_applies(jurisdiction: str, markets: Iterable[str], parents: dict[str, str]) -> bool`: true when the jurisdiction and any market lie on one path of the jurisdiction tree.
 - `scope_applies(obligation_scope: Iterable[str], product_scopes: Iterable[str]) -> bool`: true when the obligation has no scope limit or shares a scope with the product.
 - `theme_findings(register: Register, impacts: Iterable[Impact], themes: Iterable[Theme]) -> list[Finding]`: apply each theme as a lens.
-- `Impact`: frozen dataclass with `product_id`, `product_name`, `obligation_id`, `obligation_title`, `jurisdiction`, `status`, `effective_date`, `reasons` and `severity`.
+- `Impact`: frozen dataclass with `product_id`, `product_name`, `obligation_id`, `obligation_title`, `jurisdiction`, `status`, `effective_date`, `reasons`, `severity`, `focus` (the identifiers of the focus areas matched, `custom-terms` for custom terms) and `in_focus`.
 - `Finding`: frozen dataclass with `key`, `title`, `why`, `action`, `affected_products` and `obligations`.
 
 ## document
@@ -114,14 +115,14 @@ The document model shared by every briefing and renderer.
 
 Deterministic briefings. They call no external service.
 
-- `daily_brief(register, results, impacts, today) -> Document`: what changed, what is effective within 30 days, and the act-now and high candidates.
-- `weekly_synthesis(register, impacts, findings, today) -> Document`: the full analysis of the register against the portfolio.
+- `daily_brief(register, results, impacts, today) -> Document`: what changed, what is effective within 30 days, and the act-now and high candidates. Candidates with `in_focus` false are listed under `Flagged Outside Your Focus Areas`.
+- `weekly_synthesis(register, impacts, findings, today) -> Document`: the full analysis of the register against the portfolio. Candidates with `in_focus` false are listed under `Candidate Impact Outside Your Focus Areas`.
 - `upcoming_obligations(obligations, days, today) -> list[Obligation]`: obligations effective from today to `days` days ahead, soonest first.
 
 ## briefing
 
 - `TIERS: tuple[str, ...]`: `("v1", "v2", "v3")`.
-- `build_briefing(register, impacts, today, *, tier="v3", recent_count=8, since_days=None, candidates=()) -> Document`: the tiered briefing. Raises `ValueError` for an unknown tier. Candidates appear only in `v3`, and are always labelled unconfirmed.
+- `build_briefing(register, impacts, today, *, tier="v3", recent_count=8, since_days=None, candidates=(), focus=None) -> Document`: the tiered briefing. Raises `ValueError` for an unknown tier. Candidates appear only in `v3`, and are always labelled unconfirmed. With an active `focus` profile, obligations, dated items and candidates that match come first and the rest follow under an outside-your-focus-areas heading; see the [focus catalogue](focus-catalogue.md).
 
 ## sanitize
 
@@ -152,6 +153,34 @@ Delivery formats. HTML and Word output escape all text.
 - `neutralise_cell(value: str) -> str`: prefix an apostrophe to a cell that starts with one of them.
 - `build_records(register: Register) -> list[dict[str, str]]`: one normalized record per obligation.
 - `records_csv(records: list[dict[str, str]]) -> str`: CSV text with a header row, with formula cells neutralised.
+
+## focus
+
+Focus areas and profiles. See the [focus catalogue](focus-catalogue.md).
+
+- `load_catalogue(path: Path | None = None) -> tuple[FocusArea, ...]`: read and validate a catalogue file, or the shipped one when `path` is `None`. Raises `FocusError`.
+- `parse_catalogue(data: object, label: str = "the focus catalogue") -> tuple[FocusArea, ...]`: validate a decoded catalogue. Raises `FocusError`.
+- `shipped_catalogue_text() -> str`: the shipped catalogue file, read through `importlib.resources`.
+- `build_profile(settings: ProfileSettings) -> FocusProfile`: resolve the chosen identifiers against the catalogue. An empty `settings` gives an inactive profile. Raises `FocusError` for an unknown identifier.
+- `FocusProfile(areas=(), custom_terms=())`: frozen dataclass. `active` is true when there is at least one area or term. `names()` lists the labels. `matches(*texts)` returns the identifiers of the areas whose terms appear in the texts, whole word, any case, one plural ending allowed. `match_obligation(obligation, detail=None)`, `match_product(product)` and `match_candidate(candidate)` apply it to the text of each kind of item.
+- `FocusArea`: frozen dataclass with `focus_id`, `label`, `description` and `terms`.
+- `CUSTOM_TERMS_KEY: str`: `"custom-terms"`, the identifier reported for a custom term.
+- `FocusError`: the catalogue is unreadable or invalid, or the profile names an unknown area.
+
+## onboarding
+
+What `regwatch init` writes and the checks on its answers. Nothing here prints or asks a question.
+
+- `SCAFFOLD_NAMES: tuple[str, ...]`: the files `init` writes, relative to the project folder.
+- `CATALOGUE_NAME: str`: `"focus-areas.json"`.
+- `InitPlan(directory, focus_areas=(), custom_terms=(), jurisdictions=(), file_roots=(), contact="")`: frozen dataclass of the answers.
+- `scaffold_files(plan: InitPlan) -> dict[str, str]`: the text of every file, keyed by relative path. Raises `OnboardingError` if an answer cannot be stored in TOML.
+- `parse_focus_choice(tokens, catalogue) -> tuple[str, ...]`: identifiers or one-based numbers to identifiers.
+- `jurisdiction_records(names) -> tuple[dict[str, str], ...]`: tracked jurisdiction records with identifiers made from the names.
+- `example_jurisdictions() -> tuple[dict[str, str], ...]`: the invented jurisdictions that `init --example` offers.
+- `clean_value(value, what) -> str`, `clean_terms(values) -> tuple[str, ...]`, `check_contact(value) -> str`, `check_directory(value, home) -> Path` and `check_file_root(value, base, home) -> str`: validate one answer, each raising `OnboardingError` with a message that says what is wrong.
+- `user_agent_for(contact: str) -> str`: the User-Agent header for a contact.
+- `OnboardingError`: an answer is not usable. It is a `ValueError`.
 
 ## cli
 

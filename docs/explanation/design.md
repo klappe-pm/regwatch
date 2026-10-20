@@ -44,6 +44,14 @@ The gates are deliberately simple and explainable. When a pair is flagged, the o
 
 Severity is a score built from the obligation's status, how soon it takes effect, and whether a named term matched. It orders the list so the first screen is the one to read. It is not a measure of legal risk, and the documentation never presents it as one.
 
+## focus-areas-rank-and-never-hide
+
+A register for a real business is wider than the business. Rules about drinks, cosmetics and pet food all pass the three gates for someone who sells only one of them, because the gates match on attributes and not on interest. Focus areas answer a different question: of the candidates, which should a person read first?
+
+A focus area is a named set of words, chosen once during `regwatch init` and kept in the configuration. A candidate that mentions one of the words is in focus. Candidates in focus are listed first and the rest follow under an "outside your focus areas" heading. regwatch ranks and never filters, for the same reason that matching is generous: a rule that matters to you but uses a word nobody thought to list would vanish if the list were a filter, and nobody would know. Under a heading it is merely second. The words are whole words without regard to case, so the reason for a match is easy to read and to correct, and the catalogue is a file the user owns and edits.
+
+The shipped catalogue is general vocabulary. It names no company or product, and it is a starting point: the person who knows the business adds the words that matter to it.
+
 ## snapshots-and-repeatability
 
 By default `check` reads a stored snapshot instead of the network. This has three effects. A run is repeatable: the same snapshots give the same result. It works offline, which makes it testable and usable on a locked-down machine. And it separates fetching from comparing, so you can fetch on one schedule and compare on another, or capture with a tool of your own and hand regwatch the file.

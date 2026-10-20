@@ -36,12 +36,52 @@ Commands read the register and never write it. Writes go to exactly these places
 
 | command | writes |
 | --- | --- |
+| `init` | the seven scaffold files, listed under [init](#init), in the project folder |
 | `capture` | one file per source in the snapshots directory |
 | `check --accept` | `seen.json` in the state directory |
 | `ingest` | `ingest-candidates.json` in the state directory |
 | `brief --out-dir` | `<name>.md` and `<name>.json` in the directory you name |
 | `render` | the rendered files in the directory you name |
 | `digest --out`, `report --out`, `report --json`, `export --csv`, `export --json` | the path you name |
+
+## init
+
+Creates a project: `regwatch.toml`, an empty register that validates, and a copy of the focus catalogue. It asks its questions on the terminal with plain prompts and needs no other program. Every question has a flag, a question whose flag is given is not asked, and `--yes` takes the default for every question that has no flag, so the command can run without a terminal. It ignores the global `--config` option: the configuration file is always `regwatch.toml` in the project folder.
+
+| option | meaning |
+| --- | --- |
+| `--dir PATH` | the project folder, created if needed. Without it the current folder is the default answer, and `--yes` takes it. In your home directory the folder is asked for, or with `--yes` the command stops, and the home directory itself is always refused. |
+| `--focus ID` | a focus area, by id or by its number in the list; repeat for more. Default none. |
+| `--term TERM` | a custom term that counts as a focus; repeat for more. Default none. |
+| `--jurisdiction NAME` | a jurisdiction to watch; repeat for more. Its id is made from the name. Default none. |
+| `--allow-file-root FOLDER` | allow `file` sources under this folder; repeat for more. Default none, so local files are refused. The root of a file system and your home directory are refused. A relative folder is relative to the project folder. |
+| `--contact TEXT` | an email address or web page, 1 to 200 printable ASCII characters, written into the User-Agent header as `regwatch/<version> (+TEXT)`. Default: the standard header. |
+| `--example` | offer the invented example jurisdictions (Northland, Southvale and their regions) as the default answer. They are never offered otherwise. |
+| `--yes` | take the default for every question without a flag and do not ask to confirm |
+| `--force` | replace files that already exist |
+
+Interactive answers are separated by commas. A flag value is one item, so a name that contains a comma is possible only as a flag. An unusable answer is explained and asked again. A closed input stream stops the command with `error:` and a hint to use flags or `--yes`.
+
+Files written, all inside the project folder:
+
+| file | holds |
+| --- | --- |
+| `regwatch.toml` | the register paths, the state directory, the `[profile]` table and, only when answered, `[fetch]` |
+| `register/obligations.csv` | the header row only |
+| `register/jurisdictions.json` | one tracked jurisdiction per name |
+| `register/categories.json`, `register/sources.json` | empty lists |
+| `register/portfolio.json` | the name `My portfolio` and no products |
+| `focus-areas.json` | a copy of the shipped catalogue, for you to edit |
+
+Before asking anything but the folder, `init` lists the files that already exist. Without `--force` it stops, exits 2 and changes nothing. It also refuses, even with `--force`, to write through a symbolic link, and it prints a summary and asks for confirmation before writing unless `--yes` is given; declining exits 2 and writes nothing. Each file is written atomically. The finished project validates with `errors=0`.
+
+## config
+
+`regwatch config show` prints the effective configuration: every setting after defaults and path resolution, in the form of the configuration file. Paths are absolute. It prints the register files, the state and snapshots directories, the fetch limits with the User-Agent and `allowed_file_roots` (a comment says when the list is empty and every file source is refused), the ingest filters, and the profile with the catalogue in use, one comment line for each focus area with its label and number of terms. It does not read the register. It exits 2 if the configuration is invalid or names an unknown focus area.
+
+```text
+regwatch config show
+```
 
 ## validate
 
@@ -120,7 +160,7 @@ Parses a Federal Register style API response into candidate change log events an
 
 ## impact
 
-Flags candidate impacts of obligations on products, worst first. Each pair is printed with the reasons it matched.
+Flags candidate impacts of obligations on products, worst first. Each pair is printed with the reasons it matched. With focus areas set, pairs that match a focus area are printed first, each with a `focus:` reason, then a blank line, the heading `Outside your focus areas` and the rest in the same order. Nothing is left out. The last line then adds how many pairs fall in each group.
 
 | option | meaning |
 | --- | --- |
@@ -133,7 +173,7 @@ Reads the impacts through the themes in your themes file and prints one finding 
 
 ## brief
 
-Builds a briefing document. Without `--out-dir` it prints Markdown to standard output. With it, it writes `<name>.md` and `<name>.json`, where the JSON is the document model that `render` reads.
+Builds a briefing document. With focus areas set, items that match them come first and the rest follow under an `Outside Your Focus Areas` heading; see the [focus catalogue](focus-catalogue.md). Without `--out-dir` it prints Markdown to standard output. With it, it writes `<name>.md` and `<name>.json`, where the JSON is the document model that `render` reads.
 
 | option | meaning |
 | --- | --- |

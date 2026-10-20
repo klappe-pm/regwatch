@@ -9,6 +9,7 @@ silently changes behaviour.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ __all__ = [
     "ConfigError",
     "FetchSettings",
     "IngestSettings",
+    "ProfileSettings",
     "RegisterPaths",
     "load_config",
 ]
@@ -27,6 +29,7 @@ __all__ = [
 DEFAULT_CONFIG_NAME = "regwatch.toml"
 DEFAULT_USER_AGENT = "regwatch/0.1 (+https://github.com/klappe-pm/regwatch)"
 DEFAULT_API_URL = "https://www.federalregister.gov/api/v1/documents.json"
+FOCUS_ID_RE = re.compile(r"^[a-z0-9-]+$")
 MAX_CONFIG_BYTES = 256_000
 MAX_FETCH_BYTES_CEILING = 100_000_000
 
@@ -95,6 +98,20 @@ class IngestSettings:
 
 
 @dataclass(frozen=True)
+class ProfileSettings:
+    """What the user's business cares about, recorded by ``regwatch init``.
+
+    ``focus_areas`` are identifiers from the focus catalogue and ``custom_terms``
+    are extra words of the user's own. ``catalogue`` is an optional path to a
+    catalogue file that replaces the shipped one.
+    """
+
+    focus_areas: tuple[str, ...] = ()
+    custom_terms: tuple[str, ...] = ()
+    catalogue: Path | None = None
+
+
+@dataclass(frozen=True)
 class Config:
     """The parsed configuration, with every path made absolute."""
 
@@ -105,17 +122,21 @@ class Config:
     fetch: FetchSettings
     ingest: IngestSettings
     config_path: Path
+    profile: ProfileSettings = ProfileSettings()
 
     def protected_paths(self) -> list[Path]:
         """Files that a user-named output path must never overwrite.
 
-        The register files, this configuration file and regwatch's own state files.
+        The register files, this configuration file, the focus catalogue when one
+        is configured, and regwatch's own state files.
         """
+        catalogue = [self.profile.catalogue.resolve()] if self.profile.catalogue else []
         return [
             *self.register.all_paths(),
             self.config_path.resolve(),
             self.seen_path.resolve(),
             self.candidates_path.resolve(),
+            *catalogue,
         ]
 
     @property
@@ -219,6 +240,22 @@ def _parse_ingest(table: dict[str, Any]) -> IngestSettings:
     )
 
 
+def _parse_profile(table: dict[str, Any], base: Path) -> ProfileSettings:
+    areas = _str_list(table, "focus_areas", "profile", ())
+    if not all(FOCUS_ID_RE.fullmatch(area) for area in areas):
+        raise ConfigError(
+            "[profile] focus_areas must hold identifiers of lowercase letters, digits and hyphens"
+        )
+    catalogue = (
+        _resolve(base, _string(table, "catalogue", "profile")) if "catalogue" in table else None
+    )
+    return ProfileSettings(
+        focus_areas=tuple(dict.fromkeys(areas)),
+        custom_terms=tuple(dict.fromkeys(_str_list(table, "custom_terms", "profile", ()))),
+        catalogue=catalogue,
+    )
+
+
 def load_config(path: Path) -> Config:
     """Read and validate the configuration file at ``path``.
 
@@ -236,7 +273,7 @@ def load_config(path: Path) -> Config:
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise ConfigError(f"cannot parse configuration file {path}: {exc}") from exc
 
-    unknown_tables = sorted(set(data) - {"register", "state", "fetch", "ingest"})
+    unknown_tables = sorted(set(data) - {"register", "state", "fetch", "ingest", "profile"})
     if unknown_tables:
         raise ConfigError(f"unknown configuration tables: {', '.join(unknown_tables)}")
 
@@ -298,6 +335,9 @@ def load_config(path: Path) -> Config:
             base,
         ),
         config_path=path.resolve(),
+        profile=_parse_profile(
+            _table(data, "profile", ("focus_areas", "custom_terms", "catalogue")), base
+        ),
         ingest=_parse_ingest(
             _table(
                 data,

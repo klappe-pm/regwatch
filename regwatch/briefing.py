@@ -22,6 +22,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from regwatch.document import Document, Section, make_disclaimer
+from regwatch.focus import FocusProfile
 from regwatch.impact import Impact
 from regwatch.register import ChangeEvent, Citation, Obligation, Register, parse_date
 from regwatch.sanitize import clean_text, safe_https_url
@@ -139,6 +140,46 @@ def _obligation_section(
     return Section(obligation.title, level=3, paragraphs=paragraphs)
 
 
+def _jurisdiction_sections(
+    register: Register,
+    obligations: Iterable[Obligation],
+    products: Mapping[str, list[str]],
+    tier: str,
+    jurisdiction_names: Mapping[str, str],
+) -> list[Section]:
+    """Obligations grouped under one heading per jurisdiction, ordered by jurisdiction name."""
+    by_jurisdiction: dict[str, list[Obligation]] = {}
+    for obligation in obligations:
+        by_jurisdiction.setdefault(obligation.jurisdiction, []).append(obligation)
+    sections: list[Section] = []
+    for jurisdiction in sorted(by_jurisdiction, key=lambda j: jurisdiction_names.get(j, j)):
+        sections.append(
+            Section(f"Obligations: {jurisdiction_names.get(jurisdiction, jurisdiction)}")
+        )
+        sections += [
+            _obligation_section(register, o, products, tier) for o in by_jurisdiction[jurisdiction]
+        ]
+    return sections
+
+
+def _candidate_section(candidate: Mapping[str, Any]) -> Section:
+    """One unconfirmed ingest candidate. The candidates file is untrusted, so every field is cleaned."""
+    what = _plain(candidate.get("what_happened"))
+    paragraphs = [f"What happened (unconfirmed). {what}"]
+    raw_citations = candidate.get("citations")
+    citations = raw_citations if isinstance(raw_citations, list) else []
+    cited = "; ".join(_plain(c.get("citation")) for c in citations if isinstance(c, dict)).strip(
+        "; "
+    )
+    if cited:
+        paragraphs.append(f"Citations from the feed. {cited}")
+    link = safe_https_url(candidate.get("source_url"))
+    if link:
+        paragraphs.append(f"Source. {_plain(candidate.get('document_number'))} ({link})")
+    heading = f"{_plain(candidate.get('date'))}: {_plain(candidate.get('headline'))}"
+    return Section(heading, level=3, paragraphs=paragraphs)
+
+
 def build_briefing(
     register: Register,
     impacts: Iterable[Impact],
@@ -148,25 +189,40 @@ def build_briefing(
     recent_count: int = 8,
     since_days: int | None = None,
     candidates: Iterable[Mapping[str, Any]] = (),
+    focus: FocusProfile | None = None,
 ) -> Document:
     """Build the briefing at ``tier`` (``v1``, ``v2`` or ``v3``).
 
     Raises ValueError for an unknown tier. ``candidates`` are the unconfirmed
     events from ingest; they appear only in ``v3`` and are always labelled
     unconfirmed.
+
+    With an active ``focus`` profile, obligations, dated items and candidates that
+    mention a focus area are listed first and the rest follow under an "outside
+    your focus areas" heading. Nothing is left out.
     """
     if tier not in TIER_RANK:
         raise ValueError(f"unknown tier '{tier}'")
     rank = TIER_RANK[tier]
+    profile = focus or FocusProfile()
     products = _products_by_obligation(impacts)
     jurisdiction_names = {j.jurisdiction_id: j.name for j in register.jurisdictions}
     sections: list[Section] = []
+
+    def in_focus(obligation: Obligation) -> bool:
+        detail = register.detail.get(obligation.obligation_id)
+        return not profile.active or bool(profile.match_obligation(obligation, detail))
 
     scope = f"Tracked regulatory obligations and developments for the {register.portfolio.name} portfolio."
     if rank >= 2:
         scope += " Each item carries its governing citations where the register records them."
     if rank == 3:
         scope += " Each item is written as what happened, what it means and what to do, with links to primary sources."
+    if profile.active:
+        scope += (
+            f" Focus areas: {', '.join(profile.names())}. Items that mention a focus area come first;"
+            " the rest follow under an outside-your-focus-areas heading, so nothing is left out."
+        )
     sections.append(Section("Scope", paragraphs=[scope]))
 
     events, window = _recent_events(register, today, since_days, recent_count)
@@ -209,16 +265,25 @@ def build_briefing(
             )
 
     due = upcoming_obligations(register.obligations, COMING_DUE_DAYS, today)
+    due_lines = [(o, f"{o.effective_date}, {o.jurisdiction}: {o.title} ({o.status})") for o in due]
+    focused_due = [line for o, line in due_lines if in_focus(o)]
+    other_due = [line for o, line in due_lines if not in_focus(o)]
     sections.append(
         Section(
             "Coming Due",
-            paragraphs=[] if due else ["Nothing with a dated effective date in the horizon."],
-            bullets=[f"{o.effective_date}, {o.jurisdiction}: {o.title} ({o.status})" for o in due],
+            paragraphs=[]
+            if focused_due
+            else ["Nothing with a dated effective date in the horizon."],
+            bullets=focused_due,
         )
     )
+    if other_due:
+        sections.append(Section("Coming Due Outside Your Focus Areas", bullets=other_due))
 
     candidate_list = list(candidates)
     if tier == "v3" and candidate_list:
+        focused = [c for c in candidate_list if not profile.active or profile.match_candidate(c)]
+        other = [c for c in candidate_list if profile.active and not profile.match_candidate(c)]
         sections.append(
             Section(
                 "Newly Detected, Unconfirmed",
@@ -228,38 +293,50 @@ def build_briefing(
                 ],
             )
         )
-        for candidate in candidate_list[:recent_count]:
-            # The candidates file is untrusted: clean every field before it is used.
-            what = _plain(candidate.get("what_happened"))
-            paragraphs = [f"What happened (unconfirmed). {what}"]
-            raw_citations = candidate.get("citations")
-            citations = raw_citations if isinstance(raw_citations, list) else []
-            cited = "; ".join(
-                _plain(c.get("citation")) for c in citations if isinstance(c, dict)
-            ).strip("; ")
-            if cited:
-                paragraphs.append(f"Citations from the feed. {cited}")
-            link = safe_https_url(candidate.get("source_url"))
-            if link:
-                paragraphs.append(f"Source. {_plain(candidate.get('document_number'))} ({link})")
-            heading = f"{_plain(candidate.get('date'))}: {_plain(candidate.get('headline'))}"
-            sections.append(Section(heading, level=3, paragraphs=paragraphs))
+        sections += [_candidate_section(c) for c in focused[:recent_count]]
+        if other:
+            sections.append(
+                Section(
+                    "Newly Detected Outside Your Focus Areas, Unconfirmed",
+                    paragraphs=[
+                        f"{len(other)} item(s) from the ingest feed mention none of your focus areas."
+                    ],
+                )
+            )
+            sections += [_candidate_section(c) for c in other[:recent_count]]
 
     ordered = sorted(register.obligations, key=lambda o: (STATUS_ORDER.get(o.status, 9), o.title))
+    focused_items = [o for o in ordered if in_focus(o)]
+    other_items = [o for o in ordered if not in_focus(o)]
     if tier == "v1":
-        sections.append(Section("Key Items", bullets=[_short_entry(register, o) for o in ordered]))
-    else:
-        by_jurisdiction: dict[str, list[Obligation]] = {}
-        for obligation in ordered:
-            by_jurisdiction.setdefault(obligation.jurisdiction, []).append(obligation)
-        for jurisdiction in sorted(by_jurisdiction, key=lambda j: jurisdiction_names.get(j, j)):
+        sections.append(
+            Section("Key Items", bullets=[_short_entry(register, o) for o in focused_items])
+        )
+        if other_items:
             sections.append(
-                Section(f"Obligations: {jurisdiction_names.get(jurisdiction, jurisdiction)}")
+                Section(
+                    "Key Items Outside Your Focus Areas",
+                    bullets=[_short_entry(register, o) for o in other_items],
+                )
             )
-            sections += [
-                _obligation_section(register, o, products, tier)
-                for o in by_jurisdiction[jurisdiction]
-            ]
+    else:
+        sections += _jurisdiction_sections(
+            register, focused_items, products, tier, jurisdiction_names
+        )
+        if other_items:
+            sections.append(
+                Section(
+                    "Outside Your Focus Areas",
+                    paragraphs=[
+                        f"{len(other_items)} obligation(s) mention none of your focus areas. They "
+                        "are listed after the ones that do, so nothing is left out."
+                    ],
+                )
+            )
+            sections += _jurisdiction_sections(
+                register, other_items, products, tier, jurisdiction_names
+            )
+    ordered = focused_items + other_items
 
     if rank >= 2 and register.enforcement and register.enforcement.themes:
         intro = "Recurring enforcement themes signal where attention lands."
