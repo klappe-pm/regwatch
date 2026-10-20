@@ -198,7 +198,8 @@ def _cmd_validate(ctx: _Context, args: argparse.Namespace) -> int:
     register = None if errors else load_register(ctx.config)
     if register is not None:
         _say(
-            f"regwatch validate: {len(register.obligations)} obligations, {len(register.sources)} sources, "
+            f"regwatch validate: {len(register.obligations)} obligations, "
+            f"{len(register.sources)} sources, "
             f"{len(register.categories)} categories, {len(register.jurisdictions)} jurisdictions, "
             f"{len(register.portfolio.products)} products; errors=0"
         )
@@ -222,7 +223,8 @@ def _cmd_coverage(ctx: _Context, args: argparse.Namespace) -> int:
                 f"{jurisdiction.jurisdiction_id} is marked confirmed but has no obligation rows"
             )
         _say(
-            f"{jurisdiction.coverage:<10} {jurisdiction.jurisdiction_id:<16} rows={count:<3} {jurisdiction.name}"
+            f"{jurisdiction.coverage:<10} {jurisdiction.jurisdiction_id:<16} "
+            f"rows={count:<3} {jurisdiction.name}"
         )
     summary = ", ".join(f"{k}={v}" for k, v in sorted(by_coverage.items()))
     _say(f"regwatch coverage: {len(register.jurisdictions)} jurisdictions; {summary}")
@@ -253,10 +255,12 @@ def _cmd_portfolio(ctx: _Context, args: argparse.Namespace) -> int:
     for product in register.portfolio.products:
         _say(f"{product.product_id:<28} {product.name}")
         _say(
-            f"{'':<28} categories: {', '.join(product.categories) or '-'}; markets: {', '.join(product.markets)}"
+            f"{'':<28} categories: {', '.join(product.categories) or '-'}; "
+            f"markets: {', '.join(product.markets)}"
         )
     _say(
-        f"regwatch portfolio: {register.portfolio.name}, {len(register.portfolio.products)} products"
+        f"regwatch portfolio: {register.portfolio.name}, "
+        f"{len(register.portfolio.products)} products"
     )
     return EXIT_OK
 
@@ -320,7 +324,8 @@ def _cmd_check(ctx: _Context, args: argparse.Namespace) -> int:
         _say(f"regwatch check: recorded the accepted baseline in {ctx.config.seen_path}")
     elif flagged:
         _say(
-            "regwatch check: changes detected; review them, then run again with --accept to record the baseline"
+            "regwatch check: changes detected; review them, "
+            "then run again with --accept to record the baseline"
         )
     if any(r.status == "SUSPICIOUS" for r in results) and not args.accept_suspicious:
         _say(
@@ -373,7 +378,10 @@ def _cmd_impact(ctx: _Context, args: argparse.Namespace) -> int:
         _say()
         _say(f"Outside your focus areas ({len(outside)}, listed after the items above):")
         _print_impacts(outside)
-    summary = f"regwatch impact: {len(impacts)} candidate impacts across {len(register.portfolio.products)} products"
+    summary = (
+        f"regwatch impact: {len(impacts)} candidate impacts across "
+        f"{len(register.portfolio.products)} products"
+    )
     if focus.active:
         summary += f"; {len(in_focus)} in your focus areas, {len(outside)} outside"
     _say(summary)
@@ -384,7 +392,8 @@ def _cmd_impact(ctx: _Context, args: argparse.Namespace) -> int:
 def _print_impacts(impacts: list[Impact]) -> None:
     for i in impacts:
         _say(
-            f"{i.severity:<8} {i.product_id:<24} {i.jurisdiction:<14} {i.effective_date or 'no date':<11} "
+            f"{i.severity:<8} {i.product_id:<24} {i.jurisdiction:<14} "
+            f"{i.effective_date or 'no date':<11} "
             f"{i.obligation_title}"
         )
         _say(f"{'':<8} {'; '.join(i.reasons)}")
@@ -693,7 +702,10 @@ def _refuse_existing(directory: Path, force: bool) -> list[str]:
 
 
 def _write_scaffold(directory: Path, files: Mapping[str, str], *, replace: bool) -> None:
-    """Write the scaffold. Without ``replace`` no file may exist yet; each is created exclusively."""
+    """Write the scaffold.
+
+    Without ``replace`` no file may exist yet; each is created exclusively.
+    """
     try:
         write_tree(directory, files, replace=replace)
     except AlreadyExistsError as exc:
@@ -884,7 +896,9 @@ _Handler = Callable[[_Context, argparse.Namespace], int]
 def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
     parser = argparse.ArgumentParser(
         prog="regwatch",
-        description="Monitor regulatory sources for changes and flag candidate impacts on your register.",
+        description=(
+            "Monitor regulatory sources for changes and flag candidate impacts on your register."
+        ),
         epilog=DISCLAIMER,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

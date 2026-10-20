@@ -107,7 +107,8 @@ def test_plain_https_urls_are_accepted(value: str) -> None:
 
 def test_escape_markdown_neutralises_links_images_html_and_blocks() -> None:
     assert escape_markdown("[a](b) ![i](u) <b>x</b> `c` *e* _u_ ~s~ # h | t &amp;") == (
-        "\\[a\\](b) \\!\\[i\\](u) \\<b\\>x\\</b\\> \\`c\\` \\*e\\* \\_u\\_ \\~s\\~ \\# h \\| t \\&amp;"
+        "\\[a\\](b) \\!\\[i\\](u) \\<b\\>x\\</b\\> \\`c\\` \\*e\\* "
+        "\\_u\\_ \\~s\\~ \\# h \\| t \\&amp;"
     )
     assert escape_markdown("- item") == "\\- item"
     assert escape_markdown("+ item") == "\\+ item"
@@ -363,7 +364,8 @@ def test_lone_surrogates_cannot_break_encoding(tmp_path: Path) -> None:
 def test_fetch_hardening_options_parse(project: Path) -> None:
     text = project.read_text(encoding="utf-8").replace(
         "[fetch]\n",
-        '[fetch]\ntotal_timeout_seconds = 45\nallow_private_hosts = true\nallowed_file_roots = ["snapshots", "/srv/feeds"]\n',
+        "[fetch]\ntotal_timeout_seconds = 45\nallow_private_hosts = true\n"
+        'allowed_file_roots = ["snapshots", "/srv/feeds"]\n',
     )
     project.write_text(text, encoding="utf-8")
     fetch = load_config(project).fetch

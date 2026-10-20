@@ -51,7 +51,8 @@ SCAFFOLD_NAMES = (
     CATALOGUE_NAME,
 )
 MAX_VALUE_LENGTH = 200
-# Control, format, surrogate, private use and unassigned characters, and line and paragraph separators.
+# Control, format, surrogate, private use and unassigned characters, and line and paragraph
+# separators.
 INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})
 CONTACT_RE = re.compile(r"[ -~]{1,200}")
 
@@ -73,7 +74,10 @@ class InitPlan:
 
 
 def clean_value(value: str, what: str) -> str:
-    """Return ``value`` trimmed, or raise OnboardingError if it is empty, long or has control characters."""
+    """Return ``value`` trimmed.
+
+    Raise OnboardingError if it is empty, long or has control characters.
+    """
     text = value.strip()
     if not text:
         raise OnboardingError(f"{what} must not be empty")
@@ -195,7 +199,10 @@ def jurisdiction_records(names: Iterable[str]) -> tuple[dict[str, str], ...]:
 
 
 def example_jurisdictions() -> tuple[dict[str, str], ...]:
-    """The invented jurisdictions that ``regwatch init --example`` offers, read from package data."""
+    """The invented jurisdictions that ``regwatch init --example`` offers.
+
+    They are read from package data.
+    """
     path = resources.files("regwatch").joinpath("data/example-jurisdictions.json")
     return tuple(json.loads(path.read_text(encoding="utf-8"))["jurisdictions"])
 

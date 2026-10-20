@@ -27,7 +27,10 @@ RECORD_COLUMNS = (
 
 
 def build_records(register: Register) -> list[dict[str, str]]:
-    """Return one normalized record per obligation, joined with its detail record when it has one."""
+    """Return one normalized record per obligation.
+
+    Each record is joined with the obligation's detail record when it has one.
+    """
     delimiter = register.delimiter
     records: list[dict[str, str]] = []
     for obligation in register.obligations:

@@ -49,7 +49,10 @@ class AlreadyExistsError(StateError):
 
 
 def safe_write_text(path: Path, text: str, protected: Iterable[Path]) -> None:
-    """Write ``text`` as UTF-8 to ``path`` atomically unless ``path`` is a protected register file."""
+    """Write ``text`` as UTF-8 to ``path`` atomically.
+
+    Refuse when ``path`` is a protected register file.
+    """
     safe_write_bytes(path, text.encode("utf-8", errors="replace"), protected)
 
 

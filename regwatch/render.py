@@ -119,7 +119,8 @@ def render_newsletter_html(doc: Document) -> str:
         '<html lang="en"><head><meta charset="utf-8">',
         f"<title>{esc(_line(doc.title))}</title></head>",
         '<body style="margin:0;padding:0;background:#f4f4f4;">',
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;">',
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="background:#f4f4f4;">',
         '<tr><td align="center" style="padding:24px 12px;">',
         '<table role="presentation" width="640" cellpadding="0" cellspacing="0" '
         'style="background:#ffffff;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">',
@@ -131,18 +132,21 @@ def render_newsletter_html(doc: Document) -> str:
             f'<p style="margin:6px 0 0 0;color:#555;font-size:14px;">{esc(_line(doc.subtitle))}</p>'
         )
     body.append(
-        f'<p style="margin:6px 0 0 0;color:#888;font-size:12px;">Generated {esc(_line(doc.generated))}.</p>'
+        '<p style="margin:6px 0 0 0;color:#888;font-size:12px;">'
+        f"Generated {esc(_line(doc.generated))}.</p>"
     )
     body.append("</td></tr>")
     for section in doc.sections:
         body.append('<tr><td style="padding:16px 32px 0 32px;">')
         body.append(
-            '<h2 style="margin:0 0 8px 0;font-size:16px;border-bottom:1px solid #eee;padding-bottom:4px;">'
+            '<h2 style="margin:0 0 8px 0;font-size:16px;border-bottom:1px solid #eee;'
+            'padding-bottom:4px;">'
             f"{esc(_line(section.heading))}</h2>"
         )
         for paragraph in section.paragraphs:
             body.append(
-                f'<p style="margin:0 0 10px 0;font-size:14px;line-height:1.5;">{esc(_line(paragraph))}</p>'
+                '<p style="margin:0 0 10px 0;font-size:14px;line-height:1.5;">'
+                f"{esc(_line(paragraph))}</p>"
             )
         if section.bullets:
             body.append(
@@ -153,7 +157,8 @@ def render_newsletter_html(doc: Document) -> str:
         body.append("</td></tr>")
     body += [
         '<tr><td style="padding:16px 32px 28px 32px;">',
-        '<p style="margin:0;color:#444;font-size:12px;line-height:1.4;border-top:1px solid #eee;padding-top:12px;">'
+        '<p style="margin:0;color:#444;font-size:12px;line-height:1.4;'
+        'border-top:1px solid #eee;padding-top:12px;">'
         f"{esc(_line(doc.disclaimer))}</p>",
         "</td></tr>",
         "</table></td></tr></table></body></html>",
@@ -166,7 +171,8 @@ def render_newsletter_html(doc: Document) -> str:
 _CONTENT_TYPES = (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    '<Default Extension="rels" '
+    'ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
     '<Default Extension="xml" ContentType="application/xml"/>'
     '<Override PartName="/word/document.xml" '
     'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'

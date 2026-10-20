@@ -1,13 +1,17 @@
-"""Generate the README banner: a terminal window with text as outlines and a timed animation.
+"""Generate the Regwatch banner: a terminal window with text as outlines and a timed animation.
 
-Usage: python3 scripts/make-banner.py [--accent HEX] [--regular FONT.ttf] [--bold FONT.ttf] [--out PATH]
+Usage: python3 scripts/make-banner.py [--accent HEX] [--regular FONT.ttf] [--bold FONT.ttf]
+       [--out PATH]
 
-Follows the stratarc banner exactly (window chrome, palette, timing, outlined DejaVu Sans Mono)
-and changes only the command, the wordmark, the tagline and the result rows. Text is converted
-to paths so the banner renders identically in every viewer, with no font dependency.
+The output defaults to .github/regwatch-banner.svg and the wordmark colour to #febc2e.
 
-This script is not part of the package. It needs fontTools (`pip install fonttools`) and the
-DejaVu Sans Mono fonts, and writes .github/regwatch-banner.svg by default.
+Follows the Stratarc banner (window chrome, palette, timing, outlined DejaVu Sans Mono) and
+changes only the command, the wordmark, the tagline and the result rows. Text is converted to
+paths so the banner renders identically in every viewer, with no font dependency.
+
+This script is the one place that needs `fonttools` (pip install fonttools). It is a development
+tool, not a dependency of the package, and the package never imports it. The default fonts are the
+DejaVu Sans Mono files that most Linux distributions ship; pass --regular and --bold elsewhere.
 """
 
 import argparse
@@ -17,33 +21,33 @@ from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
 
-NAME = "regwatch"
-SPEC = {
-    "folder": "~/label-compliance",
-    "command": "regwatch check",
-    "tagline": "watch regulatory sources, flag what changes for your products",
-    "label": "A terminal window: regwatch check is typed, the regwatch wordmark appears, and each watched source reports changed or unchanged",
-    "rows": [
-        ("ok", "ecfr-21-101", "unchanged", "food labeling, general"),
-        ("warn", "fda-guidance", "changed", "2 candidate impacts to review"),
-        ("ok", "fed-register", "unchanged", "proposed rules, 7 day window"),
-        ("warn", "eu-1169-2011", "changed", "1 candidate impact to review"),
-    ],
+PACKAGES = {
+    "regwatch": {
+        "folder": "~/label-compliance",
+        "command": "regwatch check",
+        "tagline": "watch regulatory sources, flag what changes for your products",
+        "label": (
+            "A terminal window: regwatch check is typed, the regwatch wordmark appears, "
+            "and each watched source reports changed or unchanged"
+        ),
+        "rows": [
+            ("ok", "ecfr-21-101", "unchanged", "food labeling, general"),
+            ("warn", "fda-guidance", "changed", "2 candidate impacts to review"),
+            ("ok", "fed-register", "unchanged", "proposed rules, 7 day window"),
+            ("warn", "eu-1169-2011", "changed", "1 candidate impact to review"),
+        ],
+    },
 }
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--accent", default="#febc2e", help="wordmark colour; stratarc uses #3ddc84")
+ap.add_argument("--accent", default="#febc2e", help="wordmark colour")
 ap.add_argument("--regular", default="/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
 ap.add_argument("--bold", default="/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf")
-ap.add_argument(
-    "--out",
-    type=Path,
-    default=Path(__file__).resolve().parent.parent / ".github" / f"{NAME}-banner.svg",
-)
+ap.add_argument("--out", default=".github/regwatch-banner.svg")
 args = ap.parse_args()
-spec = SPEC
-name = NAME
-out = args.out
+name = "regwatch"
+spec = PACKAGES[name]
+out = Path(args.out)
 
 REG = TTFont(args.regular)
 BOLD = TTFont(args.bold)
@@ -52,7 +56,7 @@ CYCLE = 10.0  # seconds per loop
 
 
 def glyph_paths(font, text, x, y, size, per_char=False):
-    """Return list of (path_d, advance_x) for text at baseline (x, y); one path per run or per char."""
+    """Return a list of (path_d, advance_x) for text at baseline (x, y), per run or per char."""
     upem = font["head"].unitsPerEm
     s = size / upem
     cmap = font.getBestCmap()
@@ -90,14 +94,17 @@ def pct(t):
 parts = []
 css = []
 
-# static chrome, identical to stratarc
+# static chrome, identical to the Stratarc banner
 parts.append(
-    '<rect x="40" y="28" width="800" height="344" rx="14" fill="url(#bg)" stroke="#23344a" filter="url(#shadow)"/>'
+    '<rect x="40" y="28" width="800" height="344" rx="14" fill="url(#bg)" '
+    'stroke="#23344a" filter="url(#shadow)"/>'
 )
 parts.append('<rect x="40" y="28" width="800" height="40" rx="14" fill="#1b2a3d"/>')
 parts.append('<rect x="40" y="54" width="800" height="14" fill="#1b2a3d"/>')
 parts.append(
-    '<circle cx="66" cy="48" r="6.5" fill="#ff5f57"/><circle cx="88" cy="48" r="6.5" fill="#febc2e"/><circle cx="110" cy="48" r="6.5" fill="#28c840"/>'
+    '<circle cx="66" cy="48" r="6.5" fill="#ff5f57"/>'
+    '<circle cx="88" cy="48" r="6.5" fill="#febc2e"/>'
+    '<circle cx="110" cy="48" r="6.5" fill="#28c840"/>'
 )
 
 w = text_width(REG, name, 13)
@@ -120,7 +127,8 @@ cursor_x = x
 for i, (d, _nx) in enumerate(chars):
     t = T_TYPE0 + i * T_STEP
     css.append(
-        f".c{i}{{animation:show{i} {CYCLE}s steps(1) infinite}} @keyframes show{i}{{0%,{pct(t)}{{opacity:0}}{pct(t + 0.001)},100%{{opacity:1}}}}"
+        f".c{i}{{animation:show{i} {CYCLE}s steps(1) infinite}} "
+        f"@keyframes show{i}{{0%,{pct(t)}{{opacity:0}}{pct(t + 0.001)},100%{{opacity:1}}}}"
     )
     parts.append(f'<path class="txt c{i}" d="{d}"/>')
 T_TYPED = T_TYPE0 + len(cmd) * T_STEP
@@ -133,11 +141,14 @@ for i, cx in enumerate(cursor_positions):
     parts.append(f'<rect class="cursor k{i}" x="{cx + 3:.1f}" y="100" width="8" height="15"/>')
     if i < len(chars):
         css.append(
-            f".k{i}{{animation:cur{i} {CYCLE}s steps(1) infinite}} @keyframes cur{i}{{0%{{opacity:0}}{pct(t0)}{{opacity:1}}{pct(t1)},100%{{opacity:0}}}}"
+            f".k{i}{{animation:cur{i} {CYCLE}s steps(1) infinite}} "
+            f"@keyframes cur{i}{{0%{{opacity:0}}{pct(t0)}{{opacity:1}}{pct(t1)},100%{{opacity:0}}}}"
         )
     else:
         css.append(
-            f".k{i}{{animation:cur{i} {CYCLE}s steps(1) infinite, blink 1.1s steps(1) infinite}} @keyframes cur{i}{{0%,{pct(t0)}{{visibility:hidden}}{pct(t0 + 0.001)},100%{{visibility:visible}}}}"
+            f".k{i}{{animation:cur{i} {CYCLE}s steps(1) infinite, blink 1.1s steps(1) infinite}} "
+            f"@keyframes cur{i}{{0%,{pct(t0)}{{visibility:hidden}}"
+            f"{pct(t0 + 0.001)},100%{{visibility:visible}}}}"
         )
 
 # wordmark and tagline
@@ -147,7 +158,8 @@ parts.append(f'<path class="word show-word" d="{d}"/>')
 ((d, _),) = glyph_paths(REG, spec["tagline"], 76, 228, 15)
 parts.append(f'<path class="dim show-word" d="{d}"/>')
 css.append(
-    f".show-word{{animation:sw {CYCLE}s steps(1) infinite}} @keyframes sw{{0%,{pct(T_WORD)}{{opacity:0}}{pct(T_WORD + 0.001)},100%{{opacity:1}}}}"
+    f".show-word{{animation:sw {CYCLE}s steps(1) infinite}} "
+    f"@keyframes sw{{0%,{pct(T_WORD)}{{opacity:0}}{pct(T_WORD + 0.001)},100%{{opacity:1}}}}"
 )
 
 # result rows: a green tick, an amber dot or a red cross, drawn after the row lands
@@ -162,7 +174,8 @@ for i, (mark, first, second, third) in enumerate(spec["rows"]):
     status_column = spec.get("status_column", True)
     cls2 = {"ok": "dim", "warn": "warn", "deny": "deny"}[mark] if status_column else "dim"
     parts.append(
-        f'<g class="r{i}"><path class="txt" d="{d1}"/><path class="{cls2}" d="{d2}"/><path class="dim" d="{d3}"/></g>'
+        f'<g class="r{i}"><path class="txt" d="{d1}"/><path class="{cls2}" d="{d2}"/>'
+        f'<path class="dim" d="{d3}"/></g>'
     )
     cy = y - 5
     if mark == "ok":
@@ -172,33 +185,48 @@ for i, (mark, first, second, third) in enumerate(spec["rows"]):
     else:
         parts.append(f'<path class="denymark t{i}" d="M78 {cy - 5} l8 8 M86 {cy - 5} l-8 8"/>')
     css.append(
-        f".r{i}{{animation:row{i} {CYCLE}s steps(1) infinite}} @keyframes row{i}{{0%,{pct(t)}{{opacity:0}}{pct(t + 0.001)},100%{{opacity:1}}}}"
+        f".r{i}{{animation:row{i} {CYCLE}s steps(1) infinite}} "
+        f"@keyframes row{i}{{0%,{pct(t)}{{opacity:0}}{pct(t + 0.001)},100%{{opacity:1}}}}"
     )
     css.append(
-        f".t{i}{{animation:tick{i} {CYCLE}s linear infinite}} @keyframes tick{i}{{0%,{pct(t + 0.15)}{{stroke-dashoffset:16;opacity:0}}{pct(t + 0.45)},100%{{stroke-dashoffset:0;opacity:1}}}}"
+        f".t{i}{{animation:tick{i} {CYCLE}s linear infinite}} "
+        f"@keyframes tick{i}{{0%,{pct(t + 0.15)}{{stroke-dashoffset:16;opacity:0}}"
+        f"{pct(t + 0.45)},100%{{stroke-dashoffset:0;opacity:1}}}}"
     )
 
-style = f"""
+style = (
+    f"""
 .dim{{fill:#7c93ad}}.txt{{fill:#d7e3ee}}.prompt{{fill:#5aa9ff}}.word{{fill:{args.accent}}}
 .warn{{fill:#febc2e}}.deny{{fill:#ff5f57}}
 .cursor{{fill:#d7dce6}}
-.ok{{fill:none;stroke:#3ddc84;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:16;stroke-dashoffset:16}}
-.warnmark{{fill:#febc2e}}
-.denymark{{fill:none;stroke:#ff5f57;stroke-width:2.2;stroke-linecap:round;stroke-dasharray:16;stroke-dashoffset:16}}
-@keyframes blink{{50%{{opacity:0}}}}
-""" + "\n".join(css)
-
-svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="880" height="400" viewBox="0 0 880 400" role="img" aria-label="{spec["label"]}">
-  <!-- Generated by scripts/make-banner.py. Text is set as outlines of DejaVu Sans Mono (Bitstream Vera license) so it renders identically everywhere. Edit the generator, not these paths. -->
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#162233"/><stop offset="1" stop-color="#0d1520"/></linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.45"/></filter>
-    <style>{style}</style>
-  </defs>
-  {chr(10).join("  " + p for p in parts)}
-</svg>
-'''
-out.write_text(svg)
-print(
-    f"wrote {out}: {len(svg)} bytes; animation settles at {T_ROW0 + len(spec['rows']) * T_ROWSTEP:.2f}s of a {CYCLE:.0f}s loop"
+"""
+    ".ok{fill:none;stroke:#3ddc84;stroke-width:2.2;stroke-linecap:round;"
+    "stroke-linejoin:round;stroke-dasharray:16;stroke-dashoffset:16}\n"
+    ".warnmark{fill:#febc2e}\n"
+    ".denymark{fill:none;stroke:#ff5f57;stroke-width:2.2;stroke-linecap:round;"
+    "stroke-dasharray:16;stroke-dashoffset:16}\n"
+    "@keyframes blink{50%{opacity:0}}\n" + "\n".join(css)
 )
+
+body = "\n".join("  " + p for p in parts)
+svg = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="880" height="400" viewBox="0 0 880 400" '
+    f'role="img" aria-label="{spec["label"]}">\n'
+    "  <!-- Generated by scripts/make-banner.py. Text is set as outlines of DejaVu Sans Mono "
+    "(Bitstream Vera license) so it renders identically everywhere. "
+    "Edit the generator, not these paths. -->\n"
+    "  <defs>\n"
+    '    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
+    '<stop offset="0" stop-color="#162233"/><stop offset="1" stop-color="#0d1520"/>'
+    "</linearGradient>\n"
+    '    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">'
+    '<feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.45"/>'
+    "</filter>\n"
+    f"    <style>{style}</style>\n"
+    "  </defs>\n"
+    f"  {body}\n"
+    "</svg>\n"
+)
+out.write_text(svg)
+settles = T_ROW0 + len(spec["rows"]) * T_ROWSTEP
+print(f"wrote {out}: {len(svg)} bytes; animation settles at {settles:.2f}s of a {CYCLE:.0f}s loop")

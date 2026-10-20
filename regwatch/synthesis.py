@@ -22,7 +22,10 @@ __all__ = ["daily_brief", "upcoming_obligations", "weekly_synthesis"]
 def upcoming_obligations(
     obligations: Iterable[Obligation], days: int, today: dt.date
 ) -> list[Obligation]:
-    """Return obligations whose effective date falls from today to ``days`` days ahead, soonest first."""
+    """Return obligations whose effective date falls from today to ``days`` days ahead.
+
+    The soonest comes first.
+    """
     horizon = today + dt.timedelta(days=days)
     kept = []
     for obligation in obligations:
@@ -33,7 +36,10 @@ def upcoming_obligations(
 
 
 def _due_line(obligation: Obligation) -> str:
-    return f"{obligation.effective_date}, {obligation.jurisdiction}: {obligation.title} ({obligation.status})"
+    return (
+        f"{obligation.effective_date}, {obligation.jurisdiction}: "
+        f"{obligation.title} ({obligation.status})"
+    )
 
 
 def _product_sections(impacts: list[Impact]) -> list[Section]:
@@ -70,7 +76,8 @@ def daily_brief(
     what_changed = Section("What Changed")
     if changed:
         what_changed.paragraphs.append(
-            f"{len(changed)} upstream source(s) changed since the last accepted baseline and need a look."
+            f"{len(changed)} upstream source(s) changed since the last accepted baseline "
+            "and need a look."
         )
         what_changed.bullets = [f"{r.status}: {r.source_id}" for r in changed]
     else:
@@ -136,7 +143,8 @@ def weekly_synthesis(
 
     summary = [
         f"{register.portfolio.name} models {len(products)} product(s). The register tracks "
-        f"{len(register.obligations)} obligation(s) across {len(register.jurisdictions)} jurisdiction(s), "
+        f"{len(register.obligations)} obligation(s) across "
+        f"{len(register.jurisdictions)} jurisdiction(s), "
         f"{confirmed} of them with confirmed coverage.",
         f"{len(impact_list)} candidate impact(s) were flagged: {counts['act-now']} act-now, "
         f"{counts['high']} high, {counts['watch']} watch and {counts['info']} informational. "
@@ -160,7 +168,8 @@ def weekly_synthesis(
         Section(
             "Candidate Impact By Product",
             paragraphs=[
-                f"{len(impacted)} of {len(products)} product(s) have flagged candidates. Each product's "
+                f"{len(impacted)} of {len(products)} product(s) have flagged candidates. "
+                "Each product's "
                 "candidates are listed worst first. Each one needs human confirmation."
             ],
         )
@@ -172,7 +181,8 @@ def weekly_synthesis(
             Section(
                 "Candidate Impact Outside Your Focus Areas",
                 paragraphs=[
-                    f"{len(outside)} candidate(s) mention none of your focus areas. They are listed "
+                    f"{len(outside)} candidate(s) mention none of your focus areas. "
+                    "They are listed "
                     "after the ones that do, and each one still needs human confirmation."
                 ],
             )

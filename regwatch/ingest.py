@@ -177,8 +177,9 @@ def candidates_document(
         "generated": today.isoformat(),
         "origin": origin,
         "note": (
-            "Unconfirmed candidates from the feed. A person confirms each one and copies it into the "
-            "curated change log by hand. regwatch never edits the change log. Not legal advice."
+            "Unconfirmed candidates from the feed. A person confirms each one and copies it "
+            "into the curated change log by hand. regwatch never edits the change log. "
+            "Not legal advice."
         ),
         "candidates": candidates,
     }

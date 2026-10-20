@@ -72,7 +72,8 @@ def test_validate_ok(run) -> None:  # type: ignore[no-untyped-def]
     result = run("validate")
     assert result.code == 0
     assert result.out.strip() == (
-        "regwatch validate: 7 obligations, 5 sources, 5 categories, 6 jurisdictions, 3 products; errors=0"
+        "regwatch validate: 7 obligations, 5 sources, 5 categories, 6 jurisdictions, "
+        "3 products; errors=0"
     )
 
 

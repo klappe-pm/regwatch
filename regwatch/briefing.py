@@ -163,7 +163,10 @@ def _jurisdiction_sections(
 
 
 def _candidate_section(candidate: Mapping[str, Any]) -> Section:
-    """One unconfirmed ingest candidate. The candidates file is untrusted, so every field is cleaned."""
+    """One unconfirmed ingest candidate.
+
+    The candidates file is untrusted, so every field is cleaned.
+    """
     what = _plain(candidate.get("what_happened"))
     paragraphs = [f"What happened (unconfirmed). {what}"]
     raw_citations = candidate.get("citations")
@@ -213,14 +216,21 @@ def build_briefing(
         detail = register.detail.get(obligation.obligation_id)
         return not profile.active or bool(profile.match_obligation(obligation, detail))
 
-    scope = f"Tracked regulatory obligations and developments for the {register.portfolio.name} portfolio."
+    scope = (
+        "Tracked regulatory obligations and developments for the "
+        f"{register.portfolio.name} portfolio."
+    )
     if rank >= 2:
         scope += " Each item carries its governing citations where the register records them."
     if rank == 3:
-        scope += " Each item is written as what happened, what it means and what to do, with links to primary sources."
+        scope += (
+            " Each item is written as what happened, what it means and what to do, "
+            "with links to primary sources."
+        )
     if profile.active:
         scope += (
-            f" Focus areas: {', '.join(profile.names())}. Items that mention a focus area come first;"
+            f" Focus areas: {', '.join(profile.names())}. "
+            "Items that mention a focus area come first;"
             " the rest follow under an outside-your-focus-areas heading, so nothing is left out."
         )
     sections.append(Section("Scope", paragraphs=[scope]))
@@ -234,7 +244,8 @@ def build_briefing(
     recent = Section(heading)
     if window and window[2]:
         recent.paragraphs.append(
-            f"Covering {window[0].isoformat()} to {window[1].isoformat()}, anchored to the latest recorded "
+            f"Covering {window[0].isoformat()} to {window[1].isoformat()}, "
+            "anchored to the latest recorded "
             "development because the change log has no newer entries."
         )
     elif window:
@@ -288,7 +299,8 @@ def build_briefing(
             Section(
                 "Newly Detected, Unconfirmed",
                 paragraphs=[
-                    f"{len(candidate_list)} item(s) from the ingest feed, flagged for confirmation by a person "
+                    f"{len(candidate_list)} item(s) from the ingest feed, "
+                    "flagged for confirmation by a person "
                     "before they are added to the curated change log."
                 ],
             )
@@ -299,7 +311,8 @@ def build_briefing(
                 Section(
                     "Newly Detected Outside Your Focus Areas, Unconfirmed",
                     paragraphs=[
-                        f"{len(other)} item(s) from the ingest feed mention none of your focus areas."
+                        f"{len(other)} item(s) from the ingest feed mention none of "
+                        "your focus areas."
                     ],
                 )
             )
