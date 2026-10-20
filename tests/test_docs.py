@@ -229,7 +229,7 @@ def test_markdown_has_no_dash_punctuation() -> None:
     hits = []
     for path in MARKDOWN:
         for number, line in prose_lines(path):
-            if re.fullmatch(r"\|[\s:|-]+\|", line.strip()):
+            if re.fullmatch(r"\|[\s:|-]+\||-{3,}", line.strip()):
                 continue
             body = re.sub(r"^\s*(- |\d+\. )", "", line)
             if " - " in body or "--" in body:
@@ -290,6 +290,45 @@ def test_every_relative_link_resolves(path: Path) -> None:
                 assert fragment in anchors(resolved), (
                     f"{relative(path)} links to {target}, which has no such heading"
                 )
+
+
+README = ROOT / "README.md"
+BADGE = re.compile(r"https://img\.shields\.io/[^\"]*")
+
+
+def test_readme_links_are_absolute() -> None:
+    """PyPI shows the README, so a relative link or image would break there."""
+    text = README.read_text(encoding="utf-8")
+    targets = [*LINK.findall(text), *re.findall(r'(?:href|src)="([^"]+)"', text)]
+    assert targets
+    bad = [t for t in targets if not t.startswith(("https://", "#"))]
+    assert bad == []
+
+
+def test_readme_follows_the_skeleton() -> None:
+    text = README.read_text(encoding="utf-8")
+    banner = "https://raw.githubusercontent.com/klappe-pm/regwatch/main/.github/regwatch-banner.svg"
+    assert f'src="{banner}"' in text and 'width="760"' in text
+    assert text.index(banner) < text.index('<h1 align="center">Regwatch</h1>') < text.index("---")
+    badges = BADGE.findall(text)
+    assert len(badges) == 6
+    assert all("style=flat-square" in b and "labelColor=162233" in b for b in badges)
+    colours = [re.search(r"(?:color=|-)([0-9a-f]{6})", b) for b in badges]
+    assert [c.group(1) for c in colours if c] == ["3ddc84", "5aa9ff"] * 3
+    sections = [t for _n, level, t in headings(README) if level == 2]
+    assert sections == [
+        "Why Regwatch?",
+        "Who This Is For",
+        "Highlights",
+        "Installation",
+        "Quick Start",
+        "How It Works",
+        "Commands",
+        "Documentation",
+        "Contributing",
+        "Security",
+        "License",
+    ]
 
 
 def test_every_folder_readme_lists_its_pages() -> None:
