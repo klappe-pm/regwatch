@@ -230,7 +230,8 @@ def _parse_fetch(table: dict[str, Any], base: Path) -> FetchSettings:
         if file_root_is_too_broad(resolved, _home()):
             raise ConfigError(
                 f"[fetch] allowed_file_roots entry '{root}' is too broad; name the folder that "
-                "holds the files, not a file system root or your home directory"
+                "holds the files, not a file system root, your home directory or a folder that "
+                "contains it"
             )
     return FetchSettings(
         timeout_seconds=_seconds(table, "timeout_seconds", FetchSettings.timeout_seconds),

@@ -140,7 +140,7 @@ def check_file_root(value: str, base: Path, home: Path) -> str:
     if file_root_is_too_broad(resolved, home):
         raise OnboardingError(
             f"{text} is too broad; name the folder that holds the files, "
-            "not a file system root or your home directory"
+            "not a file system root, your home directory or a folder that contains it"
         )
     return text
 

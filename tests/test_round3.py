@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import pytest
 
@@ -171,3 +172,38 @@ def test_an_address_with_two_embedded_forms_passes_when_both_are_public() -> Non
     from regwatch.fetch import is_public_address
 
     assert is_public_address("2002:808:808::200:5efe:808:808")
+
+
+# --- rw3-05: the message names the folder that contains the home directory -------------------
+
+
+def test_the_configuration_message_for_a_parent_of_home_says_it_contains_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from regwatch.config import ConfigError, load_config
+
+    parent = tmp_path / "users"
+    home = parent / "kim"
+    (home / "project").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    config = home / "project" / "regwatch.toml"
+    config.write_text(
+        '[register]\nobligations = "o.csv"\njurisdictions = "j.json"\ncategories = "c.json"\n'
+        'sources = "s.json"\nportfolio = "p.json"\n'
+        f'[fetch]\nallowed_file_roots = ["{parent}"]\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="contains") as caught:
+        load_config(config)
+    assert "or a folder that contains it" in str(caught.value)
+
+
+def test_the_onboarding_message_for_a_parent_of_home_says_it_contains_home(tmp_path: Path) -> None:
+    from regwatch.onboarding import OnboardingError, check_file_root
+
+    parent = tmp_path / "users"
+    home = parent / "kim"
+    home.mkdir(parents=True)
+    with pytest.raises(OnboardingError, match="contains") as caught:
+        check_file_root(str(parent), home / "project", home)
+    assert "or a folder that contains it" in str(caught.value)
