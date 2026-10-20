@@ -5,15 +5,15 @@ This guide lists every check a change must pass and how to run it. It assumes th
 ## Test Suite
 
 ```bash
-/path/to/regwatch/.venv/bin/python -m pytest /path/to/regwatch/tests
+/path/to/regwatch/.venv/bin/python -P -m pytest /path/to/regwatch/tests
 ```
 
-Install the `test` and `lint` extras first: `pip install -e '/path/to/regwatch[test,lint]'`. `pytest` and `pytest-cov` are the `test` extra, with `pytest` at 9.0.3 or newer because earlier releases carry CVE-2025-71176, and `ruff` and `mypy` are the `lint` extra.
+Install the `test` and `lint` extras first: `pip install -e '/path/to/regwatch[test,lint]'`. `pytest` and `pytest-cov` are the `test` extra, with `pytest` at 9.0.3 or newer because earlier releases carry CVE-2025-71176, and `ruff` and `mypy` are the `lint` extra. The `-P` option stops Python from putting the current directory on the import path, so the commands work from any directory, including the clone of another package whose `tests` folder would otherwise be imported instead.
 
 ## Coverage
 
 ```bash
-/path/to/regwatch/.venv/bin/python -m pytest /path/to/regwatch/tests --cov=regwatch --cov-report=term-missing
+/path/to/regwatch/.venv/bin/python -P -m pytest /path/to/regwatch/tests --cov=regwatch --cov-report=term-missing
 ```
 
 The target is at least 90 percent line coverage of the package. The report lists the lines that no test reached. Report the real number in the pull request.

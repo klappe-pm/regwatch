@@ -20,7 +20,7 @@ This installs Regwatch as an editable package with the `test` extra (`pytest` an
 ## Run the Tests
 
 ```bash
-/path/to/regwatch/.venv/bin/python -m pytest /path/to/regwatch/tests
+/path/to/regwatch/.venv/bin/python -P -m pytest /path/to/regwatch/tests
 ```
 
 The suite runs in a few seconds, needs no network, and never reads your home directory or a real register: it works on a copy of `examples/` in a temporary directory. A fixture blocks every socket, so a test that tries to reach the network fails. See [Run the Tests](../how-to-guides/run-the-tests.md) for the other checks.
@@ -41,7 +41,7 @@ Write the test first. For a bug fix, write a test that fails without the fix, ap
 ## Check It
 
 ```bash
-/path/to/regwatch/.venv/bin/python -m pytest /path/to/regwatch/tests --cov=regwatch --cov-report=term-missing
+/path/to/regwatch/.venv/bin/python -P -m pytest /path/to/regwatch/tests --cov=regwatch --cov-report=term-missing
 ```
 
 ```bash
