@@ -103,3 +103,47 @@ def test_every_dot_before_a_non_space_character_is_escaped(value: str, expected:
     from regwatch.sanitize import escape_markdown
 
     assert escape_markdown(value) == expected
+
+
+# --- rw3-03: a name the idna codec would map to a different name is refused ------------------
+
+
+@pytest.mark.parametrize(
+    ("url", "mapped"),
+    [
+        ("https://faß.de/", "fass.de"),
+        ("https://straße.de/", "strasse.de"),
+        ("https://pay‍pal.example/", "paypal.example"),
+        ("https://exa­mple.com/", "example.com"),
+        ("https://οδος.gr/", "xn--pxavbq.gr"),
+    ],
+)
+def test_a_name_that_the_idna_codec_maps_to_another_name_is_refused(url: str, mapped: str) -> None:
+    from test_fetch import make, ok, web
+
+    from regwatch.fetch import FetchError
+
+    network = web(ok(), hosts={mapped: ["93.184.216.34"]})
+    with pytest.raises(FetchError, match="host name cannot be encoded"):
+        make(network).fetch(url)
+    assert network.resolved == []
+    assert network.connected == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://пример.рф/",
+        "https://пример。рф/",
+        "https://пример．рф/",  # noqa: RUF001
+        "https://пример｡рф/",
+        "https://ПРИМЕР.рф/",
+    ],
+)
+def test_a_name_that_survives_the_round_trip_is_still_fetched(url: str) -> None:
+    from test_fetch import make, ok, web
+
+    ascii_host = "xn--e1afmkfd.xn--p1ai"
+    network = web(ok(b"hi"), hosts={ascii_host: ["93.184.216.34"]})
+    assert make(network).fetch(url) == "hi"
+    assert network.resolved == [ascii_host]

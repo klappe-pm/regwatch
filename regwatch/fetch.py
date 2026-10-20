@@ -45,6 +45,7 @@ import ssl
 import stat
 import threading
 import time
+import unicodedata
 import urllib.request
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -68,6 +69,9 @@ ALLOWED_SCHEMES = frozenset({"https", "file"})
 MAX_REDIRECTS = 5
 CHUNK_BYTES = 16384
 REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+# The three dots (ideographic full stop, fullwidth full stop, halfwidth ideographic full
+# stop) that the idna codec reads as a label separator.
+_IDEOGRAPHIC_DOTS = {0x3002: ".", 0xFF0E: ".", 0xFF61: "."}
 
 Resolver = Callable[[str, int], list[str]]
 Connector = Callable[[str, int, float], socket.socket]
@@ -416,14 +420,23 @@ def _wire_host(host: str) -> str:
     """The host as it goes on the wire: an internationalised name in its ``xn--`` form.
 
     The name is used for the lookup, the TLS server name and the Host header, so all
-    three agree. A name that cannot be encoded is a clear ``FetchError``.
+    three agree. A name that cannot be encoded is a clear ``FetchError``, and so is a
+    name that the codec (IDNA 2003) would quietly turn into a different one: ``faß.de``
+    becomes ``fass.de`` and a zero-width joiner or a soft hyphen is dropped. The encoded
+    name must decode back to the name that was asked for, in NFC and lower case.
     """
     if host.isascii():
         return host
+    error = FetchError("host name cannot be encoded as an internationalised name")
     try:
-        return host.encode("idna").decode("ascii")
+        wire = host.encode("idna").decode("ascii")
+        decoded = wire.encode("ascii").decode("idna")
     except UnicodeError as exc:
-        raise FetchError("host name cannot be encoded as an internationalised name") from exc
+        raise error from exc
+    asked = unicodedata.normalize("NFC", host).lower().translate(_IDEOGRAPHIC_DOTS)
+    if decoded != asked:
+        raise error
+    return wire
 
 
 def _wire_text(target: str) -> str:
