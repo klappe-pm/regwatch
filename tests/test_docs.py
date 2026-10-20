@@ -292,6 +292,33 @@ def test_every_relative_link_resolves(path: Path) -> None:
                 )
 
 
+CHANGE_KINDS = {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"}
+
+
+def test_the_changelog_follows_keep_a_changelog() -> None:
+    path = ROOT / "CHANGELOG.md"
+    text = path.read_text(encoding="utf-8")
+    found = headings(path)
+    assert found[0][1:] == (1, "Changelog")
+    versions = [t for _n, level, t in found if level == 2]
+    assert versions[0] == "Unreleased"
+    assert all(re.fullmatch(r"\d+\.\d+\.\d+ \(\d{4}-\d{2}-\d{2}\)", v) for v in versions[1:])
+    assert {t for _n, level, t in found if level == 3} <= CHANGE_KINDS
+    lines = text.split("\n")
+    inside = [
+        i + 1
+        for i in range(1, len(lines) - 1)
+        if not lines[i] and lines[i - 1].startswith("- ") and lines[i + 1].startswith("- ")
+    ]
+    assert inside == [], f"blank line inside a list at {inside}"
+
+
+@pytest.mark.parametrize("path", MARKDOWN, ids=IDS)
+def test_every_markdown_file_ends_with_one_newline(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    assert text.endswith("\n") and not text.endswith("\n\n"), relative(path)
+
+
 README = ROOT / "README.md"
 BADGE = re.compile(r"https://img\.shields\.io/[^\"]*")
 

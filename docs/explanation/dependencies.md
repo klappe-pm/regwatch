@@ -37,7 +37,7 @@ A runtime dependency is added only when all of these hold: the standard library 
 
 ## Development Dependencies
 
-These are installed with `pip install -e '.[dev]'` and are not needed to run regwatch.
+These are installed with `pip install -e '.[test,lint]'` and are not needed to run regwatch. The `test` extra holds `pytest` and `pytest-cov`, and the `lint` extra holds `ruff` and `mypy`. The `test` extra requires `pytest` 9.0.3 or newer, because earlier releases carry CVE-2025-71176. `pytest` depends on `Pygments`, and releases of `Pygments` below 2.20.0 carry CVE-2026-4539, so the hash-pinned `requirements/ci.txt` that the release workflow installs from holds a newer one.
 
 | package | used for |
 | --- | --- |

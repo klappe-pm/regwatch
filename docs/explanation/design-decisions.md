@@ -73,6 +73,6 @@ In the source engine the tiered briefing produced Markdown directly while the da
 
 The source engine required a detail record for every obligation and failed validation without one. regwatch allows an obligation to have none, and the tiered briefing shows a placeholder that says detail is pending. A required record forces a new user to write prose before they can run anything. The cost is that a register can quietly lack detail; `export` shows which obligations have none, since their summary column is empty.
 
-## No GitHub Actions
+## One GitHub Actions Workflow
 
-Continuous integration workflows are not part of the repository. The checks in [run the tests](../how-to-guides/run-the-tests.md) are run locally before a change is committed.
+The only workflow in the repository publishes a release when a version tag is pushed; see [Cut a Release](../how-to-guides/cut-a-release.md). There is no continuous integration workflow. The checks in [Run the Tests](../how-to-guides/run-the-tests.md) are run locally before a change is committed, and the release workflow runs the suite once more against the built wheel before anything is uploaded.

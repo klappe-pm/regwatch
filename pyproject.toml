@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
@@ -11,39 +11,68 @@ requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Kevin Lappe" }]
+keywords = ["regulatory", "compliance", "monitoring", "change-detection", "obligations", "food-labeling", "briefing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-cov"]
-dev = ["pytest", "pytest-cov", "ruff", "mypy"]
+test = ["pytest>=9.0.3", "pytest-cov>=7"]
+lint = ["ruff", "mypy"]
 
 [project.scripts]
 regwatch = "regwatch.cli:main"
 
 [project.urls]
+Homepage = "https://github.com/klappe-pm/regwatch"
 Repository = "https://github.com/klappe-pm/regwatch"
+Documentation = "https://github.com/klappe-pm/regwatch/blob/main/docs/README.md"
+Changelog = "https://github.com/klappe-pm/regwatch/blob/main/CHANGELOG.md"
+Issues = "https://github.com/klappe-pm/regwatch/issues"
 
 [tool.hatch.version]
 path = "regwatch/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["regwatch"]
+# Ship every file under regwatch/, including the non-Python package data.
+artifacts = ["regwatch/data/**"]
 
 [tool.hatch.build.targets.sdist]
-include = ["regwatch", "tests", "examples", "README.md", "LICENSE", "pyproject.toml"]
+# Each pattern is anchored with a leading slash so a nested README is not pulled in.
+include = ["/regwatch", "/tests", "/examples", "/README.md", "/LICENSE", "/pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "repo_only: reads repository files that the source distribution omits (.github, docs, CHANGELOG.md) and skips when they are missing",
+]
 
 [tool.coverage.run]
 source = ["regwatch"]
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+select = ["E", "F", "I", "UP", "B", "SIM", "W", "S", "RUF"]
 # The formatter wraps code to 100 columns but cannot split long string literals,
 # so the line-length lint rule is left to the formatter.
 ignore = ["E501"]

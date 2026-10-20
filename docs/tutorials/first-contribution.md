@@ -10,7 +10,7 @@ This tutorial takes you from a fresh clone to a merge-ready pull request. You se
 ## Clone and Install
 
 ```bash
-git clone https://github.com/klappe-pm/regwatch ~/regwatch && python3 -m venv ~/regwatch/.venv && ~/regwatch/.venv/bin/pip install -e "$HOME/regwatch[dev]"
+git clone https://github.com/klappe-pm/regwatch ~/regwatch && python3 -m venv ~/regwatch/.venv && ~/regwatch/.venv/bin/pip install -e "$HOME/regwatch[test,lint]"
 ```
 
 This installs regwatch as an editable package with `pytest`, `pytest-cov`, `ruff` and `mypy`. The package itself has no runtime dependencies.

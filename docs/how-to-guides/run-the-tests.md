@@ -1,6 +1,6 @@
 # Run the Tests
 
-This guide covers every check a change must pass: the test suite and its coverage report, linting, formatting and strict type checking. There is no CI service, so these commands are the only gate; a change that passes them all is ready for review. It assumes the editable install from [first contribution](../tutorials/first-contribution.md).
+This guide covers every check a change must pass: the test suite and its coverage report, linting, formatting and strict type checking. There is no CI service for changes, so these commands are the gate; a change that passes them all is ready for review. The release workflow runs the suite once more, against the built wheel, before it publishes. It assumes the editable install from [first contribution](../tutorials/first-contribution.md).
 
 ## The Test Suite
 
@@ -11,6 +11,14 @@ This guide covers every check a change must pass: the test suite and its coverag
 Tests live under `tests/` and read only the synthetic register in `examples/`, which the `project` fixture copies into a temporary directory, and the files under `tests/fixtures/`. They never use the real home directory, a real register or the network. An autouse fixture replaces `socket.socket.connect` and `socket.create_connection` with a function that raises, so any test that reaches for the network fails with a clear message.
 
 The fetch client is tested without a network in three ways: the URL checks are plain functions, `file` URLs read a temporary directory, and the `https` path runs the real client code against fakes. `SafeFetcher` takes a resolver, a connector and a TLS wrapper, and `tests/test_fetch.py` supplies a fake name server and socket pairs with a server thread on the far end, so the tests exercise address vetting, pinning, redirects, size limits and the total deadline, including a server that sends one byte at a time. Everything above the client uses `FakeFetcher` from `tests/conftest.py`.
+
+## The Source Distribution
+
+The source distribution ships `tests/` and `examples/` but not `docs/`, `.github/` or the community files. A test that reads those carries the `repo_only` marker and skips when they are missing, so the shipped tests pass from an extracted sdist. To check that, build the distributions, extract the sdist, install the wheel in a fresh virtual environment and run pytest from the extracted tree:
+
+```bash
+cd /path/to/extracted/regwatch-0.1.0 && /path/to/venv/bin/python -P -m pytest -q
+```
 
 ## Coverage
 

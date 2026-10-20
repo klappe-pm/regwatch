@@ -5,7 +5,7 @@ Thank you for helping improve Regwatch. Open an issue to discuss a change before
 ## Setup
 
 ```bash
-git clone https://github.com/klappe-pm/regwatch && cd regwatch && python3 -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'
+git clone https://github.com/klappe-pm/regwatch && cd regwatch && python3 -m venv .venv && . .venv/bin/activate && pip install -e '.[test,lint]'
 ```
 
 ## Tests

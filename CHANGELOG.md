@@ -27,6 +27,9 @@ All notable changes to this project are documented in this file. The format foll
 - A `[profile]` table in `regwatch.toml` that records the chosen focus areas, custom terms and an optional catalogue path. Impact analysis, the tiered briefing and the daily and weekly briefs rank candidates that match a focus area first, and list the rest under an outside-your-focus-areas heading. Nothing is dropped.
 - `regwatch config show`, which prints the effective configuration, including focus areas, the catalogue in use and the allowed file roots.
 - A how-to guide, [set your focus areas](docs/how-to-guides/set-your-focus-areas.md), and a getting started tutorial that begins with `regwatch init`.
+- Community files: a code of conduct, issue templates for a bug report, a feature request and a question, a pull request template, and a README banner drawn by `scripts/make-banner.py`.
+- Package metadata for PyPI: keywords, classifiers, project URLs, a `test` extra (`pytest` 9.0.3 or newer and `pytest-cov`) and a `lint` extra (`ruff` and `mypy`).
+- A release workflow in three jobs. `build` checks that the tag is on `main` and equals the package version, builds with a hash-pinned `hatchling` and writes the checksums to the job summary. `test` installs the built wheel and runs the suite against it. `publish` uploads through trusted publishing and needs both. The lock files are in `requirements/`. [cut a release](docs/how-to-guides/cut-a-release.md) describes the one-time PyPI and GitHub setup.
 
 ### Security
 

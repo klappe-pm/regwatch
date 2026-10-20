@@ -1,0 +1,5 @@
+# What the test job installs besides the built wheel. pip-compile turns this file into ci.txt with hashes.
+# markdown-it-py with linkify is used by one test that checks Markdown output, which skips without it.
+pytest>=9.0.3
+pytest-cov>=7
+markdown-it-py[linkify]

@@ -35,10 +35,10 @@ Run it with the full path, or add `~/.venvs/regwatch/bin` to your `PATH`:
 
 ## Install from a Checkout for Development
 
-An editable install runs the code in your checkout, and the `dev` extra adds the test, lint and type checking tools:
+An editable install runs the code in your checkout, and the `test` and `lint` extras add the test, lint and type checking tools:
 
 ```bash
-git clone https://github.com/klappe-pm/regwatch ~/regwatch && python3 -m venv ~/regwatch/.venv && ~/regwatch/.venv/bin/pip install -e "$HOME/regwatch[dev]"
+git clone https://github.com/klappe-pm/regwatch ~/regwatch && python3 -m venv ~/regwatch/.venv && ~/regwatch/.venv/bin/pip install -e "$HOME/regwatch[test,lint]"
 ```
 
 See [first contribution](../tutorials/first-contribution.md) for the rest of the development setup.
