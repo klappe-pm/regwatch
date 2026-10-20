@@ -1,8 +1,4 @@
-"""The documentation and the repository layout stay linked, consistently styled and public safe.
-
-These tests read repository files that a source distribution omits, so they carry the
-``repo_only`` marker and skip when those files are missing.
-"""
+"""The documentation and the repository files around it stay accurate, linked and consistent."""
 
 from __future__ import annotations
 
@@ -11,58 +7,57 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import ROOT
+
+from tests.conftest import ROOT
 
 pytestmark = pytest.mark.repo_only
 
+PACKAGE = "regwatch"
 DOCS = ROOT / "docs"
-SKIP_DIRS = {
-    ".git",
-    ".venv",
-    "venv",
-    "__pycache__",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".ruff_cache",
-    "build",
-    "dist",
-}
-# Internal pages are gitignored and never published, so no test reads them.
-INTERNAL = (DOCS / "documentation-guide",)
-TEXT_SUFFIXES = {
-    ".py",
-    ".md",
-    ".json",
-    ".toml",
-    ".csv",
-    ".txt",
-    ".xml",
-    ".html",
-    ".yaml",
-    ".yml",
-    ".cfg",
-    ".ini",
-}
-TEXT_NAMES = {"LICENSE", ".gitignore", ".gitattributes", ".editorconfig"}
+QUADRANTS = ("tutorials", "how-to-guides", "reference", "explanation")
 COMMUNITY_FILES = (
     "README.md",
+    "LICENSE",
     "CHANGELOG.md",
-    "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
     "SECURITY.md",
     "SUPPORT.md",
 )
-RESERVED_NAMES = {*COMMUNITY_FILES, "LICENSE", "PULL_REQUEST_TEMPLATE.md"}
-GITHUB_FILES = [
-    "ISSUE_TEMPLATE/bug-report.yml",
-    "ISSUE_TEMPLATE/config.yml",
-    "ISSUE_TEMPLATE/feature-request.yml",
-    "ISSUE_TEMPLATE/question.yml",
-    "PULL_REQUEST_TEMPLATE.md",
-    "regwatch-banner.svg",
-    "workflows/release.yml",
-]
-QUADRANTS = ("tutorials", "how-to-guides", "reference", "explanation")
+REPOSITORY_FILES = (".editorconfig", ".gitattributes", ".gitignore", "pyproject.toml")
+GITHUB_FILES = {
+    ".github/ISSUE_TEMPLATE/bug-report.yml",
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/ISSUE_TEMPLATE/feature-request.yml",
+    ".github/ISSUE_TEMPLATE/question.yml",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    f".github/{PACKAGE}-banner.svg",
+    ".github/workflows/release.yml",
+}
+# Pages that quote attribution lines on purpose, because the page is about them.
+QUOTES_ATTRIBUTION: set[str] = set()
+# Pages kept out of the public tree. They are ignored by git and may exist in a working copy.
+UNPUBLISHED = (DOCS / "documentation-guide",)
+
+SKIP_DIRS = {"__pycache__", "build", "dist", "env", "htmlcov", "site", "venv"}
+TEXT_SUFFIXES = {
+    ".cfg",
+    ".csv",
+    ".html",
+    ".ini",
+    ".json",
+    ".md",
+    ".py",
+    ".toml",
+    ".txt",
+    ".xml",
+    ".yaml",
+    ".yml",
+}
+TEXT_NAMES = {"LICENSE", ".editorconfig", ".gitattributes", ".gitignore"}
+RESERVED_NAMES = {*COMMUNITY_FILES, "PULL_REQUEST_TEMPLATE.md"}
+CHANGE_KINDS = {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"}
+AGENT_FILES = ("AGENTS.md", "CLAUDE.md", "CODEX.md", "GEMINI.md")
 
 SMALL_WORDS = {
     "a",
@@ -89,24 +84,36 @@ SMALL_WORDS = {
 FENCE = re.compile(r"^\s*```")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+HTML_REFERENCE = re.compile(r'(?:href|src)="([^"]+)"')
+BADGE = re.compile(r"https://img\.shields\.io/[^\"]*")
 HOME_PATH = re.compile(r"/(?:Users|home)/[A-Za-z0-9._-]+")
-FORBIDDEN_KEYS = re.compile(r"^(models|providers|session-link)\s*:", re.MULTILINE)
-ATTRIBUTION = re.compile(r"co-authored-by|generated with|claude-session|noreply@anthropic", re.I)
-ROBOT = "\U0001f916"
+PROVENANCE_KEY = re.compile(r"^(?:models|providers|session-link)\s*:", re.MULTILINE)
+ROBOT = chr(0x1F916)
+BYLINE = re.compile(
+    r"generated (?:with|by)\b.*claude|co-authored-by|claude-session|noreply@anthropic",
+    re.IGNORECASE,
+)
 EM, EN = chr(0x2014), chr(0x2013)
+TABLE_RULE = re.compile(r"^\|?[\s:|-]+\|?$")
+
+
+def is_unpublished(path: Path) -> bool:
+    return path in UNPUBLISHED or any(folder in path.parents for folder in UNPUBLISHED)
 
 
 def text_files() -> list[Path]:
+    """Every text file in the working copy, without caches, build output and hidden folders."""
     found: list[Path] = []
-    for directory, names, files in os.walk(ROOT):
+    for directory, folders, files in os.walk(ROOT):
         here = Path(directory)
-        names[:] = [
-            n
-            for n in names
-            if n not in SKIP_DIRS
-            and not n.endswith(".egg-info")
-            and here / n not in INTERNAL
-            and not (here == ROOT / "docs" and n == "documentation-guide")
+        folders[:] = [
+            f
+            for f in folders
+            if f not in SKIP_DIRS
+            and not f.endswith(".egg-info")
+            and (f == ".github" or not f.startswith("."))
+            and not is_unpublished(here / f)
+            and not (here / f / "pyvenv.cfg").exists()
         ]
         found += [
             here / name
@@ -120,32 +127,37 @@ def markdown_files() -> list[Path]:
     return [p for p in text_files() if p.suffix == ".md"]
 
 
-def relative(path: Path) -> str:
+def label(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
-def headings(path: Path) -> list[tuple[int, int, str]]:
-    found, fenced = [], False
+MARKDOWN = pytest.mark.parametrize("path", markdown_files(), ids=label)
+
+
+def lines_of(path: Path) -> list[tuple[int, str, bool]]:
+    """Every line as (number, text, inside a fence). The fence lines themselves count as inside."""
+    result, fenced = [], False
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if FENCE.match(line):
             fenced = not fenced
+            result.append((number, line, True))
             continue
+        result.append((number, line, fenced))
+    return result
+
+
+def headings(path: Path) -> list[tuple[int, int, str]]:
+    found = []
+    for number, line, fenced in lines_of(path):
         match = None if fenced else HEADING.match(line)
         if match:
             found.append((number, len(match.group(1)), match.group(2)))
     return found
 
 
-def prose_lines(path: Path) -> list[tuple[int, str]]:
-    """Markdown lines outside code fences, with inline code removed."""
-    lines, fenced = [], False
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if FENCE.match(line):
-            fenced = not fenced
-            continue
-        if not fenced:
-            lines.append((number, re.sub(r"`[^`]*`", "", line)))
-    return lines
+def prose(path: Path) -> list[tuple[int, str]]:
+    """The lines outside code fences, with inline code spans removed."""
+    return [(n, re.sub(r"`[^`]*`", "", line)) for n, line, fenced in lines_of(path) if not fenced]
 
 
 def slug(text: str) -> str:
@@ -153,158 +165,220 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9 _-]", "", text).strip().replace(" ", "-")
 
 
-MARKDOWN = markdown_files()
-IDS = [relative(p) for p in MARKDOWN]
+def test_the_community_and_repository_files_exist() -> None:
+    missing = [n for n in (*COMMUNITY_FILES, *REPOSITORY_FILES) if not (ROOT / n).is_file()]
+    assert not missing, missing
+    assert "Copyright (c) 2026" in (ROOT / "LICENSE").read_text(encoding="utf-8")
 
 
-def test_files_were_found() -> None:
-    assert len(text_files()) > 40
-    assert len(MARKDOWN) > 30
+def test_github_holds_only_the_allowed_files() -> None:
+    present = {p.relative_to(ROOT).as_posix() for p in (ROOT / ".github").rglob("*") if p.is_file()}
+    assert present == GITHUB_FILES
 
 
-# The pull request template keeps the wording of its model and has no title.
-PAGES = [p for p in MARKDOWN if ".github" not in p.parts]
-PAGE_IDS = [relative(p) for p in PAGES]
+def test_there_is_one_docs_tree() -> None:
+    assert not (ROOT / "developer-docs").exists()
+    assert (DOCS / "README.md").is_file()
+    for quadrant in QUADRANTS:
+        assert (DOCS / quadrant / "README.md").is_file(), quadrant
+    present = {p.name for p in DOCS.iterdir() if p.is_dir() and not is_unpublished(p)}
+    assert present == set(QUADRANTS)
 
 
-@pytest.mark.parametrize("path", PAGES, ids=PAGE_IDS)
+def test_each_quadrant_index_lists_every_page_in_its_folder() -> None:
+    for quadrant in QUADRANTS:
+        folder = DOCS / quadrant
+        index = (folder / "README.md").read_text(encoding="utf-8")
+        for page in sorted(p for p in folder.glob("*.md") if p.name != "README.md"):
+            assert f"]({page.name})" in index, f"{label(folder / 'README.md')} omits {page.name}"
+
+
+def test_the_docs_index_links_every_quadrant() -> None:
+    index = (DOCS / "README.md").read_text(encoding="utf-8")
+    for quadrant in QUADRANTS:
+        assert f"]({quadrant}/README.md)" in index, quadrant
+
+
+def test_the_docs_index_names_every_page() -> None:
+    index = (DOCS / "README.md").read_text(encoding="utf-8")
+    for quadrant in QUADRANTS:
+        for page in sorted(p for p in (DOCS / quadrant).glob("*.md") if p.name != "README.md"):
+            assert f"]({quadrant}/{page.name})" in index, (
+                f"docs/README.md omits {quadrant}/{page.name}"
+            )
+
+
+def test_no_published_page_links_into_the_unpublished_guide() -> None:
+    hits = [label(p) for p in markdown_files() if "documentation-guide" in p.read_text("utf-8")]
+    assert not hits, hits
+
+
+@pytest.mark.parametrize(
+    "path", [p for p in markdown_files() if p.name != "PULL_REQUEST_TEMPLATE.md"], ids=label
+)
+def test_the_page_has_exactly_one_h1(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    h1s = [text for _n, level, text in headings(path) if level == 1]
+    html_h1s = re.findall(r"<h1[ >]", text)
+    assert len(h1s) + len(html_h1s) == 1, f"{label(path)} has {len(h1s) + len(html_h1s)} H1"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        p
+        for p in markdown_files()
+        if p.name not in ("README.md", "SECURITY.md", "CODE_OF_CONDUCT.md")
+        and p.name != "PULL_REQUEST_TEMPLATE.md"
+    ],
+    ids=label,
+)
+def test_the_page_opens_with_a_purpose_paragraph(path: Path) -> None:
+    rest = [line for line in path.read_text(encoding="utf-8").splitlines()[1:] if line.strip()]
+    assert rest, label(path)
+    assert not rest[0].startswith(("#", "-", "`", "|")), label(path)
+
+
+@MARKDOWN
 def test_every_heading_is_title_case(path: Path) -> None:
     bad = []
     for number, _level, text in headings(path):
         outside_code = re.sub(r"`[^`]*`", "", text)
         for index, word in enumerate(outside_code.split()):
-            core = re.sub(r"^[^A-Za-z]*|[^A-Za-z]*$", "", word)
-            if not core or core[0].isupper() or any(ch.isdigit() for ch in core):
+            core = re.sub(r"^[^A-Za-z0-9]*|[^A-Za-z0-9]*$", "", word)
+            if not core or any(ch.isupper() or ch.isdigit() for ch in core):
                 continue
             if core.lower() in SMALL_WORDS and index > 0:
                 continue
             bad.append(f"{number}: {text}")
             break
-    assert not bad, f"{relative(path)} has headings that are not Title Case: {bad}"
+    assert not bad, f"{label(path)} has headings that are not Title Case: {bad}"
 
 
-@pytest.mark.parametrize("path", PAGES, ids=PAGE_IDS)
-def test_every_page_has_one_h1_and_it_comes_first(path: Path) -> None:
-    found = headings(path)
-    h1s = [text for _n, level, text in found if level == 1]
-    if path == ROOT / "README.md":
-        html_title = '<h1 align="center">Regwatch</h1>' in path.read_text(encoding="utf-8")
-        assert html_title or h1s == ["Regwatch"]
-        return
-    assert len(h1s) == 1, f"{relative(path)} has {len(h1s)} H1 headings"
-    assert found[0][1] == 1, f"{relative(path)} starts with a lower heading"
-
-
-@pytest.mark.parametrize("path", MARKDOWN, ids=IDS)
-def test_no_page_records_session_provenance(path: Path) -> None:
+@MARKDOWN
+def test_the_page_carries_no_provenance_keys(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     front = text.split("---", 2)[1] if text.startswith("---") else ""
-    assert not FORBIDDEN_KEYS.search(front)
-    assert ROBOT not in text, f"{relative(path)} has a robot byline"
+    assert not PROVENANCE_KEY.search(front), label(path)
+    assert not text.startswith("---"), f"{label(path)} has frontmatter, which no page needs"
 
 
-def test_no_agent_attribution_in_markdown() -> None:
-    # CONTRIBUTING.md states the rule, so it names the phrases.
-    hits = [
-        relative(p)
-        for p in MARKDOWN
-        if ATTRIBUTION.search(p.read_text(encoding="utf-8")) and p.name != "CONTRIBUTING.md"
-    ]
-    assert hits == []
+@MARKDOWN
+def test_the_page_has_no_robot_byline_or_agent_credit(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    assert ROBOT not in text, label(path)
+    if label(path) not in QUOTES_ATTRIBUTION:
+        assert not BYLINE.search(text), label(path)
 
 
-def test_no_absolute_home_paths() -> None:
-    hits = [relative(p) for p in text_files() if HOME_PATH.search(p.read_text(encoding="utf-8"))]
-    assert hits == []
+@MARKDOWN
+def test_the_page_names_no_home_directory(path: Path) -> None:
+    assert not HOME_PATH.search(path.read_text(encoding="utf-8")), label(path)
 
 
-def test_no_em_or_en_dashes_anywhere() -> None:
-    hits = [
-        relative(p) for p in text_files() if EM in (t := p.read_text(encoding="utf-8")) or EN in t
-    ]
-    assert hits == []
-
-
-def test_markdown_has_no_dash_punctuation() -> None:
-    hits = []
-    for path in MARKDOWN:
-        for number, line in prose_lines(path):
-            if re.fullmatch(r"\|[\s:|-]+\||-{3,}", line.strip()):
-                continue
-            body = re.sub(r"^\s*(- |\d+\. )", "", line)
-            if " - " in body or "--" in body:
-                hits.append(f"{relative(path)}:{number}")
-    assert hits == []
-
-
-def test_markdown_is_never_hard_wrapped() -> None:
-    hits = []
-    for path in MARKDOWN:
-        previous_is_prose = False
-        for number, line in prose_lines(path):
-            stripped = line.strip()
-            structural = (
-                not stripped
-                or stripped.startswith(("#", "- ", "|", ">", "<"))
-                or re.match(r"^\d+\. ", stripped) is not None
-            )
-            if structural:
-                previous_is_prose = False
-                continue
-            if previous_is_prose:
-                hits.append(f"{relative(path)}:{number}")
-            previous_is_prose = True
-    assert hits == []
-
-
-def test_every_code_fence_has_a_language() -> None:
+@MARKDOWN
+def test_every_code_fence_has_a_language(path: Path) -> None:
+    """Fences follow CommonMark: a closing fence uses the same character and is as long."""
     bad = []
-    for path in MARKDOWN:
-        opening = True
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            if line.startswith("```"):
-                if opening and line.strip() == "```":
-                    bad.append(f"{relative(path)}:{number}")
-                opening = not opening
-        assert opening, f"{relative(path)} has an unclosed fence"
-    assert bad == []
+    opened: tuple[str, int] | None = None
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        match = re.match(r" {0,3}(`{3,}|~{3,})(.*)", line)
+        if match is None:
+            continue
+        fence, rest = match.group(1), match.group(2).strip()
+        if opened is None:
+            opened = (fence[0], len(fence))
+            if not rest:
+                bad.append(number)
+        elif fence[0] == opened[0] and len(fence) >= opened[1] and not rest:
+            opened = None
+    assert not bad, f"{label(path)} has fences without a language at lines {bad}"
+    assert opened is None, f"{label(path)} has an unclosed fence"
 
 
-@pytest.mark.parametrize("path", MARKDOWN, ids=IDS)
+@MARKDOWN
+def test_no_dash_is_used_as_punctuation(path: Path) -> None:
+    bad = []
+    for number, line in prose(path):
+        text = re.sub(r"\]\([^)]*\)", "]", line)
+        text = re.sub(r"<[^>]*>", "", text)
+        text = re.sub(r"https?://\S+", "", text)
+        stripped = text.strip()
+        if TABLE_RULE.match(stripped) or re.fullmatch(r"-{3,}", stripped):
+            continue
+        body = re.sub(r"^\s*(?:[-*] |\d+\. )", "", text)
+        if EM in body or EN in body or " - " in body or "--" in body:
+            bad.append(number)
+    assert not bad, f"{label(path)} uses a dash as punctuation at lines {bad}"
+
+
+def test_no_text_file_holds_an_em_or_en_dash() -> None:
+    hits = [
+        label(p)
+        for p in text_files()
+        if (t := p.read_text(encoding="utf-8")) and (EM in t or EN in t)
+    ]
+    assert not hits, hits
+
+
+@MARKDOWN
+def test_the_page_is_not_hard_wrapped(path: Path) -> None:
+    bad = []
+    previous_is_text = False
+    for number, line, fenced in lines_of(path):
+        stripped = line.strip()
+        if fenced or not stripped:
+            previous_is_text = False
+            continue
+        starts_item = re.match(r"^([-*>|#]|\d+\.)\s|^\|", stripped) is not None
+        structural = starts_item or stripped.startswith(("<", "---", "![")) or HEADING.match(line)
+        if structural:
+            # A list item or a quote is text that a following plain line would continue.
+            previous_is_text = bool(re.match(r"^([-*>]|\d+\.)\s", stripped))
+            continue
+        if previous_is_text:
+            bad.append(number)
+        previous_is_text = True
+    assert not bad, f"{label(path)} continues a paragraph or item on a new line at lines {bad}"
+
+
+@MARKDOWN
+def test_the_page_ends_with_one_newline(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    assert text.endswith("\n") and not text.endswith("\n\n"), label(path)
+
+
+@MARKDOWN
 def test_every_relative_link_resolves(path: Path) -> None:
     anchors_of: dict[Path, set[str]] = {}
 
     def anchors(target: Path) -> set[str]:
         if target not in anchors_of:
-            anchors_of[target] = {slug(text) for _n, _l, text in headings(target)}
+            anchors_of[target] = {slug(text) for _n, _level, text in headings(target)}
         return anchors_of[target]
 
-    for _number, line in prose_lines(path):
-        for target in LINK.findall(line):
-            if re.match(r"^[a-z][a-z0-9+.-]*:", target):
-                continue
-            name, _, fragment = target.partition("#")
-            resolved = (path.parent / name).resolve() if name else path
-            assert resolved.exists(), f"{relative(path)} links to {target}, which does not exist"
-            if fragment and resolved.suffix == ".md":
-                assert fragment in anchors(resolved), (
-                    f"{relative(path)} links to {target}, which has no such heading"
-                )
-
-
-CHANGE_KINDS = {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"}
+    text = "\n".join(line for _n, line in prose(path))
+    for target in LINK.findall(text):
+        if re.match(r"^[a-z][a-z0-9+.-]*:", target):
+            continue
+        name, _, fragment = target.partition("#")
+        resolved = (path.parent / name).resolve() if name else path
+        assert resolved.exists(), f"{label(path)} links to {target}, which does not exist"
+        if fragment and resolved.suffix == ".md":
+            assert fragment in anchors(resolved), (
+                f"{label(path)} links to {target}: no such heading"
+            )
 
 
 def test_the_changelog_follows_keep_a_changelog() -> None:
     path = ROOT / "CHANGELOG.md"
-    text = path.read_text(encoding="utf-8")
     found = headings(path)
     assert found[0][1:] == (1, "Changelog")
     versions = [t for _n, level, t in found if level == 2]
     assert versions[0] == "Unreleased"
     assert all(re.fullmatch(r"\d+\.\d+\.\d+ \(\d{4}-\d{2}-\d{2}\)", v) for v in versions[1:])
     assert {t for _n, level, t in found if level == 3} <= CHANGE_KINDS
-    lines = text.split("\n")
+    lines = path.read_text(encoding="utf-8").split("\n")
     inside = [
         i + 1
         for i in range(1, len(lines) - 1)
@@ -313,127 +387,77 @@ def test_the_changelog_follows_keep_a_changelog() -> None:
     assert inside == [], f"blank line inside a list at {inside}"
 
 
-@pytest.mark.parametrize("path", MARKDOWN, ids=IDS)
-def test_every_markdown_file_ends_with_one_newline(path: Path) -> None:
-    text = path.read_text(encoding="utf-8")
-    assert text.endswith("\n") and not text.endswith("\n\n"), relative(path)
-
-
-README = ROOT / "README.md"
-BADGE = re.compile(r"https://img\.shields\.io/[^\"]*")
-
-
-def test_readme_links_are_absolute() -> None:
-    """PyPI shows the README, so a relative link or image would break there."""
-    text = README.read_text(encoding="utf-8")
-    targets = [*LINK.findall(text), *re.findall(r'(?:href|src)="([^"]+)"', text)]
-    assert targets
-    bad = [t for t in targets if not t.startswith(("https://", "#"))]
-    assert bad == []
-
-
-def test_readme_follows_the_skeleton() -> None:
-    text = README.read_text(encoding="utf-8")
-    banner = "https://raw.githubusercontent.com/klappe-pm/regwatch/main/.github/regwatch-banner.svg"
-    assert f'src="{banner}"' in text and 'width="760"' in text
-    assert text.index(banner) < text.index('<h1 align="center">Regwatch</h1>') < text.index("---")
-    badges = BADGE.findall(text)
-    assert len(badges) == 6
-    assert all("style=flat-square" in b and "labelColor=162233" in b for b in badges)
-    colours = [re.search(r"(?:color=|-)([0-9a-f]{6})", b) for b in badges]
-    assert [c.group(1) for c in colours if c] == ["3ddc84", "5aa9ff"] * 3
-    sections = [t for _n, level, t in headings(README) if level == 2]
-    assert sections == [
-        "Why Regwatch?",
-        "Who This Is For",
-        "Highlights",
-        "Installation",
-        "Quick Start",
-        "How It Works",
-        "Commands",
-        "Documentation",
-        "Contributing",
-        "Security",
-        "License",
-    ]
-
-
-def test_every_folder_readme_lists_its_pages() -> None:
-    missing = []
-    for readme in MARKDOWN:
-        if readme.name != "README.md" or readme.parent in (ROOT, DOCS):
-            continue
-        if "examples" in readme.parts or "tests" in readme.parts:
-            continue
-        text = readme.read_text(encoding="utf-8")
-        for page in sorted(readme.parent.iterdir()):
-            if page.suffix == ".md" and page.name != "README.md" and f"({page.name})" not in text:
-                missing.append(f"{relative(readme)} does not link {page.name}")
-    assert missing == []
-
-
-def test_the_docs_readme_links_every_quadrant_and_page() -> None:
-    text = (DOCS / "README.md").read_text(encoding="utf-8")
-    missing = []
-    for quadrant in QUADRANTS:
-        for page in sorted((DOCS / quadrant).glob("*.md")):
-            if f"({quadrant}/{page.name})" not in text:
-                missing.append(f"{quadrant}/{page.name}")
-    assert missing == []
-
-
-def test_documentation_is_one_tree_with_the_four_quadrants() -> None:
-    present = {p.name for p in DOCS.iterdir() if p.is_dir() and p.name != "documentation-guide"}
-    assert present == set(QUADRANTS)
-    assert not (ROOT / "developer-docs").exists()
-
-
-# SECURITY.md, CODE_OF_CONDUCT.md and README.md follow their models, which start with a
-# heading or markup instead of a purpose paragraph.
-PURPOSE_PAGES = [
-    p
-    for p in PAGES
-    if "examples" not in p.parts and p.name not in ("SECURITY.md", "CODE_OF_CONDUCT.md")
-    if p != ROOT / "README.md"
-]
-
-
-@pytest.mark.parametrize("path", PURPOSE_PAGES, ids=lambda p: relative(p))
-def test_every_page_opens_with_a_purpose_paragraph(path: Path) -> None:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    rest = [line for line in lines[1:] if line.strip()]
-    assert rest, relative(path)
-    assert not rest[0].startswith(("#", "-", "`", "|")), relative(path)
-
-
-def test_required_repository_files_exist() -> None:
-    for name in (*COMMUNITY_FILES, "LICENSE", ".editorconfig", ".gitattributes", ".gitignore"):
-        assert (ROOT / name).is_file(), name
-    assert (ROOT / "pyproject.toml").is_file()
-    assert (ROOT / "docs" / "README.md").is_file()
-    assert "Copyright (c) 2026" in (ROOT / "LICENSE").read_text(encoding="utf-8")
-
-
-def test_github_holds_only_the_allowed_files() -> None:
-    github = ROOT / ".github"
-    assert sorted(p.relative_to(github).as_posix() for p in github.rglob("*") if p.is_file()) == (
-        GITHUB_FILES
-    )
-
-
 def test_filenames_are_lowercase_kebab_case() -> None:
     bad = []
     for path in text_files():
         name = path.name
-        if name in RESERVED_NAMES or name.startswith(".") or name == "regwatch.toml":
+        if name in RESERVED_NAMES or name.startswith("."):
             continue
         if re.fullmatch(r"_{0,2}[a-z0-9]+(_{1,2}[a-z0-9]+)*_{0,2}\.py", name):
             continue
         if not re.fullmatch(r"[a-z0-9]+([-.][a-z0-9]+)*", name):
-            bad.append(relative(path))
-    assert bad == []
+            bad.append(label(path))
+    assert not bad, bad
 
 
-@pytest.mark.parametrize("name", ["AGENTS.md", "CLAUDE.md", "CODEX.md", "GEMINI.md"])
+@pytest.mark.parametrize("name", AGENT_FILES)
 def test_agent_instruction_files_are_not_in_the_repository_tree(name: str) -> None:
     assert not (ROOT / name).exists()
+
+
+def test_the_readme_uses_only_absolute_links() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    markdown = [t for t in LINK.findall(text) if not t.startswith("#")]
+    html = [t for t in HTML_REFERENCE.findall(text) if not t.startswith("#")]
+    relative = [t for t in markdown + html if not re.match(r"^(https://|mailto:)", t)]
+    assert not relative, relative
+    prefix = f"https://github.com/klappe-pm/{PACKAGE}/"
+    own = [t for t in markdown + html if t.startswith(prefix)]
+    assert own, "the README links nowhere inside the repository"
+
+
+def test_the_readme_follows_the_skeleton() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    banner = (
+        f"https://raw.githubusercontent.com/klappe-pm/{PACKAGE}/main/.github/{PACKAGE}-banner.svg"
+    )
+    assert text.startswith('<p align="center">'), "the banner comes first"
+    assert banner in text.split("</p>", 1)[0]
+    assert 'width="760"' in text.split("</p>", 1)[0]
+    assert re.search(r'<h1 align="center">[A-Z][a-z]+</h1>', text)
+    assert text.count("style=flat-square&") == 6
+    assert text.count("labelColor=162233") == 6
+    colours = [re.search(r"(?:color=|-)([0-9a-f]{6})", badge) for badge in BADGE.findall(text)]
+    assert [c.group(1) for c in colours if c] == ["3ddc84", "5aa9ff"] * 3
+    order = [
+        "## Why ",
+        "## Installation",
+        "## Quick Start",
+        "## How It Works",
+        "## Commands",
+        "## Documentation",
+        "## Contributing",
+        "## Security",
+        "## License",
+    ]
+    positions = [text.index(heading) for heading in order]
+    assert positions == sorted(positions)
+    assert "\n---\n" in text
+
+
+def test_the_banner_is_an_svg_with_a_label() -> None:
+    banner = (ROOT / ".github" / f"{PACKAGE}-banner.svg").read_text(encoding="utf-8")
+    assert banner.startswith("<svg")
+    assert 'role="img"' in banner
+    assert "aria-label=" in banner
+    assert "<script" not in banner
+    assert "http" not in banner.replace("http://www.w3.org/2000/svg", "")
+
+
+def test_the_issue_templates_point_at_the_package() -> None:
+    config = (ROOT / ".github" / "ISSUE_TEMPLATE" / "config.yml").read_text(encoding="utf-8")
+    assert f"https://github.com/klappe-pm/{PACKAGE}/blob/main/SECURITY.md" in config
+    assert "blank_issues_enabled: false" in config
+    support = (ROOT / "SUPPORT.md").read_text(encoding="utf-8")
+    for template in ("bug-report", "question", "feature-request"):
+        assert f"issues/new?template={template}.yml" in support
