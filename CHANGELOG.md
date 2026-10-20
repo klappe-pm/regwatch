@@ -42,3 +42,7 @@ All notable changes to this project are documented in this file. The format foll
 - `regwatch init` looks again right before it writes and creates each file exclusively, so a file or link that appears while it asks is never replaced or followed.
 - A candidates file that is deeply nested or larger than 20,000,000 bytes is a clean error from `brief` instead of a crash.
 - Configuration: a hand-written `allowed_file_roots` entry of `/` or the home directory is refused, as it already was in `regwatch init`.
+
+### Fixed
+
+- A document model whose section `level` is a number with a fraction, such as `2.0`, is refused with a clean error from `render` instead of crashing the renderer. Only the integers 2, 3 and 4 are accepted.

@@ -380,6 +380,19 @@ def test_render_rejects_bad_input(run, tmp_path: Path) -> None:  # type: ignore[
     assert run("render", str(tmp_path / "absent.json")).code == 2
 
 
+def test_render_refuses_a_float_section_level(run, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    model = tmp_path / "m.json"
+    model.write_text(
+        '{"title": "T", "generated": "g", "sections": [{"heading": "H", "level": 2.0}]}',
+        encoding="utf-8",
+    )
+    result = run("render", str(model), "--out-dir", str(tmp_path / "out"))
+    assert result.code == 2
+    assert result.err.startswith("error:")
+    assert "'level' must be 2, 3 or 4" in result.err
+    assert "Traceback" not in result.err
+
+
 def test_render_file_size_limit(run, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr("regwatch.cli.MAX_INPUT_BYTES", 5)
     model = tmp_path / "m.json"

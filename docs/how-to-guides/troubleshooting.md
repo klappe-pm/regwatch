@@ -89,7 +89,7 @@ The `--name` of `brief` becomes a file name, so it may contain only letters, dig
 
 ## Render Says Not a Valid Document Model
 
-`render` reads the JSON model that `brief --out-dir` writes. The message names what is wrong, such as a missing title or a section level other than 2, 3 or 4. Regenerate the model with `brief`.
+`render` reads the JSON model that `brief --out-dir` writes. The message names what is wrong, such as a missing title or a section level other than the whole numbers 2, 3 or 4 (`2.0` is refused). Regenerate the model with `brief`.
 
 ## The Word Document Will Not Open
 

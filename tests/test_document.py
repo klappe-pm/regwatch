@@ -69,6 +69,8 @@ def test_a_model_cannot_remove_the_disclaimer() -> None:
         model(sections=[{"heading": ""}]),
         model(sections=[{"heading": "H", "level": 1}]),
         model(sections=[{"heading": "H", "level": True}]),
+        model(sections=[{"heading": "H", "level": 2.0}]),
+        model(sections=[{"heading": "H", "level": "2"}]),
         model(sections=[{"heading": "H", "paragraphs": "x"}]),
         model(sections=[{"heading": "H", "paragraphs": [1]}]),
         model(sections=[{"heading": "H", "bullets": ["x" * 20001]}]),

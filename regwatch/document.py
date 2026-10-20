@@ -116,7 +116,7 @@ def _section(item: object) -> Section:
     if not isinstance(item, dict):
         raise DocumentError("each section must be a JSON object")
     level = item.get("level", 2)
-    if isinstance(level, bool) or level not in (2, 3, 4):
+    if type(level) is not int or level not in (2, 3, 4):
         raise DocumentError("section 'level' must be 2, 3 or 4")
     return Section(
         heading=_text(item, "heading", required=True),
