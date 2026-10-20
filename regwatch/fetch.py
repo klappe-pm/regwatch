@@ -137,16 +137,21 @@ _ISATAP_IDS = (0x00005EFE, 0x02005EFE)  # the high half of an ISATAP interface i
 
 
 def _embedded_ipv4(ip: ipaddress.IPv6Address) -> list[ipaddress.IPv4Address] | None:
-    """The IPv4 addresses a translation or tunnel address carries, or None for other addresses."""
+    """Every IPv4 address a translation or tunnel address carries, or None for other addresses.
+
+    An address can carry more than one form at once (a 6to4 prefix with an ISATAP
+    interface identifier), so each form is collected and all of them are judged.
+    """
+    found: list[ipaddress.IPv4Address] = []
     if ip in _NAT64:
-        return [ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)]
+        found.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
     if ip.sixtofour is not None:
-        return [ip.sixtofour]
+        found.append(ip.sixtofour)
     if ip.teredo is not None:
-        return list(ip.teredo)
+        found.extend(ip.teredo)
     if (int(ip) >> 32) & 0xFFFFFFFF in _ISATAP_IDS:
-        return [ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)]
-    return None
+        found.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
+    return found or None
 
 
 def is_public_address(address: str) -> bool:
@@ -157,10 +162,11 @@ def is_public_address(address: str) -> bool:
     embeds an IPv4 address (an IPv4-mapped address, a NAT64 address in
     ``64:ff9b::/96``, a 6to4 address in ``2002::/16`` or a Teredo address in
     ``2001::/32``) or an ISATAP interface identifier (``0:5efe`` or ``200:5efe``) is
-    judged by the IPv4 addresses it carries. The whole range ``::/8`` (which holds
-    the IPv4-compatible, SIIT and loopback addresses), the deprecated site-local
-    range ``fec0::/10`` and the NAT64 prefix ``64:ff9b::/32`` apart from its ``/96``
-    are refused outright.
+    judged by the IPv4 addresses it carries, and every one of them must be public
+    (a 6to4 prefix with an ISATAP identifier carries two). The whole range ``::/8``
+    (which holds the IPv4-compatible, SIIT and loopback addresses), the deprecated
+    site-local range ``fec0::/10`` and the NAT64 prefix ``64:ff9b::/32`` apart from
+    its ``/96`` are refused outright.
     """
     try:
         ip = ipaddress.ip_address(address)
