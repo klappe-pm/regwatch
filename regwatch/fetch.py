@@ -121,12 +121,13 @@ def check_url(url: str) -> str:
 _V6_REFUSED = tuple(
     ipaddress.ip_network(network)
     for network in (
-        "::/96",  # IPv4-compatible addresses, the unspecified address and ::1
+        "::/8",  # IPv4-compatible and SIIT addresses, the unspecified address and ::1
         "fec0::/10",  # deprecated site-local addresses
-        "64:ff9b:1::/48",  # local-use NAT64 translation
+        "64:ff9b::/32",  # NAT64 prefix: only the /96 below is allowed, judged by its IPv4
     )
 )
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
+_ISATAP_IDS = (0x00005EFE, 0x02005EFE)  # the high half of an ISATAP interface identifier
 
 
 def _embedded_ipv4(ip: ipaddress.IPv6Address) -> list[ipaddress.IPv4Address] | None:
@@ -137,6 +138,8 @@ def _embedded_ipv4(ip: ipaddress.IPv6Address) -> list[ipaddress.IPv4Address] | N
         return [ip.sixtofour]
     if ip.teredo is not None:
         return list(ip.teredo)
+    if (int(ip) >> 32) & 0xFFFFFFFF in _ISATAP_IDS:
+        return [ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)]
     return None
 
 
@@ -147,9 +150,11 @@ def is_public_address(address: str) -> bool:
     multicast and unspecified addresses are all not public. An IPv6 address that
     embeds an IPv4 address (an IPv4-mapped address, a NAT64 address in
     ``64:ff9b::/96``, a 6to4 address in ``2002::/16`` or a Teredo address in
-    ``2001::/32``) is judged by the IPv4 addresses it carries. The IPv4-compatible
-    range ``::/96``, the deprecated site-local range ``fec0::/10`` and the local-use
-    NAT64 range ``64:ff9b:1::/48`` are refused outright.
+    ``2001::/32``) or an ISATAP interface identifier (``0:5efe`` or ``200:5efe``) is
+    judged by the IPv4 addresses it carries. The whole range ``::/8`` (which holds
+    the IPv4-compatible, SIIT and loopback addresses), the deprecated site-local
+    range ``fec0::/10`` and the NAT64 prefix ``64:ff9b::/32`` apart from its ``/96``
+    are refused outright.
     """
     try:
         ip = ipaddress.ip_address(address)
@@ -159,7 +164,7 @@ def is_public_address(address: str) -> bool:
         if ip.ipv4_mapped is not None:
             ip = ip.ipv4_mapped
         else:
-            if any(ip in network for network in _V6_REFUSED):
+            if ip not in _NAT64 and any(ip in network for network in _V6_REFUSED):
                 return False
             embedded = _embedded_ipv4(ip)
             if embedded is not None:
