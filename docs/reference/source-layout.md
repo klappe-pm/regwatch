@@ -31,7 +31,7 @@ Modules are listed from the bottom of the dependency order to the top. A module 
 | `extract.py` | reducing untrusted content to a signal and hashing it; imports nothing else from the package |
 | `register.py` | the register data model, reading the files, validating them against `data/schema.json`, and building immutable objects |
 | `focus.py` | the focus catalogue, focus profiles and whole-word matching of candidate text; imports `config` and `register` |
-| `state.py` | snapshots, the last-seen state, and `safe_write_text`, `safe_write_bytes` and `create_text_file`, the only functions that write files |
+| `state.py` | snapshots, the last-seen state, and `safe_write_text`, `safe_write_bytes` and `write_tree`, the only functions that write files |
 | `check.py` | change detection and capture, built from `fetch`, `extract`, `register` and `state` |
 | `ingest.py` | building the API query and turning a response into unconfirmed candidates |
 | `impact.py` | exposure, scope and attribute gates, severity scoring, focus ranking and theme findings |

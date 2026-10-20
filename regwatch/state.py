@@ -9,13 +9,14 @@ leaves a half-written file and the curated register is never touched.
 
 from __future__ import annotations
 
+import contextlib
 import errno
 import json
 import os
 import re
 import secrets
 import stat
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 __all__ = [
@@ -23,7 +24,6 @@ __all__ = [
     "AlreadyExistsError",
     "SeenState",
     "StateError",
-    "create_text_file",
     "load_seen",
     "read_snapshot",
     "safe_write_bytes",
@@ -31,6 +31,7 @@ __all__ = [
     "save_seen",
     "snapshot_path",
     "write_snapshot",
+    "write_tree",
 ]
 
 SOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
@@ -87,24 +88,106 @@ def safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None
         raise StateError(f"cannot write {path}: {exc.strerror or exc}") from exc
 
 
-def create_text_file(path: Path, text: str) -> None:
-    """Create ``path`` with ``text`` as UTF-8, failing if anything is already there.
+def write_tree(directory: Path, files: Mapping[str, str], *, replace: bool) -> None:
+    """Write ``files`` (relative names with at most one folder level) under ``directory``.
 
-    The file is created with ``O_EXCL`` and without following a link, so a file or a
-    link that appeared after an earlier check is never replaced or followed. The
-    mode is 0o644 as limited by the umask. Raises AlreadyExistsError when the path
-    is taken and StateError for any other failure.
+    Every folder is opened once, without following a link (``O_DIRECTORY`` and
+    ``O_NOFOLLOW``), before any file is written, and every file is then created
+    through that open folder, so a folder that is swapped for a link afterwards
+    cannot redirect a write: the writes go to the folder that was opened.
+
+    Without ``replace`` each file is created with ``O_EXCL`` and without following
+    a link, and one that already exists raises AlreadyExistsError. With ``replace``
+    each file is written to a temporary file in its folder and renamed into place
+    through the same folder, an existing file keeps its permission bits, and a path
+    that is a symbolic link is refused. New files get 0o644 (or the 0o666 of a
+    replacement), as limited by the umask. Raises StateError for any other failure.
     """
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    opened: dict[str, int] = {}
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor = os.open(path, flags, 0o644)
-    except FileExistsError as exc:
-        raise AlreadyExistsError(f"{path} already exists") from exc
+        directory.mkdir(parents=True, exist_ok=True)
+        opened[""] = _open_directory(directory)
+        for name in files:
+            folder = name.rpartition("/")[0]
+            if folder and folder not in opened:
+                _make_folder(opened[""], folder)
+                opened[folder] = _open_directory(
+                    folder, dir_fd=opened[""], shown=directory / folder
+                )
+        for name, text in files.items():
+            folder, _, leaf = name.rpartition("/")
+            data = text.encode("utf-8", errors="replace")
+            if replace:
+                _replace_in(opened[folder], leaf, data, directory / name)
+            else:
+                _create_in(opened[folder], leaf, data, directory / name)
     except OSError as exc:
-        raise StateError(f"cannot write {path}: {exc.strerror or exc}") from exc
+        raise StateError(f"cannot write in {directory}: {exc.strerror or exc}") from exc
+    finally:
+        for descriptor in opened.values():
+            os.close(descriptor)
+
+
+def _open_directory(path: Path | str, dir_fd: int | None = None, shown: Path | None = None) -> int:
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        return os.open(path, flags, dir_fd=dir_fd)
+    except OSError as exc:
+        if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise StateError(
+                f"{shown or path} is a symbolic link or not a directory; "
+                "regwatch will not write through it"
+            ) from exc
+        raise
+
+
+def _make_folder(parent_fd: int, name: str) -> None:
+    with contextlib.suppress(FileExistsError):
+        os.mkdir(name, 0o777, dir_fd=parent_fd)
+
+
+def _create_in(directory_fd: int, leaf: str, data: bytes, shown: Path) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    try:
+        descriptor = os.open(leaf, flags, 0o644, dir_fd=directory_fd)
+    except FileExistsError as exc:
+        raise AlreadyExistsError(f"{shown} already exists") from exc
     with os.fdopen(descriptor, "wb") as handle:
-        handle.write(text.encode("utf-8", errors="replace"))
+        handle.write(data)
+
+
+def _replace_in(directory_fd: int, leaf: str, data: bytes, shown: Path) -> None:
+    mode: int | None = None
+    try:
+        info = os.stat(leaf, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        info = None
+    if info is not None:
+        if stat.S_ISLNK(info.st_mode):
+            raise StateError(f"{shown} is a symbolic link; regwatch will not write through it")
+        if stat.S_ISDIR(info.st_mode):
+            raise StateError(f"{shown} is a directory")
+        mode = stat.S_IMODE(info.st_mode)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    for _ in range(100):
+        temporary = f".regwatch-{secrets.token_hex(8)}.tmp"
+        try:
+            descriptor = os.open(temporary, flags, 0o666, dir_fd=directory_fd)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise OSError(errno.EEXIST, "cannot create a temporary file")
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            if mode is not None:
+                os.fchmod(handle.fileno(), mode)
+            handle.write(data)
+        os.replace(temporary, leaf, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temporary, dir_fd=directory_fd)
+        raise
 
 
 def _literal_target(path: Path) -> Path:

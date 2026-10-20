@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from regwatch.state import (
+    AlreadyExistsError,
     StateError,
     load_seen,
     read_snapshot,
@@ -15,6 +16,7 @@ from regwatch.state import (
     save_seen,
     snapshot_path,
     write_snapshot,
+    write_tree,
 )
 
 
@@ -145,3 +147,62 @@ def test_unreadable_snapshot_is_a_state_error(
     monkeypatch.setattr(Path, "read_text", refuse)
     with pytest.raises(StateError, match="cannot read snapshot"):
         read_snapshot(tmp_path, "src")
+
+
+# --- write_tree: files are written through folders opened without following a link ---
+
+
+def test_write_tree_creates_files_and_the_folder_level(tmp_path: Path) -> None:
+    write_tree(tmp_path / "p", {"a.txt": "one", "sub/b.txt": "two"}, replace=False)
+    assert (tmp_path / "p" / "a.txt").read_text(encoding="utf-8") == "one"
+    assert (tmp_path / "p" / "sub" / "b.txt").read_text(encoding="utf-8") == "two"
+    with pytest.raises(AlreadyExistsError, match=r"b\.txt already exists"):
+        write_tree(tmp_path / "p", {"sub/b.txt": "again"}, replace=False)
+    assert (tmp_path / "p" / "sub" / "b.txt").read_text(encoding="utf-8") == "two"
+
+
+def test_write_tree_replace_keeps_the_mode_and_leaves_no_temporary_file(tmp_path: Path) -> None:
+    (tmp_path / "sub").mkdir()
+    target = tmp_path / "sub" / "b.txt"
+    target.write_text("old", encoding="utf-8")
+    target.chmod(0o640)
+    write_tree(tmp_path, {"sub/b.txt": "new", "c.txt": "c"}, replace=True)
+    assert target.read_text(encoding="utf-8") == "new"
+    assert target.stat().st_mode & 0o777 == 0o640
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["c.txt", "sub"]
+    assert [p.name for p in (tmp_path / "sub").iterdir()] == ["b.txt"]
+
+
+def test_write_tree_refuses_a_folder_that_is_a_link(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "sub").symlink_to(outside)
+    for replace in (False, True):
+        with pytest.raises(StateError, match="symbolic link"):
+            write_tree(project, {"a.txt": "x", "sub/b.txt": "x"}, replace=replace)
+    assert list(outside.iterdir()) == []
+    assert not (project / "a.txt").exists()  # nothing is written once a folder is refused
+
+
+def test_write_tree_replace_refuses_a_link_and_a_folder_in_place_of_a_file(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.txt"
+    outside.write_text("precious", encoding="utf-8")
+    (tmp_path / "link.txt").symlink_to(outside)
+    (tmp_path / "dir.txt").mkdir()
+    with pytest.raises(StateError, match="symbolic link"):
+        write_tree(tmp_path, {"link.txt": "x"}, replace=True)
+    with pytest.raises(StateError, match="is a directory"):
+        write_tree(tmp_path, {"dir.txt": "x"}, replace=True)
+    assert outside.read_text(encoding="utf-8") == "precious"
+
+
+def test_write_tree_does_not_follow_a_link_to_a_new_file(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.txt"
+    outside.write_text("precious", encoding="utf-8")
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "a.txt").symlink_to(outside)
+    with pytest.raises(AlreadyExistsError):
+        write_tree(tmp_path / "p", {"a.txt": "x"}, replace=False)
+    assert outside.read_text(encoding="utf-8") == "precious"

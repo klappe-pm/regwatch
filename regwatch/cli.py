@@ -32,7 +32,7 @@ import json
 import os
 import re
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TextIO, TypeVar
@@ -82,11 +82,11 @@ from regwatch.state import (
     MAX_STATE_BYTES,
     AlreadyExistsError,
     StateError,
-    create_text_file,
     load_seen,
     safe_write_bytes,
     safe_write_text,
     save_seen,
+    write_tree,
 )
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
 
@@ -692,16 +692,14 @@ def _refuse_existing(directory: Path, force: bool) -> list[str]:
     return existing
 
 
-def _write_scaffold_file(path: Path, text: str, *, replace: bool) -> None:
-    """Write one scaffold file. Without ``replace`` it must not exist yet and is created exclusively."""
-    if replace:
-        safe_write_text(path, text, ())
-        return
+def _write_scaffold(directory: Path, files: Mapping[str, str], *, replace: bool) -> None:
+    """Write the scaffold. Without ``replace`` no file may exist yet; each is created exclusively."""
     try:
-        create_text_file(path, text)
+        write_tree(directory, files, replace=replace)
     except AlreadyExistsError as exc:
         raise CommandError(
-            f"{path} appeared while init was running and was left unchanged; add --force to replace it"
+            f"{exc} (it appeared while init was running) and was left unchanged; "
+            "add --force to replace it"
         ) from exc
 
 
@@ -815,8 +813,7 @@ def _cmd_init(ctx: _Context, args: argparse.Namespace) -> int:
     # The questions can take a long time. Look again right before writing, so a file
     # or a link that appeared meanwhile is not replaced or followed.
     _refuse_existing(directory, args.force)
-    for name, text in files.items():
-        _write_scaffold_file(directory / name, text, replace=args.force)
+    _write_scaffold(directory, files, replace=args.force)
     _say(f"regwatch init: wrote {len(files)} files in {directory}")
     _say("Next, describe your products in register/portfolio.json and add sources to")
     _say("register/sources.json, then check the register:")

@@ -676,6 +676,103 @@ def test_init_creates_files_exclusively_even_if_the_second_check_is_skipped(
     assert outside.read_text(encoding="utf-8") == "precious outside file\n"
 
 
+# --- rw2-03: init writes through a directory it opened, not through a path ------------------
+
+
+def _swap_register_for_a_link(project: Path, outside: Path) -> None:
+    register = project / "register"
+    if register.is_symlink():
+        return
+    if register.exists():
+        register.rename(project / "register-original")
+    register.symlink_to(outside)
+
+
+def test_init_force_refuses_a_register_folder_swapped_for_a_link_while_it_asks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from regwatch import cli
+
+    project = tmp_path / "project"
+    (project / "register").mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "sources.json").write_text("precious outside file\n", encoding="utf-8")
+
+    def fake_prompt(question: str) -> str:
+        if question.startswith("Create these files"):
+            (project / "register").rmdir()
+            (project / "register").symlink_to(outside)
+            return "y"
+        return ""
+
+    monkeypatch.setattr(cli, "_prompt", fake_prompt)
+    assert main(["init", "--dir", str(project), "--force"]) == 2
+    assert capsys.readouterr().err.startswith("error:")
+    assert (outside / "sources.json").read_text(encoding="utf-8") == "precious outside file\n"
+    assert sorted(p.name for p in outside.iterdir()) == ["sources.json"]
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_init_refuses_a_register_folder_swapped_after_the_second_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    force: bool,
+) -> None:
+    from regwatch import cli
+
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "sources.json").write_text("precious outside file\n", encoding="utf-8")
+    real = cli._refuse_existing
+    calls: list[int] = []
+
+    def swap_after_the_second_check(directory: Path, replace: bool) -> list[str]:
+        result = real(directory, replace)
+        calls.append(1)
+        if len(calls) == 2:
+            _swap_register_for_a_link(project, outside)
+        return result
+
+    monkeypatch.setattr(cli, "_refuse_existing", swap_after_the_second_check)
+    args = ["init", "--dir", str(project), "--yes"] + (["--force"] if force else [])
+    assert main(args) == 2
+    assert capsys.readouterr().err.startswith("error:")
+    assert (outside / "sources.json").read_text(encoding="utf-8") == "precious outside file\n"
+    assert sorted(p.name for p in outside.iterdir()) == ["sources.json"]
+    assert not (project / "regwatch.toml").exists()  # nothing is written once a folder is refused
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_init_keeps_writing_into_the_register_folder_it_opened(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, force: bool
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    real_open = os.open
+    swapped: list[int] = []
+
+    def racing_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        first_file = str(path) == "regwatch.toml" or str(path).startswith(".regwatch-")
+        if first_file and not swapped:
+            swapped.append(1)
+            _swap_register_for_a_link(project, outside)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr("regwatch.state.os.open", racing_open)
+    args = ["init", "--dir", str(project), "--yes"] + (["--force"] if force else [])
+    assert main(args) == 0
+    assert swapped
+    assert list(outside.iterdir()) == []
+    assert (project / "register-original" / "obligations.csv").is_file()
+    assert (project / "register-original" / "sources.json").is_file()
+
+
 # --- rw-09: the candidates file is unbounded ----------------------------------------------
 
 
