@@ -35,3 +35,7 @@ All notable changes to this project are documented in this file. The format foll
 - Text cleaning removes bidirectional overrides and isolates and zero-width characters, and a link whose host is not plain ASCII, or that holds an invisible format character, is refused.
 - Fetch client: IPv6 forms that embed an IPv4 address (NAT64, 6to4, Teredo, IPv4-compatible, site-local) are judged by the embedded address or refused, an IPv6 literal host is bracketed in the Host header, the total deadline now covers the name lookup, and a local file swapped for a link or another file between the root check and the open is refused.
 - Markdown output: text that a renderer would link on its own (a web address, a `www.` name, a bare domain, an email address) is escaped so it stays text, and a value made only of hyphens or equals signs can no longer draw a horizontal rule. A web address in a briefing is shown as text.
+- Output paths: a path that is itself a symbolic link is refused, an existing file keeps its permission bits, and a new file gets the permissions the umask allows instead of 0600.
+- `regwatch init` looks again right before it writes and creates each file exclusively, so a file or link that appears while it asks is never replaced or followed.
+- A candidates file that is deeply nested or larger than 20,000,000 bytes is a clean error from `brief` instead of a crash.
+- Configuration: a hand-written `allowed_file_roots` entry of `/` or the home directory is refused, as it already was in `regwatch init`.

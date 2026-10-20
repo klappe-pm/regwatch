@@ -75,6 +75,10 @@ The `focus_areas` in your `[profile]` name an id that is not in the catalogue in
 
 No candidate mentions a word of your focus areas, which usually means the words do not match how your rules are written. Run `regwatch config show` to see the areas in use, then add the words your rules use as `custom_terms`, or to your copy of the catalogue. Matching is by whole word, so `soda` does not match `sodium`. Nothing is hidden in the meantime; the candidates are all listed.
 
+## is-a-symbolic-link
+
+You pointed an output option such as `--out`, `--csv` or `--json` at a path that is itself a symbolic link, and regwatch will not write through it. Name the real file instead, or remove the link. A link in a folder above the file is fine.
+
 ## refusing-to-overwrite-protected-file
 
 You pointed an output option such as `--out`, `--csv` or `--json` at a file regwatch protects: one listed under `[register]`, `regwatch.toml` itself, or `seen.json` or `ingest-candidates.json` in the state directory. regwatch compares files by identity, so a hard link or a different spelling of the name (including a different case) does not get around it. Choose a different output path. A path inside the state or snapshots directory is refused with `is inside regwatch's state directory`.

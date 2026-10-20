@@ -19,7 +19,7 @@ from importlib import resources
 from pathlib import Path
 
 from regwatch import __version__
-from regwatch.config import DEFAULT_CONFIG_NAME
+from regwatch.config import DEFAULT_CONFIG_NAME, file_root_is_too_broad
 from regwatch.focus import FocusArea, shipped_catalogue_text
 from regwatch.register import load_schema
 
@@ -133,7 +133,7 @@ def check_file_root(value: str, base: Path, home: Path) -> str:
     text = clean_value(value, "a folder")
     candidate = Path(text).expanduser()
     resolved = (candidate if candidate.is_absolute() else base / candidate).resolve()
-    if resolved == Path(resolved.anchor) or resolved == home.resolve():
+    if file_root_is_too_broad(resolved, home):
         raise OnboardingError(
             f"{text} is too broad; name the folder that holds the files, "
             "not a file system root or your home directory"

@@ -78,7 +78,14 @@ from regwatch.render import (
     render_webpost,
 )
 from regwatch.sanitize import clean_line, clean_text
-from regwatch.state import StateError, load_seen, safe_write_bytes, safe_write_text, save_seen
+from regwatch.state import (
+    MAX_STATE_BYTES,
+    StateError,
+    load_seen,
+    safe_write_bytes,
+    safe_write_text,
+    save_seen,
+)
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
 
 __all__ = ["main"]
@@ -403,8 +410,10 @@ def _load_candidates(ctx: _Context) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     try:
+        if path.stat().st_size > MAX_STATE_BYTES:
+            raise StateError(f"{path} is larger than {MAX_STATE_BYTES} bytes")
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RecursionError) as exc:
         raise StateError(f"cannot read {path}: {exc}") from exc
     items = data.get("candidates", []) if isinstance(data, dict) else []
     return [item for item in items if isinstance(item, dict)]
@@ -681,6 +690,29 @@ def _refuse_existing(directory: Path, force: bool) -> list[str]:
     return existing
 
 
+def _write_scaffold_file(path: Path, text: str, *, replace: bool) -> None:
+    """Write one scaffold file. Without ``replace`` it must not exist yet and is created exclusively.
+
+    ``O_EXCL`` makes the creation fail if anything, a file or a link, is already at the
+    path, and ``O_NOFOLLOW`` refuses a link in the last part, so no check can be raced.
+    """
+    if replace:
+        safe_write_text(path, text, ())
+        return
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(path, flags, 0o644)
+    except FileExistsError as exc:
+        raise CommandError(
+            f"{path} appeared while init was running and was left unchanged; add --force to replace it"
+        ) from exc
+    except OSError as exc:
+        raise CommandError(f"cannot write {path}: {exc.strerror or exc}") from exc
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(text.encode("utf-8", errors="replace"))
+
+
 def _ask_focus(args: argparse.Namespace) -> tuple[str, ...]:
     catalogue = load_catalogue(None)
     if args.focus is not None:
@@ -788,8 +820,11 @@ def _cmd_init(ctx: _Context, args: argparse.Namespace) -> int:
         _say(line)
     if not args.yes and _prompt("Create these files? [y/N]: ").lower() not in YES:
         raise CommandError("cancelled; nothing was written")
+    # The questions can take a long time. Look again right before writing, so a file
+    # or a link that appeared meanwhile is not replaced or followed.
+    _refuse_existing(directory, args.force)
     for name, text in files.items():
-        safe_write_text(directory / name, text, ())
+        _write_scaffold_file(directory / name, text, replace=args.force)
     _say(f"regwatch init: wrote {len(files)} files in {directory}")
     _say("Next, describe your products in register/portfolio.json and add sources to")
     _say("register/sources.json, then check the register:")

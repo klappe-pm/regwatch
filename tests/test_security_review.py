@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+import stat
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -538,3 +540,203 @@ def test_rendered_markdown_has_no_link_and_only_the_documents_own_rule() -> None
     assert html.count("<hr") == 1
     assert "<ol" not in html
     assert html.count("<blockquote") == 1  # the disclaimer at the end
+
+
+# --- rw-06: output paths written through symbolic links ----------------------------------
+
+
+def test_an_output_path_that_is_a_symlink_is_refused_and_the_target_is_untouched(
+    tmp_path: Path,
+) -> None:
+    from regwatch.state import StateError, safe_write_text
+
+    victim = tmp_path / "victim-notes.txt"
+    victim.write_text("victim's own file\n", encoding="utf-8")
+    victim.chmod(0o644)
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "report.md").symlink_to(victim)
+    with pytest.raises(StateError, match="symbolic link"):
+        safe_write_text(shared / "report.md", "replaced", [])
+    assert victim.read_text(encoding="utf-8") == "victim's own file\n"
+    assert (shared / "report.md").is_symlink()
+    assert stat.S_IMODE(victim.stat().st_mode) == 0o644
+
+
+def test_a_dangling_symlink_is_refused_too(tmp_path: Path) -> None:
+    from regwatch.state import StateError, safe_write_text
+
+    (tmp_path / "out.md").symlink_to(tmp_path / "missing.txt")
+    with pytest.raises(StateError, match="symbolic link"):
+        safe_write_text(tmp_path / "out.md", "x", [])
+    assert not (tmp_path / "missing.txt").exists()
+
+
+def test_the_digest_command_does_not_write_through_a_symlink(
+    project: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep", encoding="utf-8")
+    link = tmp_path / "out" / "report.md"
+    link.parent.mkdir()
+    link.symlink_to(victim)
+    assert main(["--config", str(project), "digest", "--out", str(link)]) == 2
+    assert "symbolic link" in capsys.readouterr().err
+    assert victim.read_text(encoding="utf-8") == "keep"
+
+
+def test_a_symlinked_folder_above_the_file_is_still_allowed(tmp_path: Path) -> None:
+    from regwatch.state import safe_write_text
+
+    real = tmp_path / "real"
+    real.mkdir()
+    (tmp_path / "alias").symlink_to(real)
+    safe_write_text(tmp_path / "alias" / "out.txt", "ok", [])
+    assert (real / "out.txt").read_text(encoding="utf-8") == "ok"
+
+
+@pytest.mark.parametrize("mode", [0o644, 0o600, 0o664])
+def test_an_existing_file_keeps_its_mode(tmp_path: Path, mode: int) -> None:
+    from regwatch.state import safe_write_text
+
+    target = tmp_path / "out.txt"
+    target.write_text("old", encoding="utf-8")
+    target.chmod(mode)
+    safe_write_text(target, "new", [])
+    assert target.read_text(encoding="utf-8") == "new"
+    assert stat.S_IMODE(target.stat().st_mode) == mode
+
+
+@pytest.mark.parametrize("umask", [0o022, 0o002, 0o077])
+def test_a_new_file_gets_the_mode_the_umask_allows(tmp_path: Path, umask: int) -> None:
+    from regwatch.state import safe_write_text
+
+    previous = os.umask(umask)
+    try:
+        safe_write_text(tmp_path / "new.txt", "x", [])
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE((tmp_path / "new.txt").stat().st_mode) == 0o666 & ~umask
+
+
+# --- rw-07: init checks and writes in two steps -------------------------------------------
+
+
+def _plant_during_the_confirmation(
+    monkeypatch: pytest.MonkeyPatch, project: Path, outside: Path
+) -> None:
+    from regwatch import cli
+
+    def fake_prompt(question: str) -> str:
+        if question.startswith("Create these files"):
+            (project / "regwatch.toml").write_text("# my hand edited config\n", encoding="utf-8")
+            (project / "register").mkdir(exist_ok=True)
+            (project / "register" / "sources.json").symlink_to(outside)
+            return "y"
+        return ""
+
+    monkeypatch.setattr(cli, "_prompt", fake_prompt)
+
+
+def test_init_keeps_a_file_and_a_link_that_appear_while_it_asks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("precious outside file\n", encoding="utf-8")
+    _plant_during_the_confirmation(monkeypatch, project, outside)
+    assert main(["init", "--dir", str(project)]) != 0
+    capsys.readouterr()
+    assert (project / "regwatch.toml").read_text(encoding="utf-8") == "# my hand edited config\n"
+    assert outside.read_text(encoding="utf-8") == "precious outside file\n"
+
+
+def test_init_creates_files_exclusively_even_if_the_second_check_is_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from regwatch import cli
+
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("precious outside file\n", encoding="utf-8")
+    _plant_during_the_confirmation(monkeypatch, project, outside)
+    real = cli._refuse_existing
+    calls: list[int] = []
+
+    def only_the_first_check(directory: Path, force: bool) -> list[str]:
+        calls.append(1)
+        return real(directory, force) if len(calls) == 1 else []
+
+    monkeypatch.setattr(cli, "_refuse_existing", only_the_first_check)
+    assert main(["init", "--dir", str(project)]) == 2
+    assert "appeared while init was running" in capsys.readouterr().err
+    assert (project / "regwatch.toml").read_text(encoding="utf-8") == "# my hand edited config\n"
+    assert outside.read_text(encoding="utf-8") == "precious outside file\n"
+
+
+# --- rw-09: the candidates file is unbounded ----------------------------------------------
+
+
+def test_a_deeply_nested_candidates_file_is_a_clean_error(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state = project.parent / "state"
+    state.mkdir(exist_ok=True)
+    (state / "ingest-candidates.json").write_text("[" * 100_000 + "]" * 100_000, encoding="utf-8")
+    assert main(["--config", str(project), "brief"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error: cannot read ")
+    assert "Traceback" not in err
+
+
+def test_a_huge_candidates_file_is_refused_by_size(
+    project: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("regwatch.cli.MAX_STATE_BYTES", 100)
+    state = project.parent / "state"
+    state.mkdir(exist_ok=True)
+    (state / "ingest-candidates.json").write_text(
+        '{"candidates": []}' + " " * 200, encoding="utf-8"
+    )
+    assert main(["--config", str(project), "brief"]) == 2
+    assert "is larger than 100 bytes" in capsys.readouterr().err
+
+
+# --- rw-15: hand-written file roots ------------------------------------------------------
+
+
+@pytest.mark.parametrize("root", ["/", "~", "~/", ".."])
+def test_a_hand_written_file_root_that_is_too_broad_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, root: str
+) -> None:
+    from regwatch.config import ConfigError, load_config
+
+    home = tmp_path / "home"
+    (home / "project").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    config = home / "project" / "regwatch.toml"
+    config.write_text(
+        '[register]\nobligations = "o.csv"\njurisdictions = "j.json"\ncategories = "c.json"\n'
+        'sources = "s.json"\nportfolio = "p.json"\n'
+        f'[fetch]\nallowed_file_roots = ["{root}"]\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="too broad"):
+        load_config(config)
+
+
+def test_a_specific_file_root_is_accepted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from regwatch.config import load_config
+
+    home = tmp_path / "home"
+    (home / "project").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    config = home / "project" / "regwatch.toml"
+    config.write_text(
+        '[register]\nobligations = "o.csv"\njurisdictions = "j.json"\ncategories = "c.json"\n'
+        'sources = "s.json"\nportfolio = "p.json"\n[fetch]\nallowed_file_roots = ["snapshots"]\n',
+        encoding="utf-8",
+    )
+    assert load_config(config).fetch.allowed_file_roots == (home / "project" / "snapshots",)

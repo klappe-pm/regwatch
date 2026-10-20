@@ -23,6 +23,7 @@ __all__ = [
     "IngestSettings",
     "ProfileSettings",
     "RegisterPaths",
+    "file_root_is_too_broad",
     "load_config",
 ]
 
@@ -185,6 +186,22 @@ def _integer(
     return value
 
 
+def file_root_is_too_broad(path: Path, home: Path | None) -> bool:
+    """True when ``path`` is a file system root or the home directory.
+
+    Such a folder as a ``file`` source root would allow almost any file to be read.
+    """
+    resolved = path.resolve()
+    return resolved == Path(resolved.anchor) or (home is not None and resolved == home.resolve())
+
+
+def _home() -> Path | None:
+    try:
+        return Path.home()
+    except (RuntimeError, KeyError):
+        return None
+
+
 def _resolve(base: Path, value: str) -> Path:
     path = Path(value).expanduser()
     return path if path.is_absolute() else (base / path)
@@ -202,13 +219,20 @@ def _parse_fetch(table: dict[str, Any], base: Path) -> FetchSettings:
     if not isinstance(allow_private, bool):
         raise ConfigError("[fetch] allow_private_hosts must be true or false")
     roots = _str_list(table, "allowed_file_roots", "fetch", ())
+    resolved_roots = tuple(_resolve(base, root) for root in roots)
+    for root, resolved in zip(roots, resolved_roots, strict=True):
+        if file_root_is_too_broad(resolved, _home()):
+            raise ConfigError(
+                f"[fetch] allowed_file_roots entry '{root}' is too broad; name the folder that "
+                "holds the files, not a file system root or your home directory"
+            )
     return FetchSettings(
         timeout_seconds=_seconds(table, "timeout_seconds", FetchSettings.timeout_seconds),
         total_timeout_seconds=_seconds(
             table, "total_timeout_seconds", FetchSettings.total_timeout_seconds
         ),
         allow_private_hosts=allow_private,
-        allowed_file_roots=tuple(_resolve(base, root) for root in roots),
+        allowed_file_roots=resolved_roots,
         max_bytes=_integer(
             table, "max_bytes", "fetch", FetchSettings.max_bytes, 1, MAX_FETCH_BYTES_CEILING
         ),

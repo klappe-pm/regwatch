@@ -9,10 +9,12 @@ leaves a half-written file and the curated register is never touched.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
-import tempfile
+import secrets
+import stat
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -45,19 +47,31 @@ def safe_write_text(path: Path, text: str, protected: Iterable[Path]) -> None:
 
 
 def safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None:
-    """Write ``data`` to ``path`` atomically unless ``path`` is a protected register file."""
-    target = path.resolve()
+    """Write ``data`` to ``path`` atomically unless ``path`` is a protected register file.
+
+    An output path that is itself a symbolic link is refused, so a link planted in a
+    shared directory cannot make regwatch replace a file elsewhere. Folders above
+    the file are resolved as usual. The new file replaces the one at the literal
+    path: an existing file keeps its permission bits, and a new file gets the
+    permissions the process umask allows, as any ordinary program would give it.
+    regwatch writes no file that is meant to be private (snapshots, the last-seen
+    hashes, ingest candidates and the files a user names are all ordinary output).
+    """
+    target = _literal_target(path)
     if any(_same_file(target, Path(p)) for p in protected):
         raise StateError(f"refusing to overwrite protected file {path}")
+    if target.is_symlink():
+        raise StateError(f"{path} is a symbolic link; regwatch will not write through it")
     if target.is_dir():
         raise StateError(f"{path} is a directory")
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary = tempfile.mkstemp(
-            dir=target.parent, prefix=".regwatch-", suffix=".tmp"
-        )
+        mode = _existing_mode(target)
+        descriptor, temporary = _create_temporary(target.parent)
         try:
             with os.fdopen(descriptor, "wb") as handle:
+                if mode is not None:
+                    os.fchmod(handle.fileno(), mode)
                 handle.write(data)
             os.replace(temporary, target)
         except BaseException:
@@ -65,6 +79,34 @@ def safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None
             raise
     except OSError as exc:
         raise StateError(f"cannot write {path}: {exc.strerror or exc}") from exc
+
+
+def _literal_target(path: Path) -> Path:
+    """``path`` with the folders above it resolved but its last part left as written."""
+    if path.name in ("", ".", ".."):
+        return path.resolve()
+    return path.parent.resolve() / path.name
+
+
+def _existing_mode(target: Path) -> int | None:
+    """The permission bits of the regular file at ``target``, or None when there is none."""
+    try:
+        info = os.lstat(target)
+    except FileNotFoundError:
+        return None
+    return stat.S_IMODE(info.st_mode) if stat.S_ISREG(info.st_mode) else None
+
+
+def _create_temporary(directory: Path) -> tuple[int, str]:
+    """Create a new file next to the target. Its mode is 0o666 as limited by the umask."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    for _ in range(100):
+        name = directory / f".regwatch-{secrets.token_hex(8)}.tmp"
+        try:
+            return os.open(name, flags, 0o666), str(name)
+        except FileExistsError:
+            continue
+    raise OSError(errno.EEXIST, "cannot create a temporary file")
 
 
 def _same_file(target: Path, protected: Path) -> bool:
