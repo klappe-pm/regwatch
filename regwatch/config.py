@@ -187,12 +187,18 @@ def _integer(
 
 
 def file_root_is_too_broad(path: Path, home: Path | None) -> bool:
-    """True when ``path`` is a file system root or the home directory.
+    """True when ``path`` is a file system root, the home directory or a parent of it.
 
     Such a folder as a ``file`` source root would allow almost any file to be read.
+    A parent of the home directory holds the home directory, and so everything in it.
     """
     resolved = path.resolve()
-    return resolved == Path(resolved.anchor) or (home is not None and resolved == home.resolve())
+    if resolved == Path(resolved.anchor):
+        return True
+    if home is None:
+        return False
+    home_resolved = home.resolve()
+    return resolved == home_resolved or resolved in home_resolved.parents
 
 
 def _home() -> Path | None:

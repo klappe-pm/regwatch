@@ -46,7 +46,7 @@ Optional table. Limits that apply to every fetch.
 | `max_bytes` | integer | 2000000 | largest response accepted; 1 to 100000000 |
 | `user_agent` | string | `regwatch/0.1 (+https://github.com/klappe-pm/regwatch)` | the `User-Agent` header sent with every request |
 | `allow_private_hosts` | boolean | false | when true, a host may resolve to a loopback, link-local, private or other non-public address; leave it false unless a source is on your own network |
-| `allowed_file_roots` | list of paths | none | directories that `file` sources may read from; with none listed, every `file` source is refused. A file system root, the home directory and `~` are refused with `too broad`, as `regwatch init` refuses them |
+| `allowed_file_roots` | list of paths | none | directories that `file` sources may read from; with none listed, every `file` source is refused. A file system root, the home directory, `~` and any parent of the home directory are refused with `too broad`, as `regwatch init` refuses them |
 
 ## Profile
 

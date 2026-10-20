@@ -41,7 +41,7 @@ All notable changes to this project are documented in this file. The format foll
 - Output paths: a path that is itself a symbolic link is refused, an existing file keeps its permission bits, and a new file gets the permissions the umask allows instead of 0600.
 - `regwatch init` looks again right before it writes and creates each file exclusively, so a file or link that appears while it asks is never replaced or followed.
 - A candidates file that is deeply nested or larger than 20,000,000 bytes is a clean error from `brief` instead of a crash.
-- Configuration: a hand-written `allowed_file_roots` entry of `/` or the home directory is refused, as it already was in `regwatch init`.
+- Configuration: a hand-written `allowed_file_roots` entry of `/`, the home directory or any parent of the home directory is refused, as it already was in `regwatch init`, which now refuses a parent of the home directory too.
 
 ### Fixed
 

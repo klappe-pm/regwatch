@@ -675,6 +675,34 @@ def test_check_directory_and_file_root(home: Path, tmp_path: Path) -> None:
         check_file_root("..", home / "project", home)
 
 
+def test_file_root_that_is_a_parent_of_home_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run: Run
+) -> None:
+    parent = tmp_path / "users"
+    home = parent / "kim"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    base = home / "project"
+    for bad in (str(parent), str(parent / "."), "..", str(tmp_path)):
+        with pytest.raises(OnboardingError, match="too broad"):
+            check_file_root(bad, base, home)
+    # A sibling of home, and a folder below home, are fine.
+    assert check_file_root(str(parent / "shared"), base, home) == str(parent / "shared")
+    assert check_file_root("feeds", base, home) == "feeds"
+    code, _, err = run("init", "--yes", "--dir", str(base), "--allow-file-root", str(parent))
+    assert code == 2 and "too broad" in err
+    assert not (base / "regwatch.toml").exists()
+
+
+def test_literal_parent_of_home_is_too_broad() -> None:
+    from regwatch.config import file_root_is_too_broad
+
+    assert file_root_is_too_broad(Path("/people"), Path("/people/kim"))
+    assert file_root_is_too_broad(Path("/people/kim"), Path("/people/kim"))
+    assert not file_root_is_too_broad(Path("/people/lee"), Path("/people/kim"))
+    assert not file_root_is_too_broad(Path("/people/kim/feeds"), Path("/people/kim"))
+
+
 def test_parse_focus_choice() -> None:
     catalogue = load_catalogue()
     assert parse_focus_choice(["2", "cosmetics", "2", " ", ""], catalogue) == (

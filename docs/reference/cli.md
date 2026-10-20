@@ -54,7 +54,7 @@ Creates a project: `regwatch.toml`, an empty register that validates, and a copy
 | `--focus ID` | a focus area, by id or by its number in the list; repeat for more. Default none. |
 | `--term TERM` | a custom term that counts as a focus; repeat for more. Default none. |
 | `--jurisdiction NAME` | a jurisdiction to watch; repeat for more. Its id is made from the name. Default none. |
-| `--allow-file-root FOLDER` | allow `file` sources under this folder; repeat for more. Default none, so local files are refused. The root of a file system and your home directory are refused. A relative folder is relative to the project folder. |
+| `--allow-file-root FOLDER` | allow `file` sources under this folder; repeat for more. Default none, so local files are refused. The root of a file system, your home directory and any parent of it are refused. A relative folder is relative to the project folder. |
 | `--contact TEXT` | an email address or web page, 1 to 200 printable ASCII characters, written into the User-Agent header as `regwatch/<version> (+TEXT)`. Default: the standard header. |
 | `--example` | offer the invented example jurisdictions (Northland, Southvale and their regions) as the default answer. They are never offered otherwise. |
 | `--yes` | take the default for every question without a flag and do not ask to confirm |

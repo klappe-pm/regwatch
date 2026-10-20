@@ -370,6 +370,29 @@ def test_fetch_hardening_options_parse(project: Path) -> None:
     assert fetch.allowed_file_roots == (project.parent.resolve() / "snapshots", Path("/srv/feeds"))
 
 
+def test_config_refuses_a_file_root_that_is_a_parent_of_home(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from regwatch.config import ConfigError
+
+    home = tmp_path / "home" / "user"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    for root in (home.parent, home, tmp_path):
+        project.write_text(
+            project.read_text(encoding="utf-8").replace(
+                "[fetch]\n", f'[fetch]\nallowed_file_roots = ["{root}"]\n'
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(ConfigError, match="too broad"):
+            load_config(project)
+        project.write_text(
+            project.read_text(encoding="utf-8").replace(f'allowed_file_roots = ["{root}"]\n', ""),
+            encoding="utf-8",
+        )
+
+
 def test_fetch_hardening_defaults_are_the_safe_ones(tmp_path: Path) -> None:
     from regwatch.config import FetchSettings
 
