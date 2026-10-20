@@ -14,7 +14,7 @@
   <a href="https://github.com/klappe-pm/regwatch/releases"><img src="https://img.shields.io/github/v/release/klappe-pm/regwatch?style=flat-square&color=3ddc84&labelColor=162233&label=release" alt="Latest release"></a>
   <a href="https://github.com/klappe-pm/regwatch/blob/main/LICENSE"><img src="https://img.shields.io/github/license/klappe-pm/regwatch?style=flat-square&color=5aa9ff&labelColor=162233&label=license" alt="MIT license"></a>
   <a href="https://github.com/klappe-pm/regwatch/blob/main/pyproject.toml"><img src="https://img.shields.io/badge/dependencies-none-3ddc84?style=flat-square&labelColor=162233" alt="No runtime dependencies"></a>
-  <a href="https://github.com/klappe-pm/regwatch/blob/main/docs/reference/focus-catalogue.md"><img src="https://img.shields.io/badge/focus%20areas-8-5aa9ff?style=flat-square&labelColor=162233" alt="Eight shipped focus areas"></a>
+  <a href="https://github.com/klappe-pm/regwatch/blob/main/docs/README.md"><img src="https://img.shields.io/badge/focus%20areas-8-5aa9ff?style=flat-square&labelColor=162233" alt="Eight shipped focus areas"></a>
 </p>
 
 <p align="center">
@@ -67,13 +67,13 @@ Regwatch needs Python 3.11 or newer. [pipx](https://pipx.pypa.io/) is the easies
 pipx install regwatch
 ```
 
-Or install straight from GitHub:
+Nothing is published to PyPI yet. Until the first release, install from GitHub:
 
 ```bash
 pipx install git+https://github.com/klappe-pm/regwatch
 ```
 
-Then check the install:
+Then check that it runs:
 
 ```bash
 regwatch --version

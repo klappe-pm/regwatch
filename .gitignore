@@ -42,8 +42,7 @@ settings.local.json
 /examples/out/
 
 # agent instruction files and runtime directories at the repository root:
-# generated per machine, never tracked here; the bundled template and the
-# examples keep their own copies
+# generated per machine, never tracked here
 /AGENTS.md
 /CLAUDE.md
 /CODEX.md

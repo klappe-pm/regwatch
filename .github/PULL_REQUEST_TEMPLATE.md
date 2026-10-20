@@ -1,10 +1,10 @@
-## What this changes
+## What This Changes
 
-## How it was tested
+## How It Was Tested
 
 ## Checklist
 
-- [ ] The test suite passes (`python3 -m pytest`), and so do `ruff check`, `ruff format --check` and `mypy`.
+- [ ] The test suite passes (`python3 -m pytest`), and `ruff check`, `ruff format --check` and `mypy` pass.
 - [ ] A user-visible change has a line under Unreleased in `CHANGELOG.md`.
 - [ ] Documentation is updated for any change in behavior.
-- [ ] No secret, credential, real register or machine-specific path is committed.
+- [ ] No secret, credential, real register or machine-specific path is committed. Test values are synthetic.
