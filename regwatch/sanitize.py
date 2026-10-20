@@ -40,7 +40,11 @@ _ORDERED_START = re.compile(r"^(\s*)(\d{1,9})([.)])(\s)")
 #   and so is the colon of "://".
 _AUTOLINK_COLON = re.compile(r":(?=//)")
 _AUTOLINK_DOT = re.compile(r"(?:www)\.|(?<=\w)\.(?=\w)", re.IGNORECASE)
-_NEEDS_CODE_SPAN = re.compile(r"@|[A-Za-z][A-Za-z0-9+.\-]*:[^\s:]")
+# A scheme is a run of scheme characters that holds a letter and is followed by a colon and
+# then something other than a space or another colon. The run must start where the previous
+# character is not a scheme character, so each run is tried once and the check is linear.
+_SCHEME_RUN = re.compile(r"(?<![A-Za-z0-9+.\-])([A-Za-z0-9+.\-]+):(?=[^\s:])")
+_LETTER = re.compile("[A-Za-z]")
 _BACKTICK_RUN = re.compile(r"`+")
 _WHITESPACE = re.compile(r"(\s+)")
 _RULE_ONLY = re.compile(r"[-=\s]+")
@@ -129,8 +133,15 @@ def _code_span(token: str) -> str:
     return f"{fence}{pad}{token}{pad}{fence}"
 
 
+def _needs_code_span(token: str) -> bool:
+    """True when ``token`` holds an ``@`` or a ``scheme:`` run that a renderer would link."""
+    if "@" in token:
+        return True
+    return any(_LETTER.search(match.group(1)) for match in _SCHEME_RUN.finditer(token))
+
+
 def _escape_token(token: str) -> str:
-    if _NEEDS_CODE_SPAN.search(token):
+    if _needs_code_span(token):
         return _code_span(token)
     escaped = _MD_SPECIAL.sub(r"\\\1", token)
     escaped = _AUTOLINK_COLON.sub(r"\\:", escaped)
