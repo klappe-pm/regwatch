@@ -29,7 +29,7 @@ The one network client. See the [security model](../explanation/security-model.m
 - `MAX_REDIRECTS: int`: 5. `CHUNK_BYTES: int`: 16384, the largest single read.
 - `check_url(url: str) -> str`: return the lower-cased scheme, or raise `FetchError` for a scheme that is not allowed, a URL that contains a space or a control character, carries credentials or has an invalid port, an `https` URL with no host, or a `file` URL that names a remote host.
 - `is_public_address(address: str) -> bool`: true for a globally routable unicast IP address; false for loopback, link-local, private, unique local, shared, reserved, multicast and unspecified addresses, for the IPv4-mapped form of any of them, and for text that is not an address.
-- `FetchError`: a fetch was refused or failed. The message is safe to show.
+- `FetchError`: a fetch was refused or failed. The message is cleaned when the error is created, with control characters and invisible format characters removed and a length of at most 1,000 characters, so it is safe to show.
 - `Fetcher`: a protocol with one method, `fetch(url: str) -> str`. Implement it to supply a fake client in tests.
 - `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url)` returns the body decoded as UTF-8 with undecodable bytes replaced. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network.
 
@@ -128,8 +128,9 @@ Deterministic briefings. They call no external service.
 
 Cleaning of untrusted text. See the [security model](../explanation/security-model.md).
 
-- `clean_text(text: str, limit: int | None = None) -> str`: one line with C0, C1, DEL and ESC characters removed, lone surrogates replaced and whitespace collapsed; cut to `limit` characters when given.
-- `safe_https_url(value: object) -> str`: the link if it is a plain https link of at most `MAX_URL_LENGTH` (2000) characters with no whitespace, control character, quote, backslash or any of `()[]<>` and backtick, otherwise an empty string.
+- `clean_text(text: str, limit: int | None = None) -> str`: one line with C0, C1, DEL and ESC characters and invisible format characters (category Cf) removed, line and paragraph separators turned into spaces, lone surrogates replaced and whitespace collapsed; cut to `limit` characters when given.
+- `clean_line(text: str) -> str`: the same cleaning for a line to be printed, but whitespace is kept so columns stay aligned.
+- `safe_https_url(value: object) -> str`: the link if it is a plain https link of at most `MAX_URL_LENGTH` (2000) characters with no whitespace, control character, invisible format character, quote, backslash or any of `()[]<>` and backtick, and with a plain ASCII host, otherwise an empty string.
 - `escape_markdown(text: str) -> str`: backslash-escape every Markdown metacharacter and a leading list marker so the text renders literally.
 - `MAX_URL_LENGTH: int`: 2000.
 

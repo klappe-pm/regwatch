@@ -49,6 +49,9 @@ __all__ = [
 ]
 
 MAX_REGISTER_FILE_BYTES = 20_000_000
+# Tab, line feed and carriage return are allowed: a CSV cell may hold a line break, and
+# every printer turns them into spaces. ESC and the rest of C0, DEL and C1 are refused.
+_CONTROL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 JsonObject = dict[str, Any]
 
 
@@ -319,6 +322,8 @@ def _check_item(
     field_name: str, rule: JsonObject, item: str, refs: dict[str, set[str]]
 ) -> list[str]:
     errors: list[str] = []
+    if _CONTROL.search(item):
+        return [f"field '{field_name}' contains a control character"]
     enum = rule.get("enum")
     if enum is not None and item not in enum:
         errors.append(f"field '{field_name}' value '{item}' not in {enum}")
@@ -390,6 +395,30 @@ def _check_catalog(
         extra = sorted(set(record) - set(fields) - {"__extra__"})
         if name != "obligations" and extra:
             errors.append(f"{prefix}: unexpected fields {extra}")
+    return errors
+
+
+def _control_errors(label: str, value: object) -> list[str]:
+    """One error for each string, in nested JSON, that holds a control character.
+
+    A control character in register text can carry a terminal escape sequence, so
+    it is refused. The walk is iterative so deeply nested input cannot exhaust the
+    stack.
+    """
+    errors: list[str] = []
+    pending: list[tuple[str, object]] = [(label, value)]
+    while pending:
+        where, current = pending.pop()
+        if isinstance(current, str):
+            if _CONTROL.search(current):
+                errors.append(f"{where}: contains a control character")
+        elif isinstance(current, list):
+            pending.extend((f"{where}[{index}]", item) for index, item in enumerate(current))
+        elif isinstance(current, dict):
+            for key, item in current.items():
+                pending.append((f"{where}.{key}", item))
+                if _CONTROL.search(str(key)):
+                    errors.append(f"{where}: a field name contains a control character")
     return errors
 
 
@@ -511,6 +540,17 @@ def _validate_raw(raw: _Raw) -> list[str]:
 
     obligation_ids = {row.get("obligation_id", "") for row in raw.obligations}
     errors += _validate_sidecars(raw, obligation_ids, refs)
+    errors += _control_errors(
+        "portfolio file", {key: v for key, v in raw.portfolio.items() if key != "products"}
+    )
+    for label, value in (
+        ("detail file", raw.detail),
+        ("change log file", raw.changelog),
+        ("enforcement file", raw.enforcement),
+        ("themes file", raw.themes),
+    ):
+        if value is not None:
+            errors += _control_errors(label, value)
     return errors
 
 

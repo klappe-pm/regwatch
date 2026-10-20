@@ -45,6 +45,8 @@ from pathlib import Path
 from typing import Protocol
 from urllib.parse import urljoin, urlsplit
 
+from regwatch.sanitize import clean_text
+
 __all__ = [
     "ALLOWED_SCHEMES",
     "CHUNK_BYTES",
@@ -66,8 +68,21 @@ Connector = Callable[[str, int, float], socket.socket]
 Wrapper = Callable[[socket.socket, str], socket.socket]
 
 
+MAX_MESSAGE_CHARACTERS = 1000
+
+
 class FetchError(Exception):
-    """A fetch was refused or failed. The message is safe to show to the user."""
+    """A fetch was refused or failed. The message is safe to show to the user.
+
+    The message is cleaned when the error is created: control characters (and so
+    terminal escape sequences and line breaks) and invisible format characters are
+    removed, and a very long message is cut. A server controls part of some
+    messages, for example the status line it sent back, so the cleaning cannot be
+    left to the code that prints the error.
+    """
+
+    def __init__(self, message: object = "") -> None:
+        super().__init__(clean_text(str(message), MAX_MESSAGE_CHARACTERS))
 
 
 class Fetcher(Protocol):

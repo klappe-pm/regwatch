@@ -35,7 +35,7 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TextIO, TypeVar
 
 from regwatch import __version__
 from regwatch.briefing import TIERS, build_briefing
@@ -77,7 +77,7 @@ from regwatch.render import (
     render_newsletter_text,
     render_webpost,
 )
-from regwatch.sanitize import clean_text
+from regwatch.sanitize import clean_line, clean_text
 from regwatch.state import StateError, load_seen, safe_write_bytes, safe_write_text, save_seen
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
 
@@ -91,6 +91,17 @@ EXIT_UNVERIFIED = 4
 NOTICE = "regwatch flags candidates for human review. It is not legal advice."
 MAX_INPUT_BYTES = 20_000_000
 NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]{0,99}$")
+
+
+def _say(text: str = "", *, file: TextIO | None = None) -> None:
+    """Print one line of console output.
+
+    Every line of console output goes through here. Values that came from the
+    register, a catalogue or a server are printed in these lines, so control
+    characters (and with them terminal escape sequences and line breaks) and
+    invisible format characters are removed first.
+    """
+    print(clean_line(text), file=file)
 
 
 class CommandError(Exception):
@@ -174,16 +185,16 @@ class _Context:
 def _cmd_validate(ctx: _Context, args: argparse.Namespace) -> int:
     errors = validate_register(ctx.config)
     for error in errors:
-        print(f"ERROR {error}")
+        _say(f"ERROR {error}")
     register = None if errors else load_register(ctx.config)
     if register is not None:
-        print(
+        _say(
             f"regwatch validate: {len(register.obligations)} obligations, {len(register.sources)} sources, "
             f"{len(register.categories)} categories, {len(register.jurisdictions)} jurisdictions, "
             f"{len(register.portfolio.products)} products; errors=0"
         )
         return EXIT_OK
-    print(f"regwatch validate: errors={len(errors)}")
+    _say(f"regwatch validate: errors={len(errors)}")
     return EXIT_INVALID
 
 
@@ -201,13 +212,13 @@ def _cmd_coverage(ctx: _Context, args: argparse.Namespace) -> int:
             gaps.append(
                 f"{jurisdiction.jurisdiction_id} is marked confirmed but has no obligation rows"
             )
-        print(
+        _say(
             f"{jurisdiction.coverage:<10} {jurisdiction.jurisdiction_id:<16} rows={count:<3} {jurisdiction.name}"
         )
     summary = ", ".join(f"{k}={v}" for k, v in sorted(by_coverage.items()))
-    print(f"regwatch coverage: {len(register.jurisdictions)} jurisdictions; {summary}")
+    _say(f"regwatch coverage: {len(register.jurisdictions)} jurisdictions; {summary}")
     for gap in gaps:
-        print(f"WARN  {gap}")
+        _say(f"WARN  {gap}")
     return EXIT_OK
 
 
@@ -223,21 +234,19 @@ def _cmd_list(ctx: _Context, args: argparse.Namespace) -> int:
     if args.upcoming is not None:
         rows = upcoming_obligations(rows, args.upcoming, ctx.today)
     for o in rows:
-        print(
-            f"{o.effective_date or '(no date)':<11} {o.jurisdiction:<16} {o.status:<11} {o.title}"
-        )
-    print(f"regwatch list: {len(rows)} obligations")
+        _say(f"{o.effective_date or '(no date)':<11} {o.jurisdiction:<16} {o.status:<11} {o.title}")
+    _say(f"regwatch list: {len(rows)} obligations")
     return EXIT_OK
 
 
 def _cmd_portfolio(ctx: _Context, args: argparse.Namespace) -> int:
     register = ctx.register()
     for product in register.portfolio.products:
-        print(f"{product.product_id:<28} {product.name}")
-        print(
+        _say(f"{product.product_id:<28} {product.name}")
+        _say(
             f"{'':<28} categories: {', '.join(product.categories) or '-'}; markets: {', '.join(product.markets)}"
         )
-    print(
+    _say(
         f"regwatch portfolio: {register.portfolio.name}, {len(register.portfolio.products)} products"
     )
     return EXIT_OK
@@ -263,9 +272,9 @@ def _cmd_capture(ctx: _Context, args: argparse.Namespace) -> int:
     )
     for r in results:
         label = "captured" if r.captured else "skipped"
-        print(f"{label:<10} {r.source_id:<28} {r.detail}")
+        _say(f"{label:<10} {r.source_id:<28} {clean_text(r.detail)}")
     done = sum(1 for r in results if r.captured)
-    print(f"regwatch capture: {done}/{len(results)} sources")
+    _say(f"regwatch capture: {done}/{len(results)} sources")
     return EXIT_OK if done else EXIT_INVALID
 
 
@@ -287,9 +296,9 @@ def _cmd_check(ctx: _Context, args: argparse.Namespace) -> int:
         counts[r.status] = counts.get(r.status, 0) + 1
         digest = f"  {r.sha256[:12]}" if r.sha256 else ""
         detail = f"  {clean_text(r.detail)}" if r.detail else ""
-        print(f"{r.status:<10} {r.source_id:<28} {r.origin}{digest}{detail}")
+        _say(f"{r.status:<10} {r.source_id:<28} {r.origin}{digest}{detail}")
     summary = ", ".join(f"{k.lower()}={v}" for k, v in sorted(counts.items()))
-    print(f"regwatch check: {len(results)} sources; {summary}")
+    _say(f"regwatch check: {len(results)} sources; {summary}")
     flagged = [r for r in results if r.flagged]
     if args.accept:
         seen = accept_results(
@@ -299,16 +308,16 @@ def _cmd_check(ctx: _Context, args: argparse.Namespace) -> int:
             accept_suspicious=args.accept_suspicious,
         )
         save_seen(ctx.config.seen_path, seen, ctx.config.register.all_paths())
-        print(f"regwatch check: recorded the accepted baseline in {ctx.config.seen_path}")
+        _say(f"regwatch check: recorded the accepted baseline in {ctx.config.seen_path}")
     elif flagged:
-        print(
+        _say(
             "regwatch check: changes detected; review them, then run again with --accept to record the baseline"
         )
     if any(r.status == "SUSPICIOUS" for r in results) and not args.accept_suspicious:
-        print(
+        _say(
             "regwatch check: SUSPICIOUS sources are not accepted unless you add --accept-suspicious"
         )
-    print(NOTICE)
+    _say(NOTICE)
     if args.exit_code and any(r.needs_attention for r in results):
         return EXIT_UNVERIFIED
     return EXIT_CHANGES if (flagged and args.exit_code) else EXIT_OK
@@ -331,9 +340,9 @@ def _cmd_ingest(ctx: _Context, args: argparse.Namespace) -> int:
         ctx.config.candidates_path,
         json.dumps(candidates_document(candidates, ctx.today, origin), indent=2) + "\n",
     )
-    print(f"regwatch ingest: {len(candidates)} candidate events from {origin} (since {since})")
-    print(f"regwatch ingest: wrote {ctx.config.candidates_path} (unconfirmed, for review)")
-    print(NOTICE)
+    _say(f"regwatch ingest: {len(candidates)} candidate events from {origin} (since {since})")
+    _say(f"regwatch ingest: wrote {ctx.config.candidates_path} (unconfirmed, for review)")
+    _say(NOTICE)
     return EXIT_OK
 
 
@@ -352,40 +361,40 @@ def _cmd_impact(ctx: _Context, args: argparse.Namespace) -> int:
     outside = [i for i in impacts if not i.in_focus]
     _print_impacts(in_focus)
     if outside:
-        print()
-        print(f"Outside your focus areas ({len(outside)}, listed after the items above):")
+        _say()
+        _say(f"Outside your focus areas ({len(outside)}, listed after the items above):")
         _print_impacts(outside)
     summary = f"regwatch impact: {len(impacts)} candidate impacts across {len(register.portfolio.products)} products"
     if focus.active:
         summary += f"; {len(in_focus)} in your focus areas, {len(outside)} outside"
-    print(summary)
-    print(NOTICE)
+    _say(summary)
+    _say(NOTICE)
     return EXIT_OK
 
 
 def _print_impacts(impacts: list[Impact]) -> None:
     for i in impacts:
-        print(
+        _say(
             f"{i.severity:<8} {i.product_id:<24} {i.jurisdiction:<14} {i.effective_date or 'no date':<11} "
             f"{i.obligation_title}"
         )
-        print(f"{'':<8} {'; '.join(i.reasons)}")
+        _say(f"{'':<8} {'; '.join(i.reasons)}")
 
 
 def _cmd_themes(ctx: _Context, args: argparse.Namespace) -> int:
     register = ctx.register()
     findings = theme_findings(register, assess_impacts(register, ctx.today), register.themes)
     for f in findings:
-        print(f"## {f.title}")
-        print(f.why)
+        _say(f"## {f.title}")
+        _say(f.why)
         if f.affected_products:
-            print("Affected products: " + ", ".join(f.affected_products))
+            _say("Affected products: " + ", ".join(f.affected_products))
         if f.obligations:
-            print("Related obligations: " + ", ".join(f.obligations))
-        print("Action: " + f.action)
-        print()
-    print(f"regwatch themes: {len(findings)} findings")
-    print(NOTICE)
+            _say("Related obligations: " + ", ".join(f.obligations))
+        _say("Action: " + f.action)
+        _say()
+    _say(f"regwatch themes: {len(findings)} findings")
+    _say(NOTICE)
     return EXIT_OK
 
 
@@ -408,8 +417,8 @@ def _write_document(ctx: _Context, doc: Document, out_dir: str | None, stem: str
     directory = Path(out_dir)
     ctx.write_text(directory / f"{stem}.md", render_markdown(doc))
     ctx.write_text(directory / f"{stem}.json", json.dumps(doc.to_dict(), indent=2) + "\n")
-    print(f"wrote {directory / f'{stem}.md'}")
-    print(f"wrote {directory / f'{stem}.json'}")
+    _say(f"wrote {directory / f'{stem}.md'}")
+    _say(f"wrote {directory / f'{stem}.json'}")
 
 
 def _cmd_brief(ctx: _Context, args: argparse.Namespace) -> int:
@@ -482,8 +491,8 @@ def _cmd_render(ctx: _Context, args: argparse.Namespace) -> int:
     if "docx" in formats:
         put(f"{stem}.docx", docx_bytes(doc))
     for path in written:
-        print(f"wrote {path}")
-    print(f"regwatch render: {len(written)} files")
+        _say(f"wrote {path}")
+    _say(f"regwatch render: {len(written)} files")
     return EXIT_OK
 
 
@@ -524,7 +533,7 @@ def _cmd_digest(ctx: _Context, args: argparse.Namespace) -> int:
 def _emit(ctx: _Context, text: str, out: str | None, label: str) -> None:
     if out:
         ctx.write_text(Path(out), text)
-        print(f"regwatch {label}: wrote {out}")
+        _say(f"regwatch {label}: wrote {out}")
     else:
         sys.stdout.write(text)
 
@@ -590,9 +599,9 @@ def _cmd_report(ctx: _Context, args: argparse.Namespace) -> int:
             "disclaimer": doc.disclaimer,
         }
         ctx.write_text(Path(args.json), json.dumps(payload, indent=2) + "\n")
-        print(f"regwatch report: wrote {args.json}")
+        _say(f"regwatch report: wrote {args.json}")
     if flagged:
-        print(
+        _say(
             f"regwatch report: {len(flagged)} source change(s) flagged for review", file=sys.stderr
         )
     return EXIT_OK
@@ -601,10 +610,10 @@ def _cmd_report(ctx: _Context, args: argparse.Namespace) -> int:
 def _cmd_export(ctx: _Context, args: argparse.Namespace) -> int:
     records = build_records(ctx.register())
     ctx.write_text(Path(args.csv), records_csv(records))
-    print(f"regwatch export: wrote {args.csv} ({len(records)} records)")
+    _say(f"regwatch export: wrote {args.csv} ({len(records)} records)")
     if args.json:
         ctx.write_text(Path(args.json), json.dumps(records, indent=2) + "\n")
-        print(f"regwatch export: wrote {args.json}")
+        _say(f"regwatch export: wrote {args.json}")
     return EXIT_OK
 
 
@@ -616,7 +625,7 @@ YES = ("y", "yes")
 
 def _prompt(question: str) -> str:
     try:
-        return input(question).strip()
+        return input(clean_line(question)).strip()
     except EOFError as exc:
         raise CommandError(
             "no answer is available on standard input; give each answer as a flag, or add --yes"
@@ -630,7 +639,7 @@ def _ask(question: str, parse: Callable[[str], _T]) -> _T:
         try:
             return parse(answer)
         except OnboardingError as exc:
-            print(f"  {exc}", file=sys.stderr)
+            _say(f"  {exc}", file=sys.stderr)
 
 
 def _comma_list(answer: str) -> list[str]:
@@ -645,7 +654,7 @@ def _init_directory(args: argparse.Namespace) -> Path:
     if here == home.resolve():
         if args.yes:
             raise CommandError("this is your home directory; name the project folder with --dir")
-        print("You are in your home directory, so regwatch will not assume a project folder.")
+        _say("You are in your home directory, so regwatch will not assume a project folder.")
         return _ask(
             "Project folder (created if it does not exist): ", lambda a: check_directory(a, home)
         )
@@ -678,9 +687,9 @@ def _ask_focus(args: argparse.Namespace) -> tuple[str, ...]:
         return parse_focus_choice(args.focus, catalogue)
     if args.yes:
         return ()
-    print("Focus areas in the catalogue:")
+    _say("Focus areas in the catalogue:")
     for number, area in enumerate(catalogue, start=1):
-        print(f"  {number}. {area.focus_id}: {area.label}. {area.description}")
+        _say(f"  {number}. {area.focus_id}: {area.label}. {area.description}")
     return _ask(
         "Which apply to your business? Numbers or ids, separated by commas; Enter for none: ",
         lambda a: parse_focus_choice(_comma_list(a), catalogue),
@@ -774,18 +783,18 @@ def _cmd_init(ctx: _Context, args: argparse.Namespace) -> int:
         contact=_ask_contact(args),
     )
     files = scaffold_files(plan)
-    print()
+    _say()
     for line in _summary(plan, list(files), existing):
-        print(line)
+        _say(line)
     if not args.yes and _prompt("Create these files? [y/N]: ").lower() not in YES:
         raise CommandError("cancelled; nothing was written")
     for name, text in files.items():
         safe_write_text(directory / name, text, ())
-    print(f"regwatch init: wrote {len(files)} files in {directory}")
-    print("Next, describe your products in register/portfolio.json and add sources to")
-    print("register/sources.json, then check the register:")
-    print(f"  regwatch --config {directory / SCAFFOLD_NAMES[0]} validate")
-    print(NOTICE)
+    _say(f"regwatch init: wrote {len(files)} files in {directory}")
+    _say("Next, describe your products in register/portfolio.json and add sources to")
+    _say("register/sources.json, then check the register:")
+    _say(f"  regwatch --config {directory / SCAFFOLD_NAMES[0]} validate")
+    _say(NOTICE)
     return EXIT_OK
 
 
@@ -797,19 +806,19 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
         return json.dumps(value if not isinstance(value, Path) else str(value))
 
     def row(key: str, value: object) -> None:
-        print(f"{key} = {text(value)}")
+        _say(f"{key} = {text(value)}")
 
-    print(f"# effective configuration from {config.config_path}")
-    print("[register]")
+    _say(f"# effective configuration from {config.config_path}")
+    _say("[register]")
     for key in ("obligations", "jurisdictions", "categories", "sources", "portfolio"):
         row(key, getattr(config.register, key))
     for key in ("detail", "changelog", "enforcement", "themes"):
         if getattr(config.register, key) is not None:
             row(key, getattr(config.register, key))
-    print("[state]")
+    _say("[state]")
     row("dir", config.state_dir)
     row("snapshots", config.snapshots_dir)
-    print("[fetch]")
+    _say("[fetch]")
     fetch = config.fetch
     row("timeout_seconds", fetch.timeout_seconds)
     row("total_timeout_seconds", fetch.total_timeout_seconds)
@@ -818,8 +827,8 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
     row("allow_private_hosts", fetch.allow_private_hosts)
     row("allowed_file_roots", [str(root) for root in fetch.allowed_file_roots])
     if not fetch.allowed_file_roots:
-        print("# no folders are listed, so every file source is refused")
-    print("[ingest]")
+        _say("# no folders are listed, so every file source is refused")
+    _say("[ingest]")
     settings = config.ingest
     row("api_url", settings.api_url)
     row("agencies", list(settings.agencies))
@@ -829,7 +838,7 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
     row("terms", list(settings.terms))
     row("jurisdiction", settings.jurisdiction)
     row("per_page", settings.per_page)
-    print("[profile]")
+    _say("[profile]")
     row("focus_areas", list(config.profile.focus_areas))
     row("custom_terms", list(config.profile.custom_terms))
     row(
@@ -837,9 +846,9 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
         config.profile.catalogue if config.profile.catalogue else "shipped with regwatch",
     )
     for area in focus.areas:
-        print(f"# focus area {area.focus_id}: {area.label}, {len(area.terms)} terms")
+        _say(f"# focus area {area.focus_id}: {area.label}, {len(area.terms)} terms")
     if not focus.active:
-        print("# no focus areas are set, so every candidate counts as in focus")
+        _say("# no focus areas are set, so every candidate counts as in focus")
     return EXIT_OK
 
 
@@ -1037,8 +1046,8 @@ def main(
     except RegisterError as exc:
         if exc.errors != [str(exc)]:
             for error in exc.errors:
-                print(f"ERROR {error}", file=sys.stderr)
-        print(f"error: {exc}; run 'regwatch validate' for the list", file=sys.stderr)
+                _say(f"ERROR {error}", file=sys.stderr)
+        _say(f"error: {exc}; run 'regwatch validate' for the list", file=sys.stderr)
         return EXIT_INVALID
     except (
         CommandError,
@@ -1051,5 +1060,5 @@ def main(
         ValueError,
         OSError,
     ) as exc:
-        print(f"error: {clean_text(str(exc))}", file=sys.stderr)
+        _say(f"error: {clean_text(str(exc))}", file=sys.stderr)
         return EXIT_ERROR

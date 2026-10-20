@@ -31,3 +31,5 @@ All notable changes to this project are documented in this file. The format foll
 ### security
 
 - CSV export: every field is quoted, and a part of a cell that would run as a formula is neutralised after a `;`, a `,`, a tab or a line break, after leading whitespace or invisible format characters, and in the fullwidth forms, so a spreadsheet that splits on semicolons cannot be made to run a formula.
+- Terminal output: every line regwatch prints goes through one function that removes control characters and invisible format characters, `FetchError` cleans its own message (a server controls part of it), and `regwatch validate` refuses control characters in register text. A hostile status line, register value or catalogue label can no longer clear the screen, set a window title or add a line.
+- Text cleaning removes bidirectional overrides and isolates and zero-width characters, and a link whose host is not plain ASCII, or that holds an invisible format character, is refused.

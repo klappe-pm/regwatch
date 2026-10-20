@@ -11,6 +11,7 @@ This page describes every file in the register: what it holds, every field, and 
 - A reference field must name an identifier defined in the file it refers to.
 - Unknown fields in a JSON catalog are errors. Unknown or missing columns in the CSV header are errors, and so is a row with a different number of cells than the header.
 - A byte order mark at the start of the CSV is ignored.
+- Text must not hold a control character. A C0 control character other than tab, line feed and carriage return, DEL, or a C1 character in any field of any file is an error, because it could carry a terminal escape sequence. The error names the field and not the value.
 - Each file may be at most 20,000,000 bytes.
 
 ## obligations-csv
