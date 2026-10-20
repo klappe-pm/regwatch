@@ -131,7 +131,7 @@ Cleaning of untrusted text. See the [security model](../explanation/security-mod
 - `clean_text(text: str, limit: int | None = None) -> str`: one line with C0, C1, DEL and ESC characters and invisible format characters (category Cf) removed, line and paragraph separators turned into spaces, lone surrogates replaced and whitespace collapsed; cut to `limit` characters when given.
 - `clean_line(text: str) -> str`: the same cleaning for a line to be printed, but whitespace is kept so columns stay aligned.
 - `safe_https_url(value: object) -> str`: the link if it is a plain https link of at most `MAX_URL_LENGTH` (2000) characters with no whitespace, control character, invisible format character, quote, backslash or any of `()[]<>` and backtick, and with a plain ASCII host, otherwise an empty string.
-- `escape_markdown(text: str) -> str`: backslash-escape every Markdown metacharacter and a leading list marker so the text renders literally; it also escapes a value made only of `-` or `=`, the colon of `://`, every `@` and every dot that is followed by a non-space character, so a renderer that links bare text finds no link.
+- `escape_markdown(text: str) -> str`: backslash-escape every Markdown metacharacter and a leading list marker (also a value that is only a marker, such as `2027.`) so the text renders literally; it also escapes a value made only of `-` or `=`, the colon of `://`, every `@` and every dot that is followed by a non-space character, so a renderer that links bare text finds no link.
 - `MAX_URL_LENGTH: int`: 2000.
 
 ## `render`

@@ -207,3 +207,58 @@ def test_the_onboarding_message_for_a_parent_of_home_says_it_contains_home(tmp_p
     with pytest.raises(OnboardingError, match="contains") as caught:
         check_file_root(str(parent), home / "project", home)
     assert "or a folder that contains it" in str(caught.value)
+
+
+# --- rw3-06: a value that is only a list marker is escaped ----------------------------------
+
+MARKER_VALUES = ["1.", "9)", "2027.", "+", "-", "  3.", "123456789)"]
+
+
+def _render_html(values: list[str], *, bullets: bool, renderer: str) -> str:
+    from regwatch.document import Document, Section
+    from regwatch.render import render_markdown
+
+    section = Section("S", paragraphs=[] if bullets else values, bullets=values if bullets else [])
+    text = render_markdown(Document("T", "2026-10-20", sections=[section]))
+    if renderer == "markdown-it":
+        markdown_it = pytest.importorskip("markdown_it")
+        pytest.importorskip("linkify_it")
+        return str(markdown_it.MarkdownIt("gfm-like").render(text))
+    cmarkgfm = pytest.importorskip("cmarkgfm")
+    from cmarkgfm.cmark import Options
+
+    return str(cmarkgfm.github_flavored_markdown_to_html(text, options=Options.CMARK_OPT_UNSAFE))
+
+
+@pytest.mark.parametrize("renderer", ["markdown-it", "cmark-gfm"])
+@pytest.mark.parametrize("value", MARKER_VALUES)
+def test_a_paragraph_that_is_only_a_list_marker_is_a_paragraph(value: str, renderer: str) -> None:
+    html = _render_html([value], bullets=False, renderer=renderer)
+    assert "<ol" not in html and "<ul" not in html, html
+    assert "<p>" in html
+
+
+@pytest.mark.parametrize("renderer", ["markdown-it", "cmark-gfm"])
+def test_a_bullet_that_is_only_a_list_marker_does_not_start_a_nested_list(renderer: str) -> None:
+    html = _render_html(MARKER_VALUES, bullets=True, renderer=renderer)
+    assert "<ol" not in html, html
+    assert html.count("<ul") == 1
+    assert html.count("<li") == len(MARKER_VALUES)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("1.", "1\\."),
+        ("9)", "9\\)"),
+        ("2027.", "2027\\."),
+        ("+", "\\+"),
+        ("1. item", "1\\. item"),
+        ("+ item", "\\+ item"),
+        ("2027 was.", "2027 was."),
+    ],
+)
+def test_escape_markdown_escapes_a_lone_list_marker(value: str, expected: str) -> None:
+    from regwatch.sanitize import escape_markdown
+
+    assert escape_markdown(value) == expected

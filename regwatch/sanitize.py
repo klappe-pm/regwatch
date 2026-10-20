@@ -27,8 +27,8 @@ _CONTROL = re.compile("[\x00-\x1f\x7f-\x9f]")
 _SURROGATE = re.compile("[\ud800-\udfff]")
 _URL_FORBIDDEN = re.compile("[\\s()\\[\\]<>`\"'\\\\{}|^]")
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>&#~|!])")
-_BULLET_START = re.compile(r"^(\s*)([-+])(\s)")
-_ORDERED_START = re.compile(r"^(\s*)(\d{1,9})([.)])(\s)")
+_BULLET_START = re.compile(r"^(\s*)([-+])(\s|$)")
+_ORDERED_START = re.compile(r"^(\s*)(\d{1,9})([.)])(\s|$)")
 # A renderer that links bare text turns "https://host", "www.host", "host.com",
 # "name@host" and "xmpp:name@host/r" into links. The text is split at whitespace and
 # each token is made safe on its own:
