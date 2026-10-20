@@ -1,8 +1,8 @@
-# data-files
+# Data Files
 
 This page describes every file in the register: what it holds, every field, and the rule the validator applies to it. The rules are packaged data in `regwatch/data/schema.json`, and `regwatch validate` applies them. The register is yours; regwatch reads these files and never writes them. A synthetic copy of every file is in [examples/register](../../examples/register/README.md).
 
-## conventions
+## Conventions
 
 - List fields in the obligations CSV are separated by `;`. In JSON files they are arrays. A scalar field must not be given an array.
 - Identifiers match `^[a-z0-9-]+$`: lowercase letters, digits and hyphens.
@@ -14,7 +14,7 @@ This page describes every file in the register: what it holds, every field, and 
 - Text must not hold a control character. A C0 control character other than tab, line feed and carriage return, DEL, or a C1 character in any field of any file is an error, because it could carry a terminal escape sequence. The error names the field and not the value.
 - Each file may be at most 20,000,000 bytes.
 
-## obligations-csv
+## Obligations CSV
 
 One row is one distinct obligation in one jurisdiction. The header must contain exactly these columns.
 
@@ -38,7 +38,7 @@ One row is one distinct obligation in one jurisdiction. The header must contain 
 | `confidence` | yes | one of `high`, `medium`, `low`, `secondary` |
 | `notes` | no | free text |
 
-## jurisdictions-json
+## Jurisdictions JSON
 
 A top-level object with a `jurisdictions` list. The `parent` field builds a tree, and the tree decides which products are exposed to which obligations: a rule reaches a market when the two lie on the same path of the tree. A product sold in a region is exposed to its national rules, and a product sold nationally is exposed to every regional rule. A parent chain may not contain a cycle.
 
@@ -51,7 +51,7 @@ A top-level object with a `jurisdictions` list. The `parent` field builds a tree
 | `coverage` | yes | `confirmed` (has its own obligation rows), `tracked` (watched only through an aggregate row) or `aggregate` (the aggregate marker itself) |
 | `notes` | no | free text |
 
-## categories-json
+## Categories JSON
 
 A top-level object with a `categories` list. A category is a class of regulated attribute that obligations and products share, such as allergens or colorants.
 
@@ -62,7 +62,7 @@ A top-level object with a `categories` list. A category is a class of regulated 
 | `definition` | yes | free text |
 | `examples` | no | list of strings |
 
-## sources-json
+## Sources JSON
 
 A top-level object with a `sources` list. See [add a source](../how-to-guides/add-a-source.md) for choosing a mechanism.
 
@@ -77,7 +77,7 @@ A top-level object with a `sources` list. See [add a source](../how-to-guides/ad
 | `cadence` | yes | free text, such as `daily`; informational |
 | `notes` | no | free text |
 
-## portfolio-json
+## Portfolio JSON
 
 A top-level object with a `name`, an optional `disclaimer` and a `products` list. The name appears in every briefing title. The disclaimer is appended to the standard one on every briefing. Use it to state how reliable the product records are.
 
@@ -94,7 +94,7 @@ A top-level object with a `name`, an optional `disclaimer` and a `products` list
 | `confidence` | yes | one of `internal-model`, `confirmed`, `secondary` |
 | `notes` | no | free text |
 
-## detail-json
+## Detail JSON
 
 Optional. A top-level object with an optional `topics_vocabulary` list and a `detail` object keyed by `obligation_id`. When a vocabulary is given, every topic must be in it. An obligation without a record is allowed; the briefing shows a placeholder for it.
 
@@ -108,7 +108,7 @@ Optional. A top-level object with an optional `topics_vocabulary` list and a `de
 | `citations` | no | list of objects with `citation` (required) and `url` |
 | `backlinks` | no | list of objects with `label` (required) and `url`; the first is used as the source link |
 
-## changelog-json
+## Changelog JSON
 
 Optional. A top-level object with an `events` list. This is your curated change log. Candidates from `ingest` are never added to it automatically.
 
@@ -123,7 +123,7 @@ Optional. A top-level object with an `events` list. This is your curated change 
 | `citations` | no | list of objects with `citation` and `url` |
 | `source_url` | no | free text |
 
-## enforcement-json
+## Enforcement JSON
 
 Optional. A top-level object with an optional `reference_url` and a `themes` list of recurring enforcement themes. Shown in the `v2` and `v3` briefings.
 
@@ -134,7 +134,7 @@ Optional. A top-level object with an optional `reference_url` and a `themes` lis
 | `note` | no | free text, shown in `v3` |
 | `citations` | no | list of objects with `citation` and `url`, shown in `v3` |
 
-## themes-json
+## Themes JSON
 
 Optional. A top-level object with a `themes` list. A theme is a lens over the impacts. It matches the obligations that list any of its categories, and the products that both carry one of its categories and have an impact from such an obligation.
 
@@ -146,7 +146,7 @@ Optional. A top-level object with a `themes` list. A theme is a lens over the im
 | `why` | yes | why the theme matters |
 | `action` | yes | what to do about it |
 
-## state-files
+## State Files
 
 regwatch writes these itself, in the state directory. You do not edit them.
 

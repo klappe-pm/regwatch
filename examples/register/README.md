@@ -1,8 +1,8 @@
-# register
+# Register
 
 These are the register files of the synthetic example, one of each kind regwatch reads. They show the shape of each file; the rules for every field are in [data files](../../docs/reference/data-files.md). All of the content is invented. Replace it with your own when you start a real register, and never commit a real register to a public repository.
 
-## files
+## Files
 
 | file | holds |
 | --- | --- |

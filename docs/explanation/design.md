@@ -1,16 +1,16 @@
-# design
+# Design
 
 This page explains what regwatch is for and why it is built the way it is. It covers the stages of a run, the choice to flag candidates and never decide, how exposure and severity are worked out, and what regwatch leaves to people on purpose. It is explanation, not procedure: for steps see the [how-to guides](../how-to-guides/README.md), and for exact behaviour see the [reference](../reference/README.md).
 
 regwatch flags candidates for human review. Nothing it produces is legal advice.
 
-## the-problem
+## The Problem
 
 A business that sells regulated goods has to notice when a rule changes, work out which of its products the rule touches, and tell the right people. The sources are scattered: official feeds, agency pages, gazettes, mailing list archives. Reading all of them every day is tedious work that people skip, and the one day they skip is the day something is published.
 
 regwatch does the tedious part. It reads the sources you list, notices when one changed, compares what you know about your products with what you know about the rules, and puts the likely matches at the top of a short briefing. It stops there.
 
-## the-stages-of-a-run
+## The Stages of a Run
 
 1. Validate. The register is checked against field rules before anything else, so an analysis never runs on data with a dangling reference.
 2. Capture. Sources are fetched into stored snapshots. This is the only stage that needs the network, and it is optional.
@@ -22,7 +22,7 @@ regwatch does the tedious part. It reads the sources you list, notices when one 
 
 Each stage reads the output of the one before it from files, so you can run any stage alone, in any order, and repeat it.
 
-## why-regwatch-only-flags
+## Why Regwatch Only Flags
 
 The register is the expensive thing: someone read primary text, decided what it means, and wrote it down. If software edited it, you would not know which rows a person had stood behind. A change log that fills itself is no longer a record of what was decided.
 
@@ -32,7 +32,7 @@ The same reasoning is why `check` needs an explicit `--accept`. Recording a base
 
 Ingest candidates follow the same rule. They are labelled unconfirmed in the file, in the briefing and in the feed, and they live in the state directory, away from your change log. A person copies a candidate across after reading the document.
 
-## what-the-matching-means
+## What the Matching Means
 
 Impact analysis has three gates, and a pair is flagged only when all three pass.
 
@@ -44,7 +44,7 @@ The gates are deliberately simple and explainable. When a pair is flagged, the o
 
 Severity is a score built from the obligation's status, how soon it takes effect, and whether a named term matched. It orders the list so the first screen is the one to read. It is not a measure of legal risk, and the documentation never presents it as one.
 
-## focus-areas-rank-and-never-hide
+## Focus Areas Rank and Never Hide
 
 A register for a real business is wider than the business. Rules about drinks, cosmetics and pet food all pass the three gates for someone who sells only one of them, because the gates match on attributes and not on interest. Focus areas answer a different question: of the candidates, which should a person read first?
 
@@ -52,17 +52,17 @@ A focus area is a named set of words, chosen once during `regwatch init` and kep
 
 The shipped catalogue is general vocabulary. It names no company or product, and it is a starting point: the person who knows the business adds the words that matter to it.
 
-## snapshots-and-repeatability
+## Snapshots and Repeatability
 
 By default `check` reads a stored snapshot instead of the network. This has three effects. A run is repeatable: the same snapshots give the same result. It works offline, which makes it testable and usable on a locked-down machine. And it separates fetching from comparing, so you can fetch on one schedule and compare on another, or capture with a tool of your own and hand regwatch the file.
 
 `check --fetch` skips the snapshot and fetches now, for a one-off look.
 
-## briefings-are-assembled-not-written
+## Briefings Are Assembled, Not Written
 
-The briefings are built by code from structured data. They contain only text that is in your register files or is a fixed sentence in the program. There is no language model in the loop, so a briefing cannot contain a statement that nobody wrote. If you want a model to draft a summary, do that outside regwatch and keep the result as a human-reviewed detail record. The reasons are in [design decisions](../../developer-docs/explanation/design-decisions.md).
+The briefings are built by code from structured data. They contain only text that is in your register files or is a fixed sentence in the program. There is no language model in the loop, so a briefing cannot contain a statement that nobody wrote. If you want a model to draft a summary, do that outside regwatch and keep the result as a human-reviewed detail record. The reasons are in [design decisions](design-decisions.md).
 
-## what-regwatch-leaves-to-people
+## What Regwatch Leaves to People
 
 - Deciding that a rule applies, or does not.
 - Reading primary text. The hash tells you a page changed, not what changed or whether it matters.

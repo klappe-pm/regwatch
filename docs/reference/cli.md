@@ -1,16 +1,16 @@
-# cli
+# CLI
 
 This page describes the `regwatch` command: its global options, every subcommand with its options, what each one reads and writes, and the exit statuses. It is a reference, so it states facts without instruction. For a guided path see [getting started](../tutorials/getting-started.md).
 
 regwatch flags candidates for human review. It never edits the register or the change log, and nothing it produces is legal advice. The help text of every command ends with that statement.
 
-## synopsis
+## Synopsis
 
 ```text
 regwatch [--version] [--config PATH] <command> [options]
 ```
 
-## global-options
+## Global Options
 
 | option | meaning |
 | --- | --- |
@@ -18,7 +18,7 @@ regwatch [--version] [--config PATH] <command> [options]
 | `--config PATH` | the configuration file; default `regwatch.toml` in the current directory. It goes before the subcommand. |
 | `-h`, `--help` | print help and exit |
 
-## exit-statuses
+## Exit Statuses
 
 | status | meaning |
 | --- | --- |
@@ -30,7 +30,7 @@ regwatch [--version] [--config PATH] <command> [options]
 
 Argument errors detected by the parser also exit with status 2.
 
-## what-gets-written
+## What Gets Written
 
 Commands read the register and never write it. Writes go to exactly these places. A path you name is refused if it is a register file, `regwatch.toml`, `seen.json`, `ingest-candidates.json`, or anything inside the state or snapshots directory, whatever its case or links. Paths are compared by identity, not by name.
 
@@ -44,7 +44,7 @@ Commands read the register and never write it. Writes go to exactly these places
 | `render` | the rendered files in the directory you name |
 | `digest --out`, `report --out`, `report --json`, `export --csv`, `export --json` | the path you name |
 
-## init
+## `init`
 
 Creates a project: `regwatch.toml`, an empty register that validates, and a copy of the focus catalogue. It asks its questions on the terminal with plain prompts and needs no other program. Every question has a flag, a question whose flag is given is not asked, and `--yes` takes the default for every question that has no flag, so the command can run without a terminal. It ignores the global `--config` option: the configuration file is always `regwatch.toml` in the project folder.
 
@@ -75,7 +75,7 @@ Files written, all inside the project folder:
 
 Before asking anything but the folder, `init` lists the files that already exist. Without `--force` it stops, exits 2 and changes nothing. It also refuses, even with `--force`, to write through a symbolic link, and it prints a summary and asks for confirmation before writing unless `--yes` is given; declining exits 2 and writes nothing. `init` looks at the folder again right before it writes, and without `--force` it creates each file exclusively, so a file or link that appears while it is asking is left alone and the command exits 2. With `--force` each file is written atomically. The finished project validates with `errors=0`.
 
-## config
+## `config`
 
 `regwatch config show` prints the effective configuration: every setting after defaults and path resolution, in the form of the configuration file. Paths are absolute. It prints the register files, the state and snapshots directories, the fetch limits with the User-Agent and `allowed_file_roots` (a comment says when the list is empty and every file source is refused), the ingest filters, and the profile with the catalogue in use, one comment line for each focus area with its label and number of terms. It does not read the register. It exits 2 if the configuration is invalid or names an unknown focus area.
 
@@ -83,7 +83,7 @@ Before asking anything but the folder, `init` lists the files that already exist
 regwatch config show
 ```
 
-## validate
+## `validate`
 
 Checks every register file against the field rules and prints one `ERROR` line per problem. Exits 1 when there is any error.
 
@@ -91,7 +91,7 @@ Checks every register file against the field rules and prints one `ERROR` line p
 regwatch validate
 ```
 
-## coverage
+## `coverage`
 
 Lists each jurisdiction with its coverage level and the number of obligation rows. Prints a `WARN` line for a jurisdiction marked `confirmed` that has no rows.
 
@@ -99,7 +99,7 @@ Lists each jurisdiction with its coverage level and the number of obligation row
 regwatch coverage
 ```
 
-## list
+## `list`
 
 Lists obligations with their effective date, jurisdiction, status and title.
 
@@ -110,11 +110,11 @@ Lists obligations with their effective date, jurisdiction, status and title.
 | `--status STATUS` | only this status |
 | `--upcoming N` | only obligations effective from today to N days ahead, soonest first |
 
-## portfolio
+## `portfolio`
 
 Lists the products that obligations are matched against, with their categories and markets.
 
-## capture
+## `capture`
 
 Fetches non-manual sources and stores the raw content as snapshots. A `manual` source is skipped. Exits 1 if no source was stored.
 
@@ -122,7 +122,7 @@ Fetches non-manual sources and stores the raw content as snapshots. A `manual` s
 | --- | --- |
 | `--source ID` | only this source; exits 2 if the id is not in the register |
 
-## check
+## `check`
 
 Reduces each source to a signal, hashes it and compares the hash with the last accepted one. Without `--fetch` it reads the stored snapshot, so the result is repeatable offline.
 
@@ -148,7 +148,7 @@ Each line shows a status, the source id, where the content came from (`snapshot`
 
 `NEW`, `CHANGED` and `SUSPICIOUS` are changes for `--exit-code` (status 3), and `ERROR` and `MISSING` are unverified sources (status 4). `--accept` records the hash and the signal length of every source that produced one, except `SUSPICIOUS` sources unless `--accept-suspicious` is also given.
 
-## ingest
+## `ingest`
 
 Parses a Federal Register style API response into candidate change log events and writes them, flagged unconfirmed, to the state directory. It needs `--fetch` or `--from-file`; with neither it exits 2 and writes nothing.
 
@@ -158,7 +158,7 @@ Parses a Federal Register style API response into candidate change log events an
 | `--from-file PATH` | parse a saved response instead |
 | `--since DAYS` | look back this many days; default 365 |
 
-## impact
+## `impact`
 
 Flags candidate impacts of obligations on products, worst first. Each pair is printed with the reasons it matched. With focus areas set, pairs that match a focus area are printed first, each with a `focus:` reason, then a blank line, the heading `Outside your focus areas` and the rest in the same order. Nothing is left out. The last line then adds how many pairs fall in each group.
 
@@ -167,11 +167,11 @@ Flags candidate impacts of obligations on products, worst first. Each pair is pr
 | `--product ID` | only this product |
 | `--severity LEVEL` | only `act-now`, `high`, `watch` or `info` |
 
-## themes
+## `themes`
 
 Reads the impacts through the themes in your themes file and prints one finding per theme that matches an obligation or a product.
 
-## brief
+## `brief`
 
 Builds a briefing document. With focus areas set, items that match them come first and the rest follow under an `Outside Your Focus Areas` heading; see the [focus catalogue](focus-catalogue.md). Without `--out-dir` it prints Markdown to standard output. With it, it writes `<name>.md` and `<name>.json`, where the JSON is the document model that `render` reads.
 
@@ -185,7 +185,7 @@ Builds a briefing document. With focus areas set, items that match them come fir
 | `--out-dir DIR` | write the files here instead of printing |
 | `--name STEM` | the file stem; default `regwatch-briefing-<tier>`, `regwatch-daily-brief` or `regwatch-weekly-brief`; 1 to 100 letters, digits, dots, hyphens and underscores, not starting with a dot or hyphen, so it cannot contain a path separator |
 
-## render
+## `render`
 
 Renders a saved document model into delivery formats. It does not need a register, and works even when the configuration file does not exist.
 
@@ -205,7 +205,7 @@ Renders a saved document model into delivery formats. It does not need a registe
 
 Every format ends with the disclaimer, whatever the model contains. Markdown and web output backslash-escape every Markdown metacharacter, HTML and Word output escape all text, and every value loses its control characters first.
 
-## digest
+## `digest`
 
 Writes a Markdown digest of the register: obligations effective soon, then every obligation grouped by jurisdiction.
 
@@ -214,7 +214,7 @@ Writes a Markdown digest of the register: obligations effective soon, then every
 | `--window N` | upcoming horizon in days; default 365 |
 | `--out PATH` | write here instead of printing |
 
-## report
+## `report`
 
 Writes a change-and-due alert: sources flagged `NEW` or `CHANGED`, sources missing a snapshot, sources in error, and obligations effective within the window.
 
@@ -225,7 +225,7 @@ Writes a change-and-due alert: sources flagged `NEW` or `CHANGED`, sources missi
 | `--out PATH` | write the Markdown here instead of printing |
 | `--json PATH` | also write the machine-readable report |
 
-## export
+## `export`
 
 Writes one flat record per obligation, joined with its detail record when there is one.
 

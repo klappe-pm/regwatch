@@ -1,8 +1,8 @@
-# review-flagged-changes
+# Review Flagged Changes
 
 This guide says what to do, in order, when regwatch flags something: a source whose content changed, an ingest candidate, or a candidate impact on a product. regwatch only detects and flags. Every step that changes your register or your change log is yours, and every conclusion is a person's. Nothing regwatch produces is legal advice.
 
-## when-a-source-changes
+## When a Source Changes
 
 `check` reports `CHANGED` or `NEW` for a source. Do these in order:
 
@@ -25,7 +25,7 @@ regwatch --config ~/my-register/regwatch.toml check --accept
 
 Accepting is a statement that a person has looked at the change. Do not accept a change you have not read. A `SUSPICIOUS` source is not recorded by `--accept`; add `--accept-suspicious` only once you have confirmed that the shorter content is real.
 
-## when-an-ingest-candidate-looks-relevant
+## When an Ingest Candidate Looks Relevant
 
 `ingest` writes candidates to `ingest-candidates.json` in your state directory, each marked `needs_review` with confidence `unconfirmed`. They also appear in the `v3` briefing under "Newly Detected, Unconfirmed".
 
@@ -36,7 +36,7 @@ Accepting is a statement that a person has looked at the change. Do not accept a
 
 The next `ingest` run replaces the candidates file, so work from a run you have already saved or copied.
 
-## when-an-impact-is-flagged
+## When an Impact Is Flagged
 
 `impact` pairs an obligation with a product because they share a category, a term or a claim, and the product is exposed to the obligation's jurisdiction. The reasons are printed next to each pair.
 
@@ -47,7 +47,7 @@ The next `ingest` run replaces the candidates file, so work from a run you have 
 
 Severity orders the list by status and by how close the effective date is. It does not measure risk.
 
-## what-regwatch-will-not-do
+## What Regwatch Will Not Do
 
 - It will not edit your obligations, change log, detail, enforcement or theme files.
 - It will not decide that a rule applies, or that it does not.

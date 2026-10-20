@@ -1,8 +1,8 @@
-# run-the-tests
+# Run the Tests
 
 This guide covers every check a change must pass: the test suite and its coverage report, linting, formatting and strict type checking. There is no CI service, so these commands are the only gate; a change that passes them all is ready for review. It assumes the editable install from [first contribution](../tutorials/first-contribution.md).
 
-## the-test-suite
+## The Test Suite
 
 ```bash
 ~/regwatch/.venv/bin/python -m pytest ~/regwatch/tests
@@ -12,7 +12,7 @@ Tests live under `tests/` and read only the synthetic register in `examples/`, w
 
 The fetch client is tested without a network in three ways: the URL checks are plain functions, `file` URLs read a temporary directory, and the `https` path runs the real client code against fakes. `SafeFetcher` takes a resolver, a connector and a TLS wrapper, and `tests/test_fetch.py` supplies a fake name server and socket pairs with a server thread on the far end, so the tests exercise address vetting, pinning, redirects, size limits and the total deadline, including a server that sends one byte at a time. Everything above the client uses `FakeFetcher` from `tests/conftest.py`.
 
-## coverage
+## Coverage
 
 ```bash
 ~/regwatch/.venv/bin/python -m pytest ~/regwatch/tests --cov=regwatch --cov-report=term-missing
@@ -22,7 +22,7 @@ The target is at least 90 percent of the lines in the package. The report lists 
 
 Coverage measures lines, not behaviour. For a security check, prove the test matters by breaking the code it covers and watching the test fail. For example, remove the DTD check in `regwatch/extract.py` and confirm `test_extract.py` fails, then restore it.
 
-## lint-and-format
+## Lint and Format
 
 ```bash
 ~/regwatch/.venv/bin/ruff check ~/regwatch
@@ -34,7 +34,7 @@ Coverage measures lines, not behaviour. For a security check, prove the test mat
 
 The configuration is in `pyproject.toml`: line length 100, target Python 3.11, and the rule sets `E`, `F`, `W`, `I`, `B`, `UP`, `S`, `SIM` and `RUF`. The `S` rules are the security rules, and any `noqa` for one must say why it is safe. The line length rule `E501` is turned off because the formatter wraps code but cannot split a long string. To fix formatting, run `ruff format` without `--check`.
 
-## type-checking
+## Type Checking
 
 ```bash
 ~/regwatch/.venv/bin/mypy --config-file ~/regwatch/pyproject.toml ~/regwatch/regwatch
@@ -42,22 +42,24 @@ The configuration is in `pyproject.toml`: line length 100, target Python 3.11, a
 
 The package passes `mypy --strict`. New public functions need complete annotations. Tests are not type checked.
 
-## the-repository-hygiene-test
+## The Documentation and Repository Tests
 
-`tests/test_repository_hygiene.py` checks the whole tree and fails on:
+`tests/test_docs.py` checks the documentation and the repository layout and fails on:
 
+- a Markdown heading that is not in Title Case, a page with no H1, or a Markdown file with frontmatter that carries `models`, `providers` or `session-link`;
 - an absolute home directory path (`/Users/<name>` or `/home/<name>`) in any text file;
-- when the environment variable `REGWATCH_FORBIDDEN_TERMS_FILE` names a text file of terms, one per line, any of those terms in any text file. The check is skipped when the variable is unset. Keep that file outside the repository; the repository never lists the terms itself;
 - an em dash or an en dash anywhere, or a dash used as punctuation in a Markdown file;
 - a hard-wrapped Markdown paragraph;
-- a Markdown heading that is not lowercase kebab-case, or an H1 that does not match its file;
 - a code fence with no language tag, or a relative link that does not resolve;
-- a folder README that does not list every page beside it;
-- frontmatter, or an agent attribution, in a Markdown file;
-- a `.github` directory.
+- a link in `README.md` that is not absolute, because PyPI shows the README and a relative link breaks there;
+- a folder README that does not list every page beside it, or a docs README that does not link every quadrant;
+- an agent attribution in a Markdown file;
+- a missing community file, or a `.github` directory that holds anything other than the issue and pull request templates, the banner and `workflows/release.yml`.
 
-When it fails it names the file and line.
+`tests/test_no_personal_terms.py` reads every tracked file and fails on the owner email, private tool names, tracker ticket codes and absolute home paths. When the environment variable `REGWATCH_FORBIDDEN_TERMS_FILE` names a text file of terms, one per line, any of those terms in any tracked text file also fails the test. The check is skipped when the variable is unset. Keep that file outside the repository; the repository never lists the terms itself.
 
-## before-you-commit
+Both files carry the `repo_only` marker, so they skip when the repository files they read are missing, as they are in an extracted source distribution. When a test fails it names the file and line.
 
-Run all four commands, and add a line under `unreleased` in [changelog.md](../../changelog.md) for any change a user can see.
+## Before You Commit
+
+Run all four commands, and add a line under Unreleased in [CHANGELOG.md](../../CHANGELOG.md) for any change a user can see.

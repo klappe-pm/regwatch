@@ -1,14 +1,14 @@
-# security-model
+# Security Model
 
-This page explains what regwatch protects against and how, for a reader deciding whether to run it on a machine that holds a confidential register. Every claim below matches the code, and every limit is given with its number. It covers the fetch client, the parsing of untrusted content, the cleaning of text, the escaping of output, the detection of suppressed changes, the write path, and what regwatch trusts. It is explanation, not procedure: it says why the pieces exist and what they do not cover. To report a vulnerability, see [security.md](../../security.md).
+This page explains what regwatch protects against and how, for a reader deciding whether to run it on a machine that holds a confidential register. Every claim below matches the code, and every limit is given with its number. It covers the fetch client, the parsing of untrusted content, the cleaning of text, the escaping of output, the detection of suppressed changes, the write path, and what regwatch trusts. It is explanation, not procedure: it says why the pieces exist and what they do not cover. To report a vulnerability, see [SECURITY.md](../../SECURITY.md).
 
-## what-regwatch-trusts
+## What Regwatch Trusts
 
 regwatch trusts your configuration file and your register files. They are yours, and regwatch reads them as written. It does not trust anything that arrives from outside: feed contents, web pages, API responses, the file you pass to `ingest --from-file`, and the candidates file in the state directory, which a person or another program may have edited. Each is handled as described below.
 
 It reads no secret. There are no API keys, tokens or passwords anywhere in the configuration, and no setting comes from the environment. Proxy environment variables such as `HTTPS_PROXY` are deliberately ignored; see below.
 
-## the-fetch-client
+## The Fetch Client
 
 All network access goes through one class, `SafeFetcher` in `regwatch/fetch.py`. It opens sockets itself and has these properties.
 
@@ -25,11 +25,11 @@ All network access goes through one class, `SafeFetcher` in `regwatch/fetch.py`.
 
 The fetch client is a protocol with one method, and the class takes a resolver, a connector and a TLS wrapper as arguments. Tests pass fakes built on socket pairs, and a fixture blocks every real socket for the whole suite, so a test cannot reach the network by accident.
 
-### why-file-sources-are-opt-in
+### Why File Sources Are Opt-In
 
 A `file` source copies a local file into the snapshots directory, where later commands print and render pieces of it. If a register could name any path, a single wrong or hostile source entry would copy a private key or a password file into a place that is easy to publish by accident. regwatch could instead have defaulted the root to the directory holding `regwatch.toml`, which is convenient but still exposes everything under it, including the register. It chose the stricter default: no file roots at all. You name each directory deliberately, as in `allowed_file_roots = ["snapshots"]`.
 
-## parsing-untrusted-content
+## Parsing Untrusted Content
 
 Four kinds of content are parsed, and none is evaluated.
 
@@ -38,13 +38,13 @@ Four kinds of content are parsed, and none is evaluated.
 - Feeds go through ElementTree, but only after the content is checked for a `DOCTYPE` or `ENTITY` declaration. A document that contains either is refused outright, before it is parsed.
 - API responses for `ingest` are JSON, and every field is type checked and cleaned as described next. At most 1,000 documents are read. Numbers that become part of a URL must be 1 to 4 digits.
 
-### why-not-defusedxml
+### Why Not `defusedxml`
 
 The usual advice for untrusted XML is to use the `defusedxml` package. regwatch takes a narrower route that needs no dependency. Entity expansion attacks, such as the billion laughs attack and external entity resolution, all require a declaration in the document type definition. RSS and Atom feeds do not need one. Refusing every document that contains a `DOCTYPE` or an `ENTITY` declaration removes the whole class of attack, and the check is a single pattern match that runs before the parser sees the document.
 
 The tradeoff is that a feed that legitimately declares a DTD is refused. In practice that is rare, and the failure is visible and safe: the source reports `ERROR` with the reason. The documented fallback is to treat that source as `html` or `email-list`, which hash the text without parsing XML. A test feeds the parser a classic entity expansion document and checks that it is refused quickly.
 
-## cleaning-text
+## Cleaning Text
 
 Text that came from outside is cleaned in `regwatch/sanitize.py` wherever it enters a file, the terminal or a rendered document.
 
@@ -55,7 +55,7 @@ Text that came from outside is cleaned in `regwatch/sanitize.py` wherever it ent
 - A link is kept only if it is a plain https link: at most 2,000 characters, with a host and no credentials, and with no whitespace, control character, invisible format character, quote, backslash, brace, bar, caret, backtick, or any of `()[]<>`. The host must be plain ASCII: a host written in other scripts is refused, because a look-alike letter would let it pass for another site, and a genuine internationalised host is given in its `xn--` form. Such a link cannot close a Markdown link or an HTML attribute, and cannot be a `javascript:` or `data:` URL. The same rule is applied again when a briefing reads the candidates file, because that file may have been edited.
 - Messages from failed fetches are cleaned before they are printed, written to a report, or shown in an error line.
 
-## escaping-output
+## Escaping Output
 
 Rendered output is meant to be opened by other people, so it is treated as an attack surface.
 
@@ -66,7 +66,7 @@ Rendered output is meant to be opened by other people, so it is treated as an at
 - CSV and JSON exports: every CSV field is quoted. A part of a cell that would run as a formula gets a leading apostrophe, so a spreadsheet shows text instead. That covers a cell starting with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed, also after leading whitespace or invisible format characters, and in the fullwidth forms such as `＝`. Spreadsheet programs in many locales split a line on `;` as well as `,`, and a tab or a line break can start a new cell, so the same test is applied to the text after each of those separators; `x;=1+1;y` is written as `x;'=1+1;y`. The apostrophe is visible to a program that reads the CSV; JSON output is not changed.
 - Every format ends with the disclaimer. A document model cannot remove it, because loading a model always restores it. A model is limited to 2,000 sections, 5,000 items per list and 20,000 characters per value.
 
-## change-detection-that-cannot-be-hidden
+## Change Detection That Cannot Be Hidden
 
 A hash comparison can be defeated by the content itself: a source that starts serving an empty page, or a short error page, is reported as "changed" once and then quietly becomes the baseline. regwatch treats that as the attack it may be.
 
@@ -75,7 +75,7 @@ A hash comparison can be defeated by the content itself: a source that starts se
 - `check --accept` does not record a `SUSPICIOUS` result. It takes `--accept-suspicious` as well, so a person has to say that the shorter content is expected.
 - `check --exit-code` exits with 3 when a source is `NEW`, `CHANGED` or `SUSPICIOUS`, and with 4 when a source is in `ERROR` or `MISSING`, because a source regwatch cannot read is a source it cannot vouch for. Exit status 4 wins over 3.
 
-## the-write-path
+## The Write Path
 
 regwatch writes only to its state directory and to paths you name on the command line. Every write goes through one function that writes to a temporary file in the same directory and renames it into place, so an interrupted run never leaves a half-written file.
 
@@ -85,7 +85,7 @@ A path you name is refused if it is any of these: a register file, `regwatch.tom
 
 A source id becomes a file name only if it matches `^[a-z0-9-]+$`, so an id cannot point outside the snapshots directory. `brief --name` must match `[A-Za-z0-9_][A-Za-z0-9._-]{0,99}`, so it cannot contain a path separator. Register files and state files are read only up to 20,000,000 bytes, and the configuration file only up to 256,000.
 
-## the-setup-command
+## The Setup Command
 
 `regwatch init` is the one command that creates a configuration, so it applies the same care to files that the rest of regwatch applies to content.
 
@@ -97,7 +97,7 @@ A source id becomes a file name only if it matches `^[a-z0-9-]+$`, so an id cann
 - Every answer is checked before it is written: control and invisible characters are refused, the User-Agent contact is limited to printable ASCII, and the generated configuration is parsed again before any file is written, so an answer cannot break the file or add a setting.
 - Answers are never read from the environment. The only inputs are flags and what the user types.
 
-## what-regwatch-does-not-protect-against
+## What Regwatch Does Not Protect Against
 
 - A compromised source. If a publisher serves misleading content over a valid certificate, regwatch reports the change faithfully. A person has to read it.
 - A hostile register. regwatch assumes your own files are well-meant. It bounds their size, but it is not a sandbox for files from a stranger.

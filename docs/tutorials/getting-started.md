@@ -1,16 +1,16 @@
-# getting-started
+# Getting Started
 
 This tutorial takes a new user from an install to a first briefing. You install the command, set up your own project with `regwatch init`, which asks what your business cares about, then use the synthetic example register to validate a register, check sources for changes, flag candidate impacts, focus the results on a business, and render a briefing in several formats. It is a lesson rather than a reference: it follows one path and explains only what that path needs. For every option see the [cli reference](../reference/cli.md), and for every file the engine reads see [data files](../reference/data-files.md).
 
 regwatch flags candidates for human review. Nothing it produces is legal advice, and the example register is entirely invented. Do not treat any output in this tutorial as a statement about a real rule.
 
-## what-you-need
+## What You Need
 
 - Python 3.11 or newer.
 - `pipx`, or a virtual environment you are willing to install into.
 - A checkout of the repository, because the example register lives in its `examples/` directory.
 
-## install-the-command
+## Install the Command
 
 Until the package is released, install it from the repository:
 
@@ -26,7 +26,7 @@ regwatch --version
 
 The [install guide](../how-to-guides/install.md) covers other install methods and upgrading.
 
-## create-your-project
+## Create Your Project
 
 `regwatch init` sets up a project folder: a configuration file, an empty register and your focus areas. Run it and answer the questions. Press Enter to skip any question; the defaults are the safe ones.
 
@@ -60,7 +60,7 @@ regwatch validate: 0 obligations, 0 sources, 0 categories, 1 jurisdictions, 0 pr
 
 The register is valid and empty. Your next steps are to describe your products in `register/portfolio.json`, add the rules you track to `register/obligations.csv`, and add sources as the [add a source guide](../how-to-guides/add-a-source.md) describes. Print what regwatch will use at any time with `regwatch --config ~/my-regwatch/regwatch.toml config show`. The rest of this tutorial uses the synthetic example, which already has a register to work on.
 
-## copy-the-example
+## Copy the Example
 
 Clone the repository and copy the example into a directory of your own, so the files you change are not part of the checkout:
 
@@ -70,7 +70,7 @@ git clone https://github.com/klappe-pm/regwatch ~/regwatch && cp -r ~/regwatch/e
 
 The directory holds `regwatch.toml`, the register files under `register/`, stored source content under `snapshots/`, and a saved API response, `ingest-response.json`. Every other command in this tutorial names the configuration file explicitly, so it runs from any directory.
 
-## validate-the-register
+## Validate the Register
 
 Validation checks every register file against the field rules and reports every problem at once:
 
@@ -84,7 +84,7 @@ regwatch validate: 7 obligations, 5 sources, 5 categories, 6 jurisdictions, 3 pr
 
 Every other command validates first and refuses to run on an invalid register, so you will see this check again. To see an error, change a jurisdiction in `register/obligations.csv` to a name that is not in `register/jurisdictions.json` and run the command again. Change it back afterwards.
 
-## check-the-sources
+## Check the Sources
 
 A source is a place regwatch reads to see whether something changed. The example stores a copy of each source under `snapshots/`, so the check works without a network:
 
@@ -126,7 +126,7 @@ MANUAL     sv-newsroom                  manual  review by hand
 
 The changed source is flagged for a person to read. regwatch has not changed your register and will not. The [review flagged changes guide](../how-to-guides/review-flagged-changes.md) says what to do next.
 
-## flag-candidate-impacts
+## Flag Candidate Impacts
 
 Impact analysis joins each obligation to each product in the portfolio and flags the pairs a person should look at:
 
@@ -145,7 +145,7 @@ act-now  oat-bar                  nl             2027-03-01  Allergen Declaratio
 
 Each line says why the pair was flagged: the shared category and term. The severity depends on the obligation's status and how soon it takes effect, so it changes as the example dates pass. Severity is a way to order the list for a reader. It is not an assessment of legal risk.
 
-## focus-the-results-on-your-business
+## Focus the Results on Your Business
 
 Some of those candidates are about sweeteners, colorants and school food, which may mean little to the business you run. A focus profile ranks candidates by relevance without hiding any. Add a profile to the example configuration. This one names a custom term and no catalogue area, which is enough to see the effect:
 
@@ -179,7 +179,7 @@ regwatch impact: 7 candidate impacts across 3 products; 2 in your focus areas, 5
 
 The two candidates for the oat bar now come first, because the bar's category and the obligation both mention allergens, even though candidates with the same or a higher severity exist. All seven are still listed. The briefing later in this tutorial follows the same rule, so its obligations are split the same way. The [set your focus areas guide](../how-to-guides/set-your-focus-areas.md) shows how to choose catalogue areas and edit their words.
 
-## ingest-candidate-events
+## Ingest Candidate Events
 
 `ingest` turns a response from a Federal Register style API into candidate events. The example includes a saved response, so no network is needed:
 
@@ -189,7 +189,7 @@ regwatch --config ~/regwatch-demo/regwatch.toml ingest --from-file ~/regwatch-de
 
 Two of the three invented documents match the filters in `regwatch.toml`. They are written to `state/ingest-candidates.json`, each flagged unconfirmed. Nothing is added to your change log. You decide which candidates are real and copy them there yourself.
 
-## build-and-render-a-briefing
+## Build and Render a Briefing
 
 A briefing combines the change log, what is coming due, the register and the candidates. Write the full version and its document model to a directory:
 
@@ -205,7 +205,7 @@ regwatch --config ~/regwatch-demo/regwatch.toml render ~/regwatch-demo/out/regwa
 
 The directory now holds Markdown, a web post, an HTML newsletter with a plain text alternative, and a Word document. Open any of them and look at the last lines: each ends with the statement that it is not legal advice.
 
-## next-steps
+## Next Steps
 
 - Choose and tune your focus areas: [set your focus areas](../how-to-guides/set-your-focus-areas.md).
 - Watch your own feed or page: [add a source](../how-to-guides/add-a-source.md).

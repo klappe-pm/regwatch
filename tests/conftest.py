@@ -40,6 +40,28 @@ class FakeFetcher:
         return value
 
 
+# Files that a source distribution omits. A test that reads them is marked repo_only.
+REPO_ONLY_PATHS = (".github", "docs", "CHANGELOG.md")
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "repo_only: reads repository files that the source distribution omits "
+        "(.github, docs, CHANGELOG.md) and skips when they are missing",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    missing = [name for name in REPO_ONLY_PATHS if not (ROOT / name).exists()]
+    if not missing:
+        return
+    skip = pytest.mark.skip(reason=f"the source distribution omits {', '.join(missing)}")
+    for item in items:
+        if "repo_only" in item.keywords:
+            item.add_marker(skip)
+
+
 @pytest.fixture(autouse=True)
 def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail loudly if any test opens a socket."""

@@ -1,14 +1,14 @@
-# regwatch
+# Regwatch
 
 regwatch watches regulatory sources for changes, compares what it finds with a register of obligations that you keep, flags the obligations and products that a person should look at, and renders a briefing. It is an engine for people who track rules such as food ingredient and labeling law, it ships as a Python package with a `regwatch` command, it needs only the Python 3.11 standard library at runtime, and nothing it produces is legal advice.
 
-## status
+## Status
 
 regwatch flags candidates for human review. It never edits the register or the change log that you curate, and it never decides anything for you. Nothing it produces is legal advice, and every briefing it renders says so. A qualified person must confirm each flagged item against the primary source text and current facts before anyone relies on it.
 
-The engine was extracted from a private repository. Nothing is released yet, so the package is not on PyPI and there is no tagged version; install it from a checkout. The commands `init`, `config`, `validate`, `coverage`, `list`, `portfolio`, `capture`, `check`, `ingest`, `impact`, `themes`, `brief`, `render`, `digest`, `report` and `export` are implemented. [changelog.md](changelog.md) records changes.
+The engine was extracted from a private repository. Nothing is released yet, so the package is not on PyPI and there is no tagged version; install it from a checkout. The commands `init`, `config`, `validate`, `coverage`, `list`, `portfolio`, `capture`, `check`, `ingest`, `impact`, `themes`, `brief`, `render`, `digest`, `report` and `export` are implemented. [CHANGELOG.md](CHANGELOG.md) records changes.
 
-## quickstart
+## Quickstart
 
 Install from a checkout into a virtual environment:
 
@@ -46,17 +46,17 @@ cd examples && regwatch brief --tier v2
 
 To use regwatch on your own rules, run `regwatch init`, then fill in `register/portfolio.json`, `register/obligations.csv` and `register/sources.json`. The [getting started tutorial](docs/tutorials/getting-started.md) walks through every step, and [set your focus areas](docs/how-to-guides/set-your-focus-areas.md) explains how the ranking works.
 
-## documentation
+## Documentation
 
-Two trees, one per audience, each arranged by [Diátaxis](https://diataxis.fr/) quadrant: tutorials, how-to guides, reference and explanation.
+One tree under `docs/`, arranged by [Diátaxis](https://diataxis.fr/) quadrant: tutorials, how-to guides, reference and explanation.
 
-- I use regwatch, where do I start: [getting started](docs/tutorials/getting-started.md), then the rest of [docs](docs/README.md).
-- I change regwatch, where do I start: [first contribution](developer-docs/tutorials/first-contribution.md), then the rest of [developer-docs](developer-docs/README.md).
+- I use regwatch, where do I start: [Getting Started](docs/tutorials/getting-started.md), then the rest of [docs](docs/README.md).
+- I change regwatch, where do I start: [First Contribution](docs/tutorials/first-contribution.md), which sits in the same tree.
 
-## support-and-contributing
+## Support and Contributing
 
-[support.md](support.md) says where to ask for help and where to file an issue. [contributing.md](contributing.md) holds the contribution guidelines. Report vulnerabilities privately as described in [security.md](security.md).
+[SUPPORT.md](SUPPORT.md) says where to ask for help and where to file an issue. [CONTRIBUTING.md](CONTRIBUTING.md) holds the contribution guidelines. Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-## license
+## License
 
 MIT. See [LICENSE](LICENSE).

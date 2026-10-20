@@ -1,8 +1,8 @@
-# focus-catalogue
+# Focus Catalogue
 
 This page describes the focus catalogue: the shipped set of focus areas, the file format that defines them, how a profile is built from it, and exactly how a candidate is matched. It is a reference, so it states facts without instruction. To choose areas and tune them, see [set your focus areas](../how-to-guides/set-your-focus-areas.md).
 
-## shipped-areas
+## Shipped Areas
 
 The catalogue ships as package data in `regwatch/data/focus-areas.json`. `regwatch init` copies it into the project as `focus-areas.json`.
 
@@ -19,7 +19,7 @@ The catalogue ships as package data in `regwatch/data/focus-areas.json`. `regwat
 
 The words of each area are generic regulatory vocabulary. They name no company, product or brand.
 
-## file-format
+## File Format
 
 A JSON object with an optional `version` and `description`, and a `focus_areas` list. Unknown keys in an entry are errors. The file must be smaller than 1,000,000 bytes.
 
@@ -30,11 +30,11 @@ A JSON object with an optional `version` and `description`, and a `focus_areas` 
 | `description` | no | text shown in the `regwatch init` list |
 | `terms` | yes | non-empty list of non-empty strings; stored lower case, repeats dropped |
 
-## the-profile
+## The Profile
 
 The `[profile]` table in `regwatch.toml` chooses areas by id and adds custom terms; see [configuration](configuration.md). The profile is active when it names at least one area or custom term. An inactive profile matches nothing, and every candidate counts as in focus. A chosen id that is not in the catalogue is an error that names the ids on offer.
 
-## matching
+## Matching
 
 - Text is lower-cased. A term matches when it appears as whole words: the characters before and after it must not be letters or digits. One plural ending, `s` or `es`, is allowed after the term.
 - A term may hold several words and hyphens, and is matched literally; it is not a pattern.
@@ -48,11 +48,11 @@ What is read for each kind of candidate:
 | obligation in a briefing | the same obligation text |
 | unconfirmed ingest candidate | the headline and the text of what happened |
 
-## ranking
+## Ranking
 
 Candidates in focus come first. Within each group the existing order applies: worst severity first, then earliest effective date, then product id. A candidate in focus carries a `focus:` reason that lists the areas it matched. A candidate outside is never removed.
 
-## where-the-result-appears
+## Where the Result Appears
 
 | output | in focus | outside |
 | --- | --- | --- |

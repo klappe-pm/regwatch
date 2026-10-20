@@ -1,14 +1,14 @@
-# python-api
+# Python API
 
 This page lists every public function, class and constant in the `regwatch` package, module by module (the heading is the module name inside the `regwatch` package, for example `regwatch.config`), with its signature and what it does. The command line is a thin layer over these functions, and you can call them from your own scripts. A name is public when it appears in its module's `__all__`; everything else is internal and may change without notice. The package is typed, and `mypy --strict` passes on it.
 
 Nothing the package produces is legal advice. Functions that produce documents always include the disclaimer.
 
-## package
+## Package
 
 - `__version__: str`: the package version, `"0.1.0"`.
 
-## config
+## `config`
 
 Reads `regwatch.toml`. See [configuration](configuration.md) for the keys.
 
@@ -21,7 +21,7 @@ Reads `regwatch.toml`. See [configuration](configuration.md) for the keys.
 - `FetchSettings`: frozen dataclass with `timeout_seconds`, `total_timeout_seconds`, `max_bytes`, `user_agent`, `allow_private_hosts` and `allowed_file_roots`.
 - `IngestSettings`: frozen dataclass with `api_url`, `agencies`, `types`, `cfr_title`, `cfr_parts`, `terms`, `jurisdiction` and `per_page`.
 
-## fetch
+## `fetch`
 
 The one network client. See the [security model](../explanation/security-model.md).
 
@@ -33,7 +33,7 @@ The one network client. See the [security model](../explanation/security-model.m
 - `Fetcher`: a protocol with one method, `fetch(url: str) -> str`. Implement it to supply a fake client in tests.
 - `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url)` returns the body decoded as UTF-8 with undecodable bytes replaced. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network.
 
-## extract
+## `extract`
 
 Reduces untrusted content to a signal. Nothing here evaluates content.
 
@@ -41,7 +41,7 @@ Reduces untrusted content to a signal. Nothing here evaluates content.
 - `signal_hash(signal: str) -> str`: the SHA-256 hex digest of the signal.
 - `ExtractError`: the content cannot be safely reduced to a signal.
 
-## register
+## `register`
 
 The data model, loading and validation. See [data files](data-files.md).
 
@@ -54,7 +54,7 @@ The data model, loading and validation. See [data files](data-files.md).
 - `RegisterError`: the register is unreadable, malformed or invalid; `errors` holds the messages.
 - Frozen dataclasses: `Register`, `Jurisdiction`, `Category`, `Source`, `Obligation`, `Product`, `Portfolio`, `Citation`, `DetailRecord`, `ChangeEvent`, `EnforcementTheme`, `Enforcement` and `Theme`. Their fields match the columns and keys in [data files](data-files.md), with list fields as tuples.
 
-## state
+## `state`
 
 Snapshots, the last-seen state and the only write path.
 
@@ -69,7 +69,7 @@ Snapshots, the last-seen state and the only write path.
 - `SOURCE_ID_RE`: the compiled pattern `^[a-z0-9-]+$`.
 - `StateError`: a state file is unreadable or a write was refused.
 
-## check
+## `check`
 
 Change detection.
 
@@ -80,7 +80,7 @@ Change detection.
 - `SourceResult`: frozen dataclass with `source_id`, `status`, `origin`, `sha256`, `detail` and `signal_length`; the property `flagged` is true for `NEW`, `CHANGED` and `SUSPICIOUS`, and `needs_attention` is true for `ERROR` and `MISSING`.
 - `CaptureResult`: frozen dataclass with `source_id`, `captured` and `detail`.
 
-## ingest
+## `ingest`
 
 Candidate events from a Federal Register style API response.
 
@@ -89,7 +89,7 @@ Candidate events from a Federal Register style API response.
 - `candidates_document(candidates, today, origin) -> dict[str, Any]`: wrap candidates with provenance for writing to the state directory.
 - `IngestError`: the response is not usable.
 
-## impact
+## `impact`
 
 Candidate impact analysis.
 
@@ -101,7 +101,7 @@ Candidate impact analysis.
 - `Impact`: frozen dataclass with `product_id`, `product_name`, `obligation_id`, `obligation_title`, `jurisdiction`, `status`, `effective_date`, `reasons`, `severity`, `focus` (the identifiers of the focus areas matched, `custom-terms` for custom terms) and `in_focus`.
 - `Finding`: frozen dataclass with `key`, `title`, `why`, `action`, `affected_products` and `obligations`.
 
-## document
+## `document`
 
 The document model shared by every briefing and renderer.
 
@@ -111,7 +111,7 @@ The document model shared by every briefing and renderer.
 - `Document(title, generated, subtitle="", sections=[], disclaimer=DISCLAIMER)`: a titled, dated list of sections. `to_dict()` returns a JSON-serialisable form. `Document.from_dict(data)` builds one from parsed JSON, checks every field, and always restores the disclaimer. Raises `DocumentError`.
 - `DocumentError`: a document model is malformed.
 
-## synthesis
+## `synthesis`
 
 Deterministic briefings. They call no external service.
 
@@ -119,12 +119,12 @@ Deterministic briefings. They call no external service.
 - `weekly_synthesis(register, impacts, findings, today) -> Document`: the full analysis of the register against the portfolio. Candidates with `in_focus` false are listed under `Candidate Impact Outside Your Focus Areas`.
 - `upcoming_obligations(obligations, days, today) -> list[Obligation]`: obligations effective from today to `days` days ahead, soonest first.
 
-## briefing
+## `briefing`
 
 - `TIERS: tuple[str, ...]`: `("v1", "v2", "v3")`.
 - `build_briefing(register, impacts, today, *, tier="v3", recent_count=8, since_days=None, candidates=(), focus=None) -> Document`: the tiered briefing. Raises `ValueError` for an unknown tier. Candidates appear only in `v3`, and are always labelled unconfirmed. With an active `focus` profile, obligations, dated items and candidates that match come first and the rest follow under an outside-your-focus-areas heading; see the [focus catalogue](focus-catalogue.md).
 
-## sanitize
+## `sanitize`
 
 Cleaning of untrusted text. See the [security model](../explanation/security-model.md).
 
@@ -134,7 +134,7 @@ Cleaning of untrusted text. See the [security model](../explanation/security-mod
 - `escape_markdown(text: str) -> str`: backslash-escape every Markdown metacharacter and a leading list marker so the text renders literally; it also escapes a value made only of `-` or `=`, the colon of `://`, every `@` and every dot between a letter or digit and a letter, so a renderer that links bare text finds no link.
 - `MAX_URL_LENGTH: int`: 2000.
 
-## render
+## `render`
 
 Delivery formats. HTML and Word output escape all text.
 
@@ -147,7 +147,7 @@ Delivery formats. HTML and Word output escape all text.
 - `render_document_xml(doc: Document) -> str`: the `word/document.xml` part.
 - `docx_bytes(doc: Document) -> bytes`: the bytes of a `.docx` file.
 
-## export
+## `export`
 
 - `RECORD_COLUMNS: tuple[str, ...]`: the export columns.
 - `FORMULA_STARTS: tuple[str, ...]`: the characters that make a spreadsheet read a cell as a formula.
@@ -155,7 +155,7 @@ Delivery formats. HTML and Word output escape all text.
 - `build_records(register: Register) -> list[dict[str, str]]`: one normalized record per obligation.
 - `records_csv(records: list[dict[str, str]]) -> str`: CSV text with a header row, every field quoted and formula cells neutralised.
 
-## focus
+## `focus`
 
 Focus areas and profiles. See the [focus catalogue](focus-catalogue.md).
 
@@ -168,7 +168,7 @@ Focus areas and profiles. See the [focus catalogue](focus-catalogue.md).
 - `CUSTOM_TERMS_KEY: str`: `"custom-terms"`, the identifier reported for a custom term.
 - `FocusError`: the catalogue is unreadable or invalid, or the profile names an unknown area.
 
-## onboarding
+## `onboarding`
 
 What `regwatch init` writes and the checks on its answers. Nothing here prints or asks a question.
 
@@ -183,6 +183,6 @@ What `regwatch init` writes and the checks on its answers. Nothing here prints o
 - `user_agent_for(contact: str) -> str`: the User-Agent header for a contact.
 - `OnboardingError`: an answer is not usable. It is a `ValueError`.
 
-## cli
+## `cli`
 
 - `main(argv=None, *, fetcher=None, today=None, now=None) -> int`: run the command line and return the exit status. `fetcher`, `today` and `now` let tests and embedders supply a fake network client and a fixed clock.

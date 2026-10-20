@@ -1,8 +1,8 @@
-# add-a-source
+# Add a Source
 
 This guide shows how to watch a new source: a feed, a web page, an API, a mailing list archive or a page you will read by hand. You add one entry to your sources file, capture its content once, and let `check` compare later runs against it. It assumes a working register; see [getting started](../tutorials/getting-started.md) if you do not have one.
 
-## choose-a-mechanism
+## Choose a Mechanism
 
 The `mechanism` field tells regwatch how to reduce the content to a signal before hashing it. The signal is what gets compared, so a mechanism that ignores page furniture avoids false alarms.
 
@@ -16,7 +16,7 @@ The `mechanism` field tells regwatch how to reduce the content to a signal befor
 
 Prefer `rss` or `api` when the publisher offers one. A feed or API changes only when something is published, while a page can change for reasons that do not matter.
 
-## add-the-entry
+## Add the Entry
 
 Add an object to the `sources` list in your sources file. The `jurisdiction` must already exist in your jurisdictions file, and the `source_id` must be lowercase letters, digits and hyphens because it becomes a file name.
 
@@ -39,7 +39,7 @@ The `url` must use `https`, or `file` for content you keep on disk. regwatch ref
 regwatch --config ~/my-register/regwatch.toml validate
 ```
 
-## capture-the-first-copy
+## Capture the First Copy
 
 `capture` fetches the source and stores the raw content under your snapshots directory:
 
@@ -49,7 +49,7 @@ regwatch --config ~/my-register/regwatch.toml capture --source sv-newsroom-feed
 
 Read the stored file once to confirm it is what you expected. A login page or an error page stored as a snapshot will hash the same every day and hide real changes.
 
-## record-the-baseline
+## Record the Baseline
 
 Check the new source and accept the result as the baseline:
 
@@ -59,7 +59,7 @@ regwatch --config ~/my-register/regwatch.toml check --source sv-newsroom-feed --
 
 From now on `check` reports `CHANGED` when the signal differs from this baseline.
 
-## schedule-the-check
+## Schedule the Check
 
 regwatch runs when you run it and does not install a scheduler. To check on a schedule, run `capture` and then `check` from your own scheduler, such as cron. Add `--exit-code` to `check` so the job can alert on exit status 3:
 
@@ -73,7 +73,7 @@ regwatch --config ~/my-register/regwatch.toml check --exit-code
 
 Capturing replaces the stored copy. If you want to compare the old and new text when a source changes, copy the snapshots directory to a dated archive of your own before each capture.
 
-## check-the-live-fetch-without-storing
+## Check the Live Fetch Without Storing
 
 `check --fetch` fetches each source now instead of reading its snapshot. It records nothing unless you also pass `--accept`:
 
@@ -81,6 +81,6 @@ Capturing replaces the stored copy. If you want to compare the old and new text 
 regwatch --config ~/my-register/regwatch.toml check --fetch --source sv-newsroom-feed
 ```
 
-## limits
+## Limits
 
 Every fetch has a timeout and a size limit, set in the `[fetch]` table of `regwatch.toml`; see [configuration](../reference/configuration.md). A source larger than the limit is reported as `ERROR`, not truncated. If a source needs a login, a cookie or a script to render, use `manual`.

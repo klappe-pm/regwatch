@@ -1,4 +1,4 @@
-# configuration
+# Configuration
 
 This page lists every key in `regwatch.toml`, the file that tells regwatch where your register is and how to behave. Every path is resolved relative to the directory that holds the file; an absolute path is used as written and a leading `~` is expanded. Unknown tables, unknown keys and values of the wrong type are rejected with an `error:` message, so a typo never silently changes behaviour. The file must be smaller than 256,000 bytes.
 
@@ -6,7 +6,7 @@ The configuration holds no API keys, tokens or credentials, and regwatch reads n
 
 A complete working file is [examples/regwatch.toml](../../examples/regwatch.toml).
 
-## register
+## Register
 
 Required table. The first five keys are required; the last four are optional. regwatch only ever reads these files.
 
@@ -24,7 +24,7 @@ Required table. The first five keys are required; the last four are optional. re
 
 The format of each file is in [data files](data-files.md).
 
-## state
+## State
 
 Optional table. regwatch writes its own state here and nowhere else apart from output paths you name.
 
@@ -35,7 +35,7 @@ Optional table. regwatch writes its own state here and nowhere else apart from o
 
 Neither may be a register file.
 
-## fetch
+## Fetch
 
 Optional table. Limits that apply to every fetch.
 
@@ -48,7 +48,7 @@ Optional table. Limits that apply to every fetch.
 | `allow_private_hosts` | boolean | false | when true, a host may resolve to a loopback, link-local, private or other non-public address; leave it false unless a source is on your own network |
 | `allowed_file_roots` | list of paths | none | directories that `file` sources may read from; with none listed, every `file` source is refused. A file system root, the home directory and `~` are refused with `too broad`, as `regwatch init` refuses them |
 
-## profile
+## Profile
 
 Optional table, written by `regwatch init`. It records what matters to your business so that results can be ranked by relevance; see [set your focus areas](../how-to-guides/set-your-focus-areas.md).
 
@@ -60,7 +60,7 @@ Optional table, written by `regwatch init`. It records what matters to your busi
 
 With no areas and no custom terms nothing is ranked and every candidate counts as in focus.
 
-## ingest
+## Ingest
 
 Optional table. Filters for `ingest`, which reads a Federal Register style API.
 

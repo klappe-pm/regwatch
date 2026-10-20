@@ -1,8 +1,8 @@
-# examples
+# Examples
 
 This directory holds a complete, working regwatch project built from synthetic data, so you can run every command without a register of your own. Every jurisdiction, rule, source, product and company in it is invented, and the `.example` addresses are reserved names that never resolve. None of it describes a real rule, and nothing here is legal advice. The tests copy this directory and run against the copy, so keep it valid when you change it.
 
-## contents
+## Contents
 
 | path | what it is |
 | --- | --- |
@@ -13,7 +13,7 @@ This directory holds a complete, working regwatch project built from synthetic d
 
 The jurisdictions form two small trees. Northland is a country with three regions, one of them tracked only through an aggregate marker. Southvale is a second country. The example company, Example Pantry Co., sells three invented products into them.
 
-## try-it
+## Try It
 
 Each command names the configuration file, so it runs from any directory. Replace `~/regwatch` with the path of your checkout.
 
