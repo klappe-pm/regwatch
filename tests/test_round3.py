@@ -47,3 +47,59 @@ def test_the_code_span_choice_is_unchanged(value: str, expected: str) -> None:
     from regwatch.sanitize import escape_markdown
 
     assert escape_markdown(value) == expected
+
+
+# --- rw3-02: a dot after a mark, a vowel sign, an emoji or a symbol is escaped too -----------
+
+LINKIFY_VALUES = [
+    "visit हिन्दी.com today",
+    "visit é.com today",
+    "visit \xe9.com today",
+    "\U0001f600.com",
+    "™.com",
+    "தமிழ்.com",
+]
+
+
+def _markdown_for(value: str) -> str:
+    from regwatch.document import Document, Section
+    from regwatch.render import render_markdown
+
+    doc = Document("T", "2026-10-20", sections=[Section("S", paragraphs=[value], bullets=[value])])
+    return render_markdown(doc)
+
+
+@pytest.mark.parametrize("value", LINKIFY_VALUES)
+def test_markdown_it_with_linkify_links_none_of_them(value: str) -> None:
+    markdown_it = pytest.importorskip("markdown_it")
+    pytest.importorskip("linkify_it")
+    html = markdown_it.MarkdownIt("gfm-like").render(_markdown_for(value))
+    assert "<a " not in html, html
+
+
+@pytest.mark.parametrize("value", LINKIFY_VALUES)
+def test_cmark_gfm_links_none_of_them(value: str) -> None:
+    cmarkgfm = pytest.importorskip("cmarkgfm")
+    from cmarkgfm.cmark import Options
+
+    html = cmarkgfm.github_flavored_markdown_to_html(
+        _markdown_for(value), options=Options.CMARK_OPT_UNSAFE
+    )
+    assert "<a" not in html, html
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("é.com", "é\\.com"),
+        ("™.com", "™\\.com"),
+        ("a.", "a."),
+        ("The end.", "The end."),
+        ("a..b", "a\\.\\.b"),
+        ("www.", "www\\."),
+    ],
+)
+def test_every_dot_before_a_non_space_character_is_escaped(value: str, expected: str) -> None:
+    from regwatch.sanitize import escape_markdown
+
+    assert escape_markdown(value) == expected

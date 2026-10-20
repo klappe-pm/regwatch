@@ -35,11 +35,13 @@ _ORDERED_START = re.compile(r"^(\s*)(\d{1,9})([.)])(\s)")
 #
 # - a token that holds an "@" or a "scheme:" prefix is shown in a code span, where
 #   no renderer links anything and no backslash escape is needed;
-# - in any other token the dot after a "www" (whatever follows it) and every dot
-#   between two word characters (letters and digits of any script) are escaped,
-#   and so is the colon of "://".
+# - in any other token the dot after a "www" (whatever follows it) and every dot that
+#   is followed by a non-space character are escaped, and so is the colon of "://".
+#   The dot does not depend on the character before it, because a renderer's idea
+#   of a letter (a combining mark, a vowel sign, an emoji or a symbol) differs from
+#   the regular expression one.
 _AUTOLINK_COLON = re.compile(r":(?=//)")
-_AUTOLINK_DOT = re.compile(r"(?:www)\.|(?<=\w)\.(?=\w)", re.IGNORECASE)
+_AUTOLINK_DOT = re.compile(r"(?:www)\.|\.(?=\S)", re.IGNORECASE)
 # A scheme is a run of scheme characters that holds a letter and is followed by a colon and
 # then something other than a space or another colon. The run must start where the previous
 # character is not a scheme character, so each run is tried once and the check is linear.
@@ -161,9 +163,10 @@ def escape_markdown(text: str) -> str:
     link anything in it. A word that holds an ``@`` or starts with a ``scheme:``
     (an email address, ``mailto:``, ``xmpp:``) is put in a code span, with a fence
     longer than any run of backticks inside it, so it shows exactly as written. In
-    every other word the dot after ``www`` (whatever follows) and every dot between
-    two word characters, of any script, and the colon of ``://`` are escaped, so a
-    web address, a ``www.`` name or a bare domain stays text.
+    every other word the dot after ``www`` (whatever follows) and every dot that is
+    followed by a non-space character, whatever precedes it, and the colon of
+    ``://`` are escaped, so a web address, a ``www.`` name or a bare domain stays
+    text.
     """
     escaped = "".join(
         part if not part or part.isspace() else _escape_token(part)
