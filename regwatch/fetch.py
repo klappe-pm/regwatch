@@ -15,7 +15,9 @@ The shipped SafeFetcher is deliberately small and enforces these rules:
 - the connection is made to the address that was vetted, not to a second
   lookup of the name, so a DNS answer that changes between the check and the
   connection cannot redirect the request;
-- certificates are always verified against the original host name;
+- certificates are always verified against the original host name; an
+  internationalised host is sent in its ``xn--`` form and a non-ASCII path or
+  query is percent-encoded;
 - a redirect may only lead to another ``https`` URL, at most 5 times, and the
   redirects share one total deadline with the request itself;
 - every request has a per-operation timeout, a total deadline enforced by
@@ -47,7 +49,7 @@ import urllib.request
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Protocol
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 from regwatch.sanitize import clean_text
 
@@ -318,10 +320,10 @@ class SafeFetcher:
 
     def _request(self, url: str, deadline: float) -> tuple[bytes, str | None]:
         parts = urlsplit(url)
-        host = parts.hostname or ""
+        host = _wire_host(parts.hostname or "")
         port = parts.port or 443
         addresses = self._vet(host, port, deadline)
-        target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+        target = _wire_text((parts.path or "/") + (f"?{parts.query}" if parts.query else ""))
         sock: socket.socket | None = None
         watchdog: threading.Timer | None = None
         expired = threading.Event()
@@ -350,7 +352,7 @@ class SafeFetcher:
                 location = response.getheader("Location")
                 if not location:
                     raise FetchError(f"HTTP status {response.status} without a Location header")
-                return b"", location
+                return b"", _utf8_header(location)
             if not 200 <= response.status < 300:
                 raise FetchError(f"HTTP status {response.status}")
             declared = response.getheader("Content-Length")
@@ -408,6 +410,38 @@ class SafeFetcher:
 
     def _deadline_error(self) -> FetchError:
         return FetchError(f"total time limit of {self.total_timeout_seconds:g} seconds exceeded")
+
+
+def _wire_host(host: str) -> str:
+    """The host as it goes on the wire: an internationalised name in its ``xn--`` form.
+
+    The name is used for the lookup, the TLS server name and the Host header, so all
+    three agree. A name that cannot be encoded is a clear ``FetchError``.
+    """
+    if host.isascii():
+        return host
+    try:
+        return host.encode("idna").decode("ascii")
+    except UnicodeError as exc:
+        raise FetchError("host name cannot be encoded as an internationalised name") from exc
+
+
+def _wire_text(target: str) -> str:
+    """The request target with every non-ASCII character percent-encoded as UTF-8.
+
+    Existing escapes and the characters that structure a URL are left alone.
+    """
+    if target.isascii():
+        return target
+    return quote(target, safe="/%:@!$&'()*+,;=-._~?")
+
+
+def _utf8_header(value: str) -> str:
+    """Undo the Latin-1 reading of a header value that a server wrote as raw UTF-8."""
+    try:
+        return value.encode("latin-1").decode("utf-8")
+    except UnicodeError:
+        return value
 
 
 def _host_header(host: str, port: int) -> str:

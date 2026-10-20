@@ -432,6 +432,45 @@ def test_isatap_with_a_public_ipv4_and_plain_addresses_still_pass() -> None:
     assert is_public_address("2a00:1450:4001::200e")
 
 
+def test_an_internationalised_host_and_a_non_ascii_path_are_encoded_for_the_wire() -> None:
+    ascii_host = "xn--e1afmkfd.xn--p1ai"  # пример.рф
+    network = web(ok(b"hi"), hosts={ascii_host: [PUBLIC]})
+    url = "https://пример.рф/путь/файл%20один?q=ключ&x=1"  # noqa: RUF001
+    body = make(network).fetch(url)
+    assert body == "hi"
+    assert network.resolved == [ascii_host]
+    assert network.wrapped == [ascii_host]
+    request = network.requests[0]
+    request.decode("ascii")  # the whole request is plain ASCII
+    lines = request.split(b"\r\n")
+    assert lines[0] == (
+        b"GET /%D0%BF%D1%83%D1%82%D1%8C/%D1%84%D0%B0%D0%B9%D0%BB%20%D0%BE%D0%B4%D0%B8%D0%BD"
+        b"?q=%D0%BA%D0%BB%D1%8E%D1%87&x=1 HTTP/1.1"
+    )
+    assert b"Host: " + ascii_host.encode() in lines
+
+
+def test_a_redirect_to_an_internationalised_host_is_followed_in_ascii() -> None:
+    ascii_host = "xn--e1afmkfd.xn--p1ai"
+    network = web(
+        redirect("https://пример.рф/страница"),
+        ok(b"there"),
+        hosts={"example.org": [PUBLIC], ascii_host: [PUBLIC]},
+    )
+    assert make(network).fetch("https://example.org/") == "there"
+    assert network.resolved == ["example.org", ascii_host]
+    assert b"GET /%D1%81%D1%82%D1%80%D0%B0%D0%BD%D0%B8%D1%86%D0%B0 " in network.requests[1]
+
+
+@pytest.mark.parametrize("url", ["https://a..рф/", "https://" + "я" * 70 + ".рф/"])
+def test_a_host_that_cannot_be_encoded_is_a_clear_error(url: str) -> None:
+    network = web(ok())
+    with pytest.raises(FetchError, match="host name cannot be encoded") as caught:
+        make(network).fetch(url)
+    assert "codec" not in str(caught.value)
+    assert network.resolved == [] and network.connected == []
+
+
 def test_public_addresses() -> None:
     assert is_public_address(PUBLIC)
     assert is_public_address("2606:4700:4700::1111")

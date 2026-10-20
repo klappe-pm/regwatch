@@ -45,4 +45,5 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- Fetching a source whose host is written in other scripts, or whose path or query holds non-ASCII characters, now works: the host goes on the wire in its `xn--` form for the lookup, the TLS server name and the Host header, the path and query are percent-encoded, and a host that cannot be encoded is a clear `FetchError`. Links shown to readers still require a plain ASCII host.
 - A document model whose section `level` is a number with a fraction, such as `2.0`, is refused with a clean error from `render` instead of crashing the renderer. Only the integers 2, 3 and 4 are accepted.
