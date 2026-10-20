@@ -40,7 +40,7 @@ The configuration runs `mypy --strict` on the `regwatch` package. Tests are not 
 
 ## Source Distribution
 
-The source distribution leaves out `.github/`, `docs/` and the community files. Tests marked `repo_only` read those files, so they skip themselves when the files are missing, and the tests that ship in the sdist pass when run from an extracted copy. To check that, build the distributions, extract the sdist, install the wheel and run the tests there with the source package out of the way, so that the wheel is what gets imported:
+The source distribution leaves out `.github/`, `docs/` and the community files. Tests marked `repo_only` read those files, so they skip themselves when the files are missing, and the tests that ship in the sdist pass when run from an extracted copy. To check that, build the distributions, extract the sdist, install the wheel and run the tests there with the source package out of the way, so that the wheel is what gets imported. The `tests` folder is not a package, so a test module imports a helper module of that folder by its plain name (`from conftest import ROOT`, `from test_docs import headings`) and never as `tests.conftest`; `tests.conftest` resolves only from a source checkout, and a test checks that no module uses it:
 
 ```bash
 cd /path/to/regwatch && python3 -m build --outdir /path/to/dist

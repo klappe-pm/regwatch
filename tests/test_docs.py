@@ -7,8 +7,7 @@ import re
 from pathlib import Path
 
 import pytest
-
-from tests.conftest import ROOT
+from conftest import ROOT
 
 pytestmark = pytest.mark.repo_only
 

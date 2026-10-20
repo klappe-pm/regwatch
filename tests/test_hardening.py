@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import NOW, TODAY, FakeFetcher
+from conftest import NOW, ROOT, TODAY, FakeFetcher
 
 from regwatch.briefing import build_briefing
 from regwatch.check import MIN_PRIOR_LENGTH, accept_results, check_sources
@@ -434,3 +434,14 @@ def test_protected_paths_include_the_config_and_state_files(config: Config) -> N
     assert config.seen_path.resolve() in protected
     assert config.candidates_path.resolve() in protected
     assert set(config.register.all_paths()) <= protected
+
+
+def test_no_test_module_imports_tests_as_a_package() -> None:
+    """tests/ has no __init__.py, so `tests.x` resolves only through the working directory or an
+    editable install; the other modules use `from conftest import`, which always works."""
+    offenders = [
+        path.name
+        for path in sorted((ROOT / "tests").glob("*.py"))
+        if re.search(r"^\s*(?:from|import)\s+tests\b", path.read_text(encoding="utf-8"), re.M)
+    ]
+    assert offenders == []

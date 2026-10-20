@@ -5,8 +5,7 @@ from __future__ import annotations
 import re
 
 import pytest
-
-from tests.conftest import ROOT
+from conftest import ROOT
 
 pytestmark = pytest.mark.repo_only
 

@@ -12,8 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
-from tests.conftest import ROOT
+from conftest import ROOT
 
 TERMS_FILE_VARIABLE = "REGWATCH_FORBIDDEN_TERMS_FILE"
 

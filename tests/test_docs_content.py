@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
-from tests.conftest import ROOT
-from tests.test_docs import headings
+from conftest import ROOT
+from test_docs import headings
 
 pytestmark = pytest.mark.repo_only
 
