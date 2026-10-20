@@ -330,3 +330,152 @@ def test_look_alike_hosts_and_invisible_characters_are_refused(url: str) -> None
 
     assert safe_https_url(url) == ""
     assert safe_https_url("https://xn--exmple-cua.gov/") == "https://xn--exmple-cua.gov/"
+
+
+# --- rw-04: IPv6 addresses that embed an IPv4 address ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "64:ff9b::7f00:1",
+        "64:ff9b::a9fe:a9fe",
+        "::127.0.0.1",
+        "::10.0.0.1",
+        "fec0::1",
+        "64:ff9b:1::1",
+        "2002:a9fe:a9fe::1",
+        "2002:7f00:1::1",
+        "2001:0:4136:e378:8000:63bf:3fff:fdd2",
+    ],
+)
+def test_ipv6_forms_that_embed_a_non_public_ipv4_address_are_refused(address: str) -> None:
+    from regwatch.fetch import is_public_address
+
+    assert is_public_address(address) is False
+
+
+def test_ipv6_forms_that_embed_a_public_ipv4_address_follow_the_ipv4_rules() -> None:
+    from regwatch.fetch import is_public_address
+
+    assert is_public_address("64:ff9b::5db8:d822")
+    assert is_public_address("2002:5db8:d822::1")
+    assert is_public_address("2606:4700:4700::1111")
+
+
+def test_a_host_that_resolves_to_an_embedded_loopback_is_never_connected_to() -> None:
+    from test_fetch import make, ok, web
+
+    from regwatch.fetch import FetchError
+
+    for address in ("64:ff9b::a9fe:a9fe", "::127.0.0.1", "fec0::1"):
+        network = web(ok(), hosts={"example.org": [address]})
+        with pytest.raises(FetchError, match="non-public address"):
+            make(network).fetch("https://example.org/")
+        assert network.connected == []
+
+
+# --- rw-13: IPv6 literal in the Host header -------------------------------------------------
+
+
+def test_an_ipv6_literal_host_is_bracketed_in_the_host_header() -> None:
+    from test_fetch import make, ok, web
+
+    network = web(ok(), ok())
+    make(network).fetch("https://[2606:4700::1]:8443/")
+    make(network).fetch("https://[2606:4700::1]/")
+    first, second = (request.decode() for request in network.requests)
+    assert "Host: [2606:4700::1]:8443\r\n" in first
+    assert "Host: [2606:4700::1]\r\n" in second
+
+
+# --- rw-08: swap between the file root check and the open ---------------------------------
+
+
+def _swap_on_open(monkeypatch: pytest.MonkeyPatch, path: Path, replace: Callable[[], None]) -> None:
+    import os
+
+    import regwatch.fetch as fetch_module
+
+    real_open = os.open
+
+    def swapping_open(target: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        if str(target).endswith(path.name):
+            replace()
+        return real_open(target, flags, *args, **kwargs)
+
+    monkeypatch.setattr(fetch_module.os, "open", swapping_open)
+
+
+def test_a_file_swapped_for_a_symlink_after_the_check_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from regwatch.fetch import FetchError, SafeFetcher
+
+    root = tmp_path / "root"
+    root.mkdir()
+    secret = tmp_path / "secret.txt"
+    secret.write_text("SECRET OUTSIDE THE ROOT", encoding="utf-8")
+    target = root / "ok.txt"
+    target.write_text("inside", encoding="utf-8")
+
+    def replace() -> None:
+        target.unlink()
+        target.symlink_to(secret)
+
+    _swap_on_open(monkeypatch, target, replace)
+    fetcher = SafeFetcher(1.0, 10_000, "test", allowed_file_roots=[root])
+    with pytest.raises(FetchError, match="cannot read file"):
+        fetcher.fetch(target.as_uri())
+
+
+def test_a_file_swapped_for_another_file_after_the_check_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from regwatch.fetch import FetchError, SafeFetcher
+
+    root = tmp_path / "root"
+    root.mkdir()
+    target = root / "ok.txt"
+    target.write_text("inside", encoding="utf-8")
+
+    def replace() -> None:
+        # Create the new file while the old one still exists so the inode cannot be reused.
+        other = root / "other.txt"
+        other.write_text("a different file", encoding="utf-8")
+        other.replace(target)
+
+    _swap_on_open(monkeypatch, target, replace)
+    fetcher = SafeFetcher(1.0, 10_000, "test", allowed_file_roots=[root])
+    with pytest.raises(FetchError, match="changed while it was being opened"):
+        fetcher.fetch(target.as_uri())
+
+
+# --- rw-10: the total deadline covers the name lookup -----------------------------------
+
+
+def test_a_slow_name_lookup_hits_the_total_deadline() -> None:
+    import threading
+    import time
+
+    from test_fetch import make, ok, web
+
+    from regwatch.fetch import FetchError
+
+    release = threading.Event()
+
+    class SlowDns:
+        def __call__(self, host: str, port: int) -> list[str]:
+            release.wait(4)
+            return ["93.184.216.34"]
+
+    network = web(ok())
+    network.resolver = SlowDns()  # type: ignore[method-assign]
+    started = time.monotonic()
+    try:
+        with pytest.raises(FetchError, match="total time limit"):
+            make(network, total_timeout_seconds=1.0).fetch("https://example.org/")
+        assert time.monotonic() - started < 2.0
+    finally:
+        release.set()
+    assert network.connected == []

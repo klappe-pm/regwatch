@@ -5,19 +5,23 @@ The shipped SafeFetcher is deliberately small and enforces these rules:
 
 - only the ``https`` and ``file`` URL schemes are accepted;
 - ``file`` URLs are refused unless they lie under a configured root directory,
-  and only regular files are read (never a FIFO, a device or a directory);
+  and only regular files are read (never a FIFO, a device or a directory); the
+  file is opened without following a link and must be the very file that was
+  checked, so a swap between the check and the open is refused;
 - a host that resolves to a loopback, link-local, private, unique local,
   reserved, multicast or otherwise non-global address is refused, for the first
-  request and for every redirect, unless ``allow_private_hosts`` is set;
+  request and for every redirect, unless ``allow_private_hosts`` is set; an IPv6
+  address that embeds an IPv4 address is judged by the IPv4 address;
 - the connection is made to the address that was vetted, not to a second
   lookup of the name, so a DNS answer that changes between the check and the
   connection cannot redirect the request;
 - certificates are always verified against the original host name;
 - a redirect may only lead to another ``https`` URL, at most 5 times, and the
   redirects share one total deadline with the request itself;
-- every request has a per-operation timeout, a total deadline enforced both by
-  checking the clock between reads and by a watchdog that closes the socket, and
-  a hard limit on the number of bytes read;
+- every request has a per-operation timeout, a total deadline enforced by
+  checking the clock between reads, by a watchdog that closes the socket and by
+  running the name lookup in a worker thread that is abandoned at the deadline,
+  and a hard limit on the number of bytes read;
 - URLs that carry credentials, or contain control characters, are refused;
 - proxy environment variables are ignored, because a proxy would resolve the
   host itself and defeat the address check;
@@ -114,19 +118,52 @@ def check_url(url: str) -> str:
     return scheme
 
 
+_V6_REFUSED = tuple(
+    ipaddress.ip_network(network)
+    for network in (
+        "::/96",  # IPv4-compatible addresses, the unspecified address and ::1
+        "fec0::/10",  # deprecated site-local addresses
+        "64:ff9b:1::/48",  # local-use NAT64 translation
+    )
+)
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _embedded_ipv4(ip: ipaddress.IPv6Address) -> list[ipaddress.IPv4Address] | None:
+    """The IPv4 addresses a translation or tunnel address carries, or None for other addresses."""
+    if ip in _NAT64:
+        return [ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)]
+    if ip.sixtofour is not None:
+        return [ip.sixtofour]
+    if ip.teredo is not None:
+        return list(ip.teredo)
+    return None
+
+
 def is_public_address(address: str) -> bool:
     """True when ``address`` is a globally routable unicast IP address.
 
     Loopback, link-local, private (including unique local), shared, reserved,
-    multicast and unspecified addresses are all not public. An IPv4 address
-    written as an IPv4-mapped IPv6 address is judged as the IPv4 address.
+    multicast and unspecified addresses are all not public. An IPv6 address that
+    embeds an IPv4 address (an IPv4-mapped address, a NAT64 address in
+    ``64:ff9b::/96``, a 6to4 address in ``2002::/16`` or a Teredo address in
+    ``2001::/32``) is judged by the IPv4 addresses it carries. The IPv4-compatible
+    range ``::/96``, the deprecated site-local range ``fec0::/10`` and the local-use
+    NAT64 range ``64:ff9b:1::/48`` are refused outright.
     """
     try:
         ip = ipaddress.ip_address(address)
     except ValueError:
         return False
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        else:
+            if any(ip in network for network in _V6_REFUSED):
+                return False
+            embedded = _embedded_ipv4(ip)
+            if embedded is not None:
+                return all(is_public_address(str(v4)) for v4 in embedded)
     return ip.is_global and not ip.is_multicast
 
 
@@ -191,9 +228,17 @@ class SafeFetcher:
             raise FetchError("file is outside the allowed_file_roots directories")
         descriptor = -1
         try:
+            vetted = os.stat(path)
             # O_NONBLOCK so that opening a FIFO cannot block; the type is checked next.
-            descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
-            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            # O_NOFOLLOW refuses a file that was swapped for a link after the check.
+            descriptor = os.open(
+                path,
+                os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0),
+            )
+            opened = os.fstat(descriptor)
+            if (opened.st_dev, opened.st_ino) != (vetted.st_dev, vetted.st_ino):
+                raise FetchError("file changed while it was being opened; refused")
+            if not stat.S_ISREG(opened.st_mode):
                 raise FetchError("only regular files can be read")
             with os.fdopen(descriptor, "rb", closefd=False) as handle:
                 return self._limit(handle.read(self.max_bytes + 1))
@@ -205,10 +250,40 @@ class SafeFetcher:
 
     # --- https: URLs --------------------------------------------------------
 
-    def _vet(self, host: str, port: int) -> list[str]:
+    def _resolve(self, host: str, port: int, deadline: float) -> list[str]:
+        """Run the resolver in a worker thread and give up when the total deadline passes.
+
+        The operating system's name lookup takes no timeout, so a slow DNS server
+        would otherwise hold the whole fetch past the deadline. The worker is a
+        daemon thread, so a lookup that never returns cannot keep the program alive.
+        """
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise self._deadline_error()
+        outcome: dict[str, object] = {}
+        finished = threading.Event()
+
+        def work() -> None:
+            try:
+                outcome["addresses"] = self._resolver(host, port)
+            except BaseException as exc:  # handed to the caller below
+                outcome["error"] = exc
+            finally:
+                finished.set()
+
+        threading.Thread(target=work, daemon=True).start()
+        if not finished.wait(remaining):
+            raise self._deadline_error()
+        error = outcome.get("error")
+        if isinstance(error, BaseException):
+            raise error
+        addresses = outcome.get("addresses")
+        return list(addresses) if isinstance(addresses, list) else []
+
+    def _vet(self, host: str, port: int, deadline: float) -> list[str]:
         """Resolve ``host`` and return the addresses it is allowed to connect to."""
         try:
-            addresses = [host] if _is_ip_literal(host) else self._resolver(host, port)
+            addresses = [host] if _is_ip_literal(host) else self._resolve(host, port, deadline)
         except (OSError, ValueError) as exc:
             raise FetchError(
                 f"cannot resolve host: {getattr(exc, 'strerror', None) or exc}"
@@ -240,7 +315,7 @@ class SafeFetcher:
         parts = urlsplit(url)
         host = parts.hostname or ""
         port = parts.port or 443
-        addresses = self._vet(host, port)
+        addresses = self._vet(host, port, deadline)
         target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
         sock: socket.socket | None = None
         watchdog: threading.Timer | None = None
@@ -259,7 +334,7 @@ class SafeFetcher:
                 "GET",
                 target,
                 headers={
-                    "Host": host if port == 443 else f"{host}:{port}",
+                    "Host": _host_header(host, port),
                     "User-Agent": self.user_agent,
                     "Accept": "text/html,application/json,application/xml,*/*",
                     "Connection": "close",
@@ -328,6 +403,12 @@ class SafeFetcher:
 
     def _deadline_error(self) -> FetchError:
         return FetchError(f"total time limit of {self.total_timeout_seconds:g} seconds exceeded")
+
+
+def _host_header(host: str, port: int) -> str:
+    """The Host header value: an IPv6 literal is bracketed, and a non-default port is appended."""
+    name = f"[{host}]" if ":" in host else host
+    return name if port == 443 else f"{name}:{port}"
 
 
 def _is_ip_literal(host: str) -> bool:
