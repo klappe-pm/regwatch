@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {"source_id": "nl-notices", "jurisdiction": "nl", "name": "Northland regulator notices feed", "url": "https://regulator.nl.example/notices.xml", "method": "poll", "mechanism": "rss", "cadence": "daily", "notes": "RSS feed of orders and guidance."},
+    {"source_id": "nl-east-gazette", "jurisdiction": "nl-east", "name": "East Region gazette food page", "url": "https://gazette.east.nl.example/food", "method": "poll", "mechanism": "html", "cadence": "weekly", "notes": "Web page; the signal is its visible text."},
+    {"source_id": "sv-register-api", "jurisdiction": "sv", "name": "Southvale rules registry API", "url": "https://api.sv.example/documents.json", "method": "poll", "mechanism": "api", "cadence": "daily", "notes": "JSON API with a results list."},
+    {"source_id": "sv-subscription", "jurisdiction": "sv", "name": "Southvale mailing list archive", "url": "https://lists.sv.example/archive", "method": "subscribe", "mechanism": "email-list", "cadence": "weekly", "notes": "Plain text archive of the list."},
+    {"source_id": "sv-newsroom", "jurisdiction": "sv", "name": "Southvale agency newsroom", "url": "https://news.sv.example/press", "method": "poll", "mechanism": "manual", "cadence": "daily", "notes": "Blocks automated clients, so an analyst reads it by hand."}
+  ]
+}

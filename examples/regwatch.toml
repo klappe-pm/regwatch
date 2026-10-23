@@ -1,0 +1,33 @@
+# Example configuration. Every path is relative to this file.
+# The register below is synthetic: the jurisdictions, rules, sources and products are invented.
+
+[register]
+obligations = "register/obligations.csv"
+jurisdictions = "register/jurisdictions.json"
+categories = "register/categories.json"
+sources = "register/sources.json"
+portfolio = "register/portfolio.json"
+# The next four files are optional.
+detail = "register/detail.json"
+changelog = "register/changelog.json"
+enforcement = "register/enforcement.json"
+themes = "register/themes.json"
+
+[state]
+# regwatch writes only here. Snapshots are read from the snapshots directory.
+dir = "state"
+snapshots = "snapshots"
+
+[fetch]
+timeout_seconds = 20
+max_bytes = 2000000
+
+[ingest]
+api_url = "https://www.federalregister.gov/api/v1/documents.json"
+agencies = ["example-food-agency"]
+types = ["RULE", "PRORULE", "NOTICE"]
+cfr_title = 21
+cfr_parts = [101, 172]
+terms = ["allergen", "label"]
+jurisdiction = "nl"
+per_page = 100

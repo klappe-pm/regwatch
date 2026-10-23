@@ -1,0 +1,9 @@
+{
+  "jurisdictions": [
+    {"jurisdiction_id": "nl", "name": "Northland", "level": "national", "coverage": "tracked", "notes": "Invented national jurisdiction."},
+    {"jurisdiction_id": "nl-east", "name": "Northland East Region", "parent": "nl", "level": "regional", "coverage": "tracked"},
+    {"jurisdiction_id": "nl-west", "name": "Northland West Region", "parent": "nl", "level": "regional", "coverage": "tracked"},
+    {"jurisdiction_id": "sv", "name": "Southvale", "level": "national", "coverage": "tracked", "notes": "Invented national jurisdiction."},
+    {"jurisdiction_id": "sv-multi", "name": "Southvale regional bills", "parent": "sv", "level": "aggregate", "coverage": "aggregate", "notes": "Marker for bills not yet split out by region."}
+  ]
+}

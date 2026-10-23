@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest a capability, including a new source mechanism.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: The need
+      description: What you are trying to do and why it cannot be done today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: An idea for how it could work
+      description: Optional. A new kind of source can be taught to `regwatch check`; say if the guide on adding a source mechanism does not cover your case.

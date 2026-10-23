@@ -1,0 +1,60 @@
+{
+  "version": "0.1.0",
+  "description": "Field rules for the regwatch register files. One obligation row is one distinct obligation in one jurisdiction. Rule keys: required, unique, pattern, enum, type (date, date-or-empty, url-or-empty, fetch-url), list, ref.",
+  "list_delimiter": ";",
+  "obligation_fields": {
+    "obligation_id": {"required": true, "unique": true, "pattern": "^[a-z0-9-]+$"},
+    "jurisdiction": {"required": true, "ref": "jurisdictions"},
+    "instrument": {"required": true, "enum": ["statute", "bill", "final-rule", "proposed-rule", "guidance", "definition", "list", "program", "waiver"]},
+    "citation": {"required": false},
+    "title": {"required": true},
+    "categories": {"required": false, "list": true, "ref": "categories"},
+    "terms": {"required": false, "list": true},
+    "claims": {"required": false, "list": true},
+    "scope": {"required": false, "list": true},
+    "status": {"required": true, "enum": ["enacted", "proposed", "finalized", "voluntary", "in-progress", "monitoring"]},
+    "effective_date": {"required": false, "type": "date-or-empty"},
+    "key_date_note": {"required": false},
+    "source_id": {"required": true, "ref": "sources"},
+    "source_url": {"required": false, "type": "url-or-empty"},
+    "last_reviewed": {"required": true, "type": "date"},
+    "confidence": {"required": true, "enum": ["high", "medium", "low", "secondary"]},
+    "notes": {"required": false}
+  },
+  "source_fields": {
+    "source_id": {"required": true, "unique": true, "pattern": "^[a-z0-9-]+$"},
+    "jurisdiction": {"required": true, "ref": "jurisdictions"},
+    "name": {"required": true},
+    "url": {"required": true, "type": "fetch-url"},
+    "method": {"required": true, "enum": ["poll", "subscribe"]},
+    "mechanism": {"required": true, "enum": ["api", "rss", "html", "email-list", "manual"]},
+    "cadence": {"required": true},
+    "notes": {"required": false}
+  },
+  "category_fields": {
+    "category_id": {"required": true, "unique": true, "pattern": "^[a-z0-9-]+$"},
+    "label": {"required": true},
+    "definition": {"required": true},
+    "examples": {"required": false, "list": true}
+  },
+  "jurisdiction_fields": {
+    "jurisdiction_id": {"required": true, "unique": true, "pattern": "^[a-z0-9-]+$"},
+    "name": {"required": true},
+    "parent": {"required": false, "ref": "jurisdictions"},
+    "level": {"required": false},
+    "coverage": {"required": true, "enum": ["confirmed", "tracked", "aggregate"]},
+    "notes": {"required": false}
+  },
+  "product_fields": {
+    "product_id": {"required": true, "unique": true, "pattern": "^[a-z0-9-]+$"},
+    "name": {"required": true},
+    "kind": {"required": false},
+    "categories": {"required": false, "list": true, "ref": "categories"},
+    "terms": {"required": false, "list": true},
+    "claims": {"required": false, "list": true},
+    "markets": {"required": true, "list": true, "ref": "jurisdictions"},
+    "scopes": {"required": false, "list": true},
+    "confidence": {"required": true, "enum": ["internal-model", "confirmed", "secondary"]},
+    "notes": {"required": false}
+  }
+}
