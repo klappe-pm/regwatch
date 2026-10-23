@@ -25,8 +25,8 @@ regwatch [--version] [--config PATH] <command> [options]
 | 0 | success |
 | 1 | the register is invalid, or `capture` stored nothing |
 | 2 | a usage, configuration, network, state or file error; the message starts with `error:` |
-| 3 | `check --exit-code` found a source that is `NEW`, `CHANGED` or `SUSPICIOUS` |
-| 4 | `check --exit-code` found a source that is `ERROR` or `MISSING`; this wins over 3 |
+| 3 | `check --exit-code` or `run` found a source that is `NEW`, `CHANGED` or `SUSPICIOUS` |
+| 4 | `check --exit-code` or `run` found a source that is `ERROR` or `MISSING`, `run` could not capture a source, or `sources verify` could not fetch an address; this wins over 3 |
 
 Argument errors detected by the parser also exit with status 2.
 
@@ -44,6 +44,10 @@ Commands read the register. Only `sources add` and `sources remove` write it, an
 | `brief --out-dir` | `<name>.md` and `<name>.json` in the directory you name |
 | `render` | the rendered files in the directory you name |
 | `digest --out`, `report --out`, `report --json`, `export --csv`, `export --json` | the path you name |
+| `run` | snapshots, and one run record in `runs/` in the state directory |
+| `schedule --install`, `schedule --remove` | on macOS `~/Library/LaunchAgents/io.github.klappe-pm.regwatch.plist`; elsewhere your crontab, between regwatch's marker lines only |
+
+`keys set` and `keys remove` change the system keychain, never a file.
 
 ## `init`
 
@@ -117,6 +121,40 @@ regwatch sources search "food recalls"
 ```text
 regwatch sources add us-fda-recalls-rss gb-fsa-food-alerts-api
 ```
+
+## `keys`
+
+Keeps the keys that keyed sources need in the system keychain: the macOS login keychain through `security`, or the Secret Service on Linux through `secret-tool`. An environment variable named by the source's `key_env` overrides the keychain. No action ever prints a key. The [security model](../explanation/security-model.md#api-keys) explains how a key is kept off command lines.
+
+| action | meaning |
+| --- | --- |
+| `set SOURCE_ID` | print where to get a key, prompt for it without echo, store it and read it back to confirm |
+| `list` | each keyed source with `stored`, `set in the environment`, `missing` or `missing (no keychain tool)`; with a configuration the keyed sources of your sources file, without one the keyed catalogue sources |
+| `remove SOURCE_ID` | delete the stored key; says so when the environment variable still supplies one |
+
+`SOURCE_ID` is a keyed source in your sources file or in the catalogue. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, or a machine with neither keychain tool exits 2; the last names the environment variable to use instead.
+
+## `run`
+
+Captures every source, then checks every source against its snapshot, as `capture` followed by `check --exit-code` would, and writes a run record to `runs/` in the state directory: the start and end times, the number of sources, how many were captured, how many failed to capture, the counts by status and the exit status. The newest 500 records are kept. It does not accept a baseline. Exit status 3 means a change to review, and 4 means a source could not be captured or verified. This is the command a schedule runs.
+
+```text
+regwatch run
+```
+
+## `schedule`
+
+Installs, shows or removes a recurring `regwatch run`. On macOS it is a launchd agent with the label `io.github.klappe-pm.regwatch`, loaded with `launchctl bootout` then `launchctl bootstrap gui/<uid>`. Elsewhere it is a block in your crontab between marker comments, so it can be found and removed later; every other line of the crontab is kept. The job runs `<python> -m regwatch --config <this config> run` from the project folder, with the interpreter that runs regwatch now named by absolute path, and appends its output to `schedule.log` in the state directory. With no action it shows the schedule.
+
+| option | meaning |
+| --- | --- |
+| `--install` | install the schedule, replacing an earlier one |
+| `--remove` | remove the schedule |
+| `--show` | show whether it is installed and what it runs; the default |
+| `--every CADENCE` | `hourly`, `daily` or `weekly`; default the most frequent cadence among your sources, or `daily` |
+| `--dry-run` | print the file or the crontab block and the commands, and change nothing |
+
+Cron times are a minute past the start of the period: `17 * * * *`, `17 6 * * *` and `17 6 * * 1`. A launchd agent repeats every 3,600, 86,400 or 604,800 seconds. A crontab that cannot be read for a reason other than there being none is left unchanged and the command exits 2.
 
 ## `validate`
 

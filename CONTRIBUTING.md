@@ -27,7 +27,7 @@ python3 -m pytest --cov=regwatch
 - Package data lives under `regwatch/data/` and is read through `importlib.resources`, never through a path built from `__file__`. See [Package Data](docs/reference/package-data.md).
 - Tests read fixtures only: never the live home directory, a real network or a real register. The test suite blocks sockets, so a test that tries to reach the network fails.
 - Never add a real register or a real company. The register in `examples/` is invented.
-- Network access goes through the one fetch client in `regwatch/fetch.py`. Do not call `urllib`, `socket` or a subprocess from anywhere else.
+- Network access goes through the one fetch client in `regwatch/fetch.py`. Do not call `urllib` or `socket` from anywhere else. A program is started only through `run_command` in `regwatch/system.py`, with an argument list and never a shell, and a secret only on standard input.
 - Text from outside goes through `regwatch/sanitize.py` before it is stored, printed or rendered. A link is accepted only through `safe_https_url`.
 - Fetched content is untrusted. Parse it with the functions in `regwatch/extract.py` and never with `eval`, `pickle` or an XML parser that resolves entities.
 - Regwatch writes a register file only through `state.update_register_file`, and only the sources and jurisdictions files for `regwatch sources add` and `remove`. Every write goes through `regwatch/state.py`.
@@ -53,7 +53,7 @@ Open an issue before starting on one of these, so the approach can be agreed fir
 - [ ] Publish the first release to PyPI
 - [ ] Add source mechanisms for more kinds of source
 - [ ] Add a running index of briefings, which the engine this was extracted from had
-- [ ] Add a recipe for scheduled runs, which are left to the user today
+- [x] Add scheduled runs: `regwatch schedule` installs them with launchd or cron
 
 ## License
 

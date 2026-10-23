@@ -158,4 +158,6 @@ regwatch writes these itself, in the state directory. You do not edit them.
 | --- | --- |
 | `seen.json` | for each source id, the accepted `sha256`, where it came from, when it was accepted and the length of the accepted signal in characters (`signal_length`) |
 | `ingest-candidates.json` | the latest ingest candidates, each with `needs_review` set and `confidence` set to `unconfirmed` |
-| `snapshots/<source_id>.txt` | the raw content stored by `capture` |
+| `snapshots/<source_id>.txt` | the raw content stored by `capture`; the body only, never the request URL or a key |
+| `runs/run-<start>-<random>.json` | one record per `regwatch run`: `started`, `ended`, `sources`, `captured`, `capture_failed`, `counts` by status and `exit_code`. The newest 500 are kept. |
+| `schedule.log` | the output of scheduled runs, appended by launchd or cron |

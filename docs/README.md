@@ -12,7 +12,7 @@ Lessons that take you through a task from start to finish. [Getting Started](tut
 
 Recipes for a specific goal, for someone who already knows the basics.
 
-- Use: [Install](how-to-guides/install.md), [Set Your Focus Areas](how-to-guides/set-your-focus-areas.md), [Add a Source](how-to-guides/add-a-source.md), [Review Flagged Changes](how-to-guides/review-flagged-changes.md), [Troubleshooting](how-to-guides/troubleshooting.md).
+- Use: [Install](how-to-guides/install.md), [Set Your Focus Areas](how-to-guides/set-your-focus-areas.md), [Add a Source](how-to-guides/add-a-source.md), [Keep API Keys](how-to-guides/keep-api-keys.md), [Schedule Runs](how-to-guides/schedule-runs.md), [Review Flagged Changes](how-to-guides/review-flagged-changes.md), [Troubleshooting](how-to-guides/troubleshooting.md).
 - Contribute: [Run the Tests](how-to-guides/run-the-tests.md), [Add a Source Mechanism](how-to-guides/add-a-source-mechanism.md), [Cut a Release](how-to-guides/cut-a-release.md).
 
 Index: [How-To Guides](how-to-guides/README.md).

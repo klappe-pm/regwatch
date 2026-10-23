@@ -141,6 +141,9 @@ Regwatch flags candidates for human review. A qualified person must confirm each
 | `regwatch coverage` | Reports how much of each jurisdiction the register covers. |
 | `regwatch list` | Lists obligations, optionally filtered by jurisdiction, category, status or upcoming effective date. |
 | `regwatch portfolio` | Lists the products obligations are matched against. |
+| `regwatch keys` | Stores, lists and removes the API keys some sources need, in the system keychain. |
+| `regwatch run` | Captures and checks every source and writes a run record. |
+| `regwatch schedule` | Installs, shows or removes a recurring run with launchd or cron. |
 | `regwatch capture` | Fetches sources into stored snapshots. |
 | `regwatch check` | Detects changes in sources since the last accepted run. |
 | `regwatch ingest` | Turns a Federal Register style response into unconfirmed candidates. |

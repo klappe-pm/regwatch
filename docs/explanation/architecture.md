@@ -1,6 +1,6 @@
 # Architecture
 
-This page explains how regwatch is put together, for a contributor who needs the shape of the whole before changing a part. It describes the data flow from the register and the sources to a rendered briefing, the layering of the modules, and the three trust boundaries that the design is built around. The [source layout](../reference/source-layout.md) lists the modules; the [design](design.md) page explains the product reasoning.
+This page explains how regwatch is put together, for a contributor who needs the shape of the whole before changing a part. It describes the data flow from the register and the sources to a rendered briefing, the layering of the modules, and the four trust boundaries that the design is built around. The [source layout](../reference/source-layout.md) lists the modules; the [design](design.md) page explains the product reasoning.
 
 ## The Data Flow
 
@@ -29,8 +29,8 @@ Every arrow between stages that matter is a file or an immutable value. `check` 
 
 The modules form layers, and each imports only from the ones below it.
 
-1. `config`, `sanitize`, `extract`, `fetch`: no dependency on the rest of the package, except that `fetch` uses `sanitize` to clean its error messages. These are the modules that touch the outside world, and they are small on purpose.
-2. `register`, `focus`, `catalogue`, `state`: the data model, the focus catalogue and profile, the source catalogue with its one search ranking, and the one write path.
+1. `config`, `sanitize`, `extract`, `fetch`, `system`, `schedule`: no dependency on the rest of the package, except that `fetch` uses `sanitize` to clean its error messages. These are the modules that touch the outside world, and they are small on purpose.
+2. `register`, `focus`, `catalogue`, `keys`, `state`: the data model, the focus catalogue and profile, the source catalogue with its one search ranking, and the one write path.
 3. `check`, `ingest`, `impact`: the engine's analysis. They take loaded data and return values. `impact` ranks by the focus profile it is given and never drops a candidate.
 4. `document`, `synthesis`, `briefing`, `render`, `export`: turning analysis into output. `synthesis` and `briefing` build a `Document`; `render` turns a `Document` into text or bytes.
 5. `onboarding`: the files `regwatch init` writes and the checks on its answers. Pure functions; the questions and the printing stay in `cli`.
@@ -40,10 +40,11 @@ Analysis and output functions are pure. They take loaded data and an explicit da
 
 ## The Trust Boundaries
 
-There are three places where data crosses from one trust level to another, and each has one owner.
+There are four places where data crosses from one trust level to another, and each has one owner.
 
 - Network to process. `fetch.py` is the only module that opens a connection. It checks the scheme, the address, the size, the time and the redirect target, and returns text.
 - Text to structure. `extract.py` and `ingest.py` are the only modules that parse fetched text. They return strings and plain dicts of bounded, type-checked values, and they never evaluate content. `sanitize.py` cleans every such value, and `render.py` escapes it again for the output format.
+- Process to programs. `system.py` is the only module that starts a program: the keychain tools, `launchctl` and `crontab`. It passes an argument list with no shell and a timeout, and a key travels only on standard input.
 - Process to disk. `state.py` is the only module that writes. It refuses the register files (apart from the one rewrite of the sources or jurisdictions file that `sources add` and `sources remove` ask for) and any output path that is a symbolic link, writes atomically, keeps an existing file's permissions and rejects a source id that is not a plain identifier.
 
 A change that adds a way across one of these boundaries somewhere else is a change to the security model, and needs the justification described in [contributing](../../CONTRIBUTING.md).

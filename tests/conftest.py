@@ -109,3 +109,95 @@ def snapshot_responses(config: Config) -> dict[str, str]:
         if path.exists():
             responses[source["url"]] = path.read_text(encoding="utf-8")
     return responses
+
+
+class FakeSystem:
+    """Stand-ins for the keychain tools, launchctl and crontab, kept in memory.
+
+    ``calls`` records every argument list and ``inputs`` every standard input, so a test
+    can prove a key never reached a command line.
+    """
+
+    def __init__(self, platform: str = "darwin", tools: tuple[str, ...] | None = None) -> None:
+        self.platform = platform
+        self.tools = set(
+            tools if tools is not None else ("security", "secret-tool", "launchctl", "crontab")
+        )
+        self.keychain: dict[str, str] = {}
+        self.crontab: str | None = None
+        self.calls: list[list[str]] = []
+        self.inputs: list[str | None] = []
+        self.fail: set[str] = set()
+        self.drop_stores = False
+        self.environ: dict[str, str] = {}
+        self.secret = ""
+
+    def which(self, name: str) -> str | None:
+        return f"/usr/bin/{name}" if name in self.tools else None
+
+    def run(self, args: Any, stdin: str | None) -> Any:
+        from regwatch.system import CommandResult
+
+        argv = [str(a) for a in args]
+        self.calls.append(argv)
+        self.inputs.append(stdin)
+        tool = Path(argv[0]).name
+        verb = argv[1] if len(argv) > 1 else ""
+        if f"{tool} {verb}" in self.fail or tool in self.fail:
+            return CommandResult(1, "", "failed")
+        if tool == "security" and verb == "-i":
+            import shlex
+
+            words = shlex.split(stdin or "")
+            account = words[words.index("-a") + 1]
+            if not self.drop_stores:
+                self.keychain[account] = words[words.index("-w") + 1]
+            return CommandResult(0, "security> ")
+        if tool == "security":
+            account = argv[argv.index("-a") + 1]
+            if verb == "find-generic-password":
+                if account in self.keychain:
+                    return CommandResult(0, self.keychain[account] + "\n")
+                return CommandResult(44, "", "not found")
+            if verb == "delete-generic-password":
+                return CommandResult(0 if self.keychain.pop(account, None) else 44)
+        if tool == "secret-tool":
+            account = argv[argv.index("account") + 1]
+            if verb == "store":
+                if not self.drop_stores:
+                    self.keychain[account] = stdin or ""
+                return CommandResult(0)
+            if verb == "lookup":
+                value = self.keychain.get(account)
+                return CommandResult(0 if value else 1, value or "")
+            if verb == "clear":
+                self.keychain.pop(account, None)
+                return CommandResult(0)
+        if tool == "launchctl":
+            return CommandResult(0)
+        if tool == "crontab" and verb == "-l":
+            if self.crontab is None:
+                return CommandResult(1, "", "no crontab for tester")
+            return CommandResult(0, self.crontab)
+        if tool == "crontab" and verb == "-":
+            self.crontab = stdin or ""
+            return CommandResult(0)
+        raise AssertionError(f"unexpected command {argv}")
+
+    def system(self, home: Path | None = None) -> Any:
+        from regwatch.system import System
+
+        return System(
+            runner=self.run,
+            platform=self.platform,
+            which=self.which,
+            environ=self.environ,
+            home=lambda: home or Path("/nonexistent-home"),
+            uid=lambda: 501,
+            executable="/opt/python/bin/python3",
+            read_secret=lambda prompt: self.secret,
+            stdin_is_terminal=lambda: False,
+        )
+
+    def argv_text(self) -> str:
+        return "\n".join(" ".join(call) for call in self.calls)

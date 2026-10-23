@@ -2,7 +2,7 @@
 
 This page lists every key in `regwatch.toml`, the file that tells regwatch where your register is and how to behave. Every path is resolved relative to the directory that holds the file; an absolute path is used as written and a leading `~` is expanded. Unknown tables, unknown keys and values of the wrong type are rejected with an `error:` message, so a typo never silently changes behaviour. The file must be smaller than 256,000 bytes.
 
-The configuration holds no API keys, tokens or credentials, and regwatch reads no secret. No setting comes from the environment, and proxy environment variables are ignored on purpose; see the [security model](../explanation/security-model.md).
+The configuration holds no API keys, tokens or credentials. A source that needs a key gets it from the system keychain or from the environment variable its entry names, never from this file; see [keep API keys](../how-to-guides/keep-api-keys.md). No setting comes from the environment, and proxy environment variables are ignored on purpose; see the [security model](../explanation/security-model.md).
 
 A complete working file is [examples/regwatch.toml](../../examples/regwatch.toml).
 

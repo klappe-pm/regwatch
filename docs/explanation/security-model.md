@@ -6,7 +6,7 @@ This page explains what regwatch protects against and how, for a reader deciding
 
 regwatch trusts your configuration file and your register files. They are yours, and regwatch reads them as written. It also trusts the source catalogue that ships with it, which is data reviewed in pull requests, and the extra catalogue file you name; a source chosen from either still goes through every fetch check, and every catalogue address must pass the fetch client's URL checks before the catalogue loads. It does not trust anything that arrives from outside: feed contents, web pages, API responses, the file you pass to `ingest --from-file`, and the candidates file in the state directory, which a person or another program may have edited. Each is handled as described below.
 
-It reads no secret. There are no API keys, tokens or passwords anywhere in the configuration, and no setting comes from the environment. Proxy environment variables such as `HTTPS_PROXY` are deliberately ignored; see below.
+It reads a secret only for a source that needs one: an API key, kept in the system keychain or supplied by the environment variable the source names, as [API keys](#api-keys) describes. There are no API keys, tokens or passwords anywhere in the configuration, and no other setting comes from the environment. Proxy environment variables such as `HTTPS_PROXY` are deliberately ignored; see below.
 
 ## The Fetch Client
 
@@ -22,13 +22,35 @@ All network access goes through one class, `SafeFetcher` in `regwatch/fetch.py`.
 - Time is limited three ways. Each socket operation has a timeout, default 20 seconds. The whole fetch, including every redirect, has a total deadline, default 60 seconds. The deadline is enforced by checking the clock before every read of at most 16,384 bytes, and by a watchdog timer that shuts the socket down when the deadline passes, so a server that sends one byte at a time, or never answers, cannot hold the run past it. The name lookup runs in a worker thread, and the fetch gives up on it when the deadline passes; the abandoned thread is a daemon thread, so it cannot keep the program alive.
 - The body is limited to `max_bytes`, default 2,000,000 and at most 100,000,000. A response larger than the limit is an error, never a truncation, because a truncated page would hash differently and look like a change. A declared `Content-Length` over the limit is refused before the body is read.
 - Proxy environment variables are ignored. A proxy would resolve the host itself, which would defeat the address check, so regwatch connects directly. A machine that can reach the internet only through a proxy cannot use `--fetch`; it can capture snapshots with another tool and run `check` on them.
-- No shell, subprocess or external program is ever started. A test checks the module's imports and calls.
+- The fetch client starts no shell, subprocess or external program. A test checks the module's imports and calls.
+- A key for a source that needs one is sent only over `https`, only to the host and port of the source's own address, and only as the query parameter or header the source's `auth` field names. A redirect to another host or port drops it, even when a later redirect comes back. A header key cannot replace the `Host`, `User-Agent`, `Accept`, `Connection` or `Content-Length` header, and a key with a space, a control character, a quote or a backslash is refused, so it cannot split a header. Every error raised during a keyed fetch has the key, raw or percent-encoded, replaced with `[key]`, and its cause is dropped so no traceback carries the request either.
 
 The fetch client is a protocol with one method, and the class takes a resolver, a connector and a TLS wrapper as arguments. Tests pass fakes built on socket pairs, and a fixture blocks every real socket for the whole suite, so a test cannot reach the network by accident.
 
 ### Why File Sources Are Opt-In
 
 A `file` source copies a local file into the snapshots directory, where later commands print and render pieces of it. If a register could name any path, a single wrong or hostile source entry would copy a private key or a password file into a place that is easy to publish by accident. regwatch could instead have defaulted the root to the directory holding `regwatch.toml`, which is convenient but still exposes everything under it, including the register. It chose the stricter default: no file roots at all. You name each directory deliberately, as in `allowed_file_roots = ["snapshots"]`.
+
+## API Keys
+
+A few catalogue sources need a free or paid key. regwatch keeps keys out of every file it writes and every line it prints.
+
+- On macOS a key is a generic password in the login keychain, under the service `regwatch` and an account named by the source's `key_env`. On Linux it is a Secret Service item with the attributes `service regwatch` and `account <key_env>`. An environment variable named by `key_env` overrides the keychain, so a scheduled job or a container can supply a key without one.
+- A key never appears on a command line, where any user of the machine could read it in the process list. `secret-tool store` reads the secret from standard input. `security add-generic-password` takes a secret only as an argument or from a terminal prompt, so regwatch starts `security -i`, its documented interactive mode, and writes the one `add-generic-password` command, with the key inside it, to that program's standard input. That is why a key may not hold a quote or a backslash: they would change how the command is read. After storing, regwatch reads the key back and compares it, so a store that silently failed is reported.
+- Reading a key back makes the tool print it on its standard output, which regwatch reads and never shows. `regwatch keys set` reads the key with `getpass`, without echoing it, and `regwatch keys list` reports only whether each key is stored, set in the environment or missing.
+- A snapshot holds only the response body, never the request URL, so a key sent as a query parameter is not stored. Run records hold counts, and `seen.json` holds hashes.
+- No message regwatch writes holds a key. The keychain functions name the variable and the exit status of the tool, never the value, and an unusable key is refused without being repeated.
+- Every program is started by one function, `run_command` in `regwatch/system.py`, with an argument list and never a shell, with a 15 second timeout, and with its output captured. Tests replace it, so the suite never touches a real keychain.
+
+What this does not cover: anyone who can run programs as your user can read your keychain and your environment, as they could for any other program you use.
+
+## Scheduled Runs
+
+`regwatch schedule` installs a recurring `regwatch run` only when you ask, and `--remove` takes it out again.
+
+- On macOS it writes a launchd agent to `~/Library/LaunchAgents/io.github.klappe-pm.regwatch.plist`, through the same atomic write as every other file, and loads it with `launchctl bootout` and `launchctl bootstrap gui/<uid>`. The agent runs the interpreter that runs regwatch now, by absolute path, so it does not depend on a search path.
+- Elsewhere it reads the crontab with `crontab -l`, replaces only the lines between its own marker comments, and installs the result with `crontab -` on standard input. If the crontab cannot be read for a reason other than there being none, it stops and changes nothing, so a failed read can never wipe your other entries. Every part of the command is quoted for the shell cron uses, and a path holding `%` or a line break is refused, because cron would read it.
+- `--dry-run` prints what would change and starts no program.
 
 ## Parsing Untrusted Content
 
@@ -78,7 +100,7 @@ A hash comparison can be defeated by the content itself: a source that starts se
 
 ## The Write Path
 
-regwatch writes only to its state directory, to paths you name on the command line, and, when you run `regwatch sources add` or `regwatch sources remove`, to your sources and jurisdictions files. That rewrite goes through the same atomic write, refuses a file that is a symbolic link, and keeps every other register file protected, and `add` never replaces a different entry that already has the id. Every write goes through one function that writes to a temporary file in the same directory and renames it into place, so an interrupted run never leaves a half-written file.
+regwatch writes only to its state directory, to paths you name on the command line, and, when you run `regwatch sources add` or `regwatch sources remove`, to your sources and jurisdictions files, and with `regwatch schedule --install` on macOS to its launchd agent file. That rewrite goes through the same atomic write, refuses a file that is a symbolic link, and keeps every other register file protected, and `add` never replaces a different entry that already has the id. Every write goes through one function that writes to a temporary file in the same directory and renames it into place, so an interrupted run never leaves a half-written file.
 
 An output path that is itself a symbolic link is refused with `is a symbolic link`, so a link planted in a shared folder cannot make regwatch replace a file somewhere else. Folders above the file may be links, and regwatch follows them; see the limit below. The new file replaces the one at the literal path: an existing file keeps its permission bits, and a new file gets the permissions your umask allows (usually 0644), as any ordinary program would give it. regwatch writes no file that is meant to be private. Snapshots, the last-seen hashes, ingest candidates and every file you name are ordinary output, and if one holds something you want kept private, set the umask or the folder permissions for it.
 

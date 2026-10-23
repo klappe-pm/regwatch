@@ -19,10 +19,13 @@ Each subcommand is one stage of the engine:
     init      create a project: configuration, an empty register and your focus areas
     config    show the effective configuration
     sources   list, search, show, add, remove and verify catalogue sources
+    keys      store, list and remove the API keys some sources need
+    run       capture, then check, and write a run record (what a schedule runs)
+    schedule  install, show or remove a recurring run with launchd or cron
 
 Exit status: 0 success, 1 the register is invalid or nothing could be captured,
 2 a usage, configuration, network or file error, 3 changes were detected and
-``check --exit-code`` was given.
+``check --exit-code`` was given, 4 a source could not be verified.
 """
 
 from __future__ import annotations
@@ -62,10 +65,11 @@ from regwatch.config import (
 )
 from regwatch.document import DISCLAIMER, Document, DocumentError, Section, make_disclaimer
 from regwatch.export import build_records, records_csv
-from regwatch.fetch import Fetcher, FetchError, SafeFetcher
+from regwatch.fetch import Credential, Fetcher, FetchError, SafeFetcher
 from regwatch.focus import FocusError, FocusProfile, build_profile, load_catalogue
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.ingest import IngestError, build_query_url, candidates_document, parse_candidates
+from regwatch.keys import KeyStore, KeyStoreError
 from regwatch.onboarding import (
     SCAFFOLD_NAMES,
     InitPlan,
@@ -99,18 +103,33 @@ from regwatch.render import (
     render_webpost,
 )
 from regwatch.sanitize import clean_line, clean_text
+from regwatch.schedule import (
+    CADENCES,
+    LABEL,
+    ScheduleError,
+    cron_block,
+    installed_block,
+    plist_bytes,
+    plist_path,
+    program_arguments,
+    replace_block,
+    schedule_cadence,
+)
 from regwatch.state import (
     MAX_STATE_BYTES,
     AlreadyExistsError,
     StateError,
     load_seen,
+    remove_file,
     safe_write_bytes,
     safe_write_text,
     save_seen,
     update_register_file,
+    write_run_record,
     write_tree,
 )
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
+from regwatch.system import System
 
 __all__ = ["main"]
 
@@ -145,7 +164,19 @@ class _Context:
     fetcher: Fetcher | None
     today: dt.date
     now: dt.datetime
+    system: System = field(default_factory=System)
+    clock: Callable[[], dt.datetime] = field(default=lambda: dt.datetime.now(dt.UTC))
     _config: Config | None = field(default=None, init=False)
+
+    def keystore(self) -> KeyStore:
+        return KeyStore(self.system)
+
+    def key_for(self, key_env: str) -> str | None:
+        """The key for ``key_env``, or None when there is none or no keychain can be read."""
+        try:
+            return self.keystore().get(key_env)
+        except KeyStoreError:
+            return None
 
     @property
     def config(self) -> Config:
@@ -303,7 +334,11 @@ def _cmd_capture(ctx: _Context, args: argparse.Namespace) -> int:
     register = ctx.register()
     sources = _select_sources(register, args.source)
     results = capture_sources(
-        sources, ctx.live_fetcher(), ctx.config.snapshots_dir, ctx.config.register.all_paths()
+        sources,
+        ctx.live_fetcher(),
+        ctx.config.snapshots_dir,
+        ctx.config.register.all_paths(),
+        ctx.key_for,
     )
     for r in results:
         label = "captured" if r.captured else "skipped"
@@ -319,7 +354,7 @@ def _run_check(
     seen = load_seen(ctx.config.seen_path)
     fetcher = ctx.live_fetcher() if fetch else None
     return check_sources(
-        _select_sources(register, source_id), seen, ctx.config.snapshots_dir, fetcher
+        _select_sources(register, source_id), seen, ctx.config.snapshots_dir, fetcher, ctx.key_for
     )
 
 
@@ -1035,6 +1070,9 @@ def _cmd_sources_add(ctx: _Context, args: argparse.Namespace) -> int:
         state = "added" if entry.source_id in merged.added else "present"
         _say(f"{state:<10} {entry.source_id:<34} {entry.access_label:<8} {entry.name}")
     _say(f"regwatch sources add: {len(merged.added)} added, {len(merged.present)} already present")
+    for entry in entries:
+        if entry.keyed and not ctx.key_for(str(entry.key_env)):
+            _say(f"{entry.source_id} needs a key: run 'regwatch keys set {entry.source_id}'")
     return EXIT_OK
 
 
@@ -1062,8 +1100,13 @@ def _cmd_sources_verify(ctx: _Context, args: argparse.Namespace) -> int:
     failed = 0
     for entry in entries:
         try:
-            body = fetcher.fetch(entry.url)
-        except FetchError as exc:
+            key = ctx.key_for(entry.key_env) if entry.auth and entry.key_env else None
+            if entry.auth is not None and key:
+                credential = Credential(entry.auth.type, entry.auth.name, key)
+                body = fetcher.fetch(entry.url, credential=credential)
+            else:
+                body = fetcher.fetch(entry.url)
+        except (FetchError, ValueError) as exc:
             failed += 1
             _say(f"{'failed':<8} {entry.source_id:<34} {exc}")
             continue
@@ -1071,6 +1114,304 @@ def _cmd_sources_verify(ctx: _Context, args: argparse.Namespace) -> int:
     _say(f"regwatch sources verify: {len(entries) - failed} ok, {failed} failed")
     _say("The catalogue is not changed; a failure means the address needs checking.")
     return EXIT_UNVERIFIED if failed else EXIT_OK
+
+
+# --- keys --------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _KeyedSource:
+    source_id: str
+    key_env: str
+    signup_url: str | None
+
+
+def _keyed_sources(ctx: _Context) -> list[_KeyedSource]:
+    """Keyed sources: those in your sources file, then keyed catalogue entries not in it."""
+    found: dict[str, _KeyedSource] = {}
+    if ctx.config_path.exists():
+        _data, sources = read_json_list(ctx.config.register.sources, "sources", "sources file")
+        for source in sources:
+            key_env = str(source.get("key_env", "") or "")
+            if key_env:
+                sid = str(source.get("source_id", ""))
+                found[sid] = _KeyedSource(sid, key_env, None)
+    for entry in _source_catalogue(ctx):
+        if entry.key_env is None:
+            continue
+        if entry.source_id in found:
+            found[entry.source_id] = _KeyedSource(
+                entry.source_id, found[entry.source_id].key_env, entry.signup_url
+            )
+    return list(found.values())
+
+
+def _keyed_source(ctx: _Context, source_id: str) -> _KeyedSource:
+    for item in _keyed_sources(ctx):
+        if item.source_id == source_id:
+            return item
+    for entry in _source_catalogue(ctx):
+        if entry.source_id == source_id and entry.key_env is not None:
+            return _KeyedSource(entry.source_id, entry.key_env, entry.signup_url)
+    raise CommandError(f"'{source_id}' is not a source that needs a key")
+
+
+def _cmd_keys_set(ctx: _Context, args: argparse.Namespace) -> int:
+    item = _keyed_source(ctx, args.source_id)
+    store = ctx.keystore()
+    if store.backend is None:
+        raise CommandError(
+            "no keychain tool was found (security on macOS, secret-tool from libsecret on "
+            f"Linux); set the environment variable {item.key_env} to supply the key instead"
+        )
+    if item.signup_url:
+        _say(f"Get a key for {item.source_id} at {item.signup_url}")
+    try:
+        value = ctx.system.read_secret(clean_line(f"Key for {item.source_id} (not shown): "))
+    except EOFError as exc:
+        raise CommandError("no key was given; nothing was stored") from exc
+    store.set(item.key_env, value.strip())
+    _say(f"regwatch keys: stored the key for {item.source_id} in {store.backend_label}")
+    return EXIT_OK
+
+
+def _cmd_keys_list(ctx: _Context, args: argparse.Namespace) -> int:
+    store = ctx.keystore()
+    items = (
+        _keyed_sources(ctx)
+        if ctx.config_path.exists()
+        else [
+            _KeyedSource(e.source_id, e.key_env, e.signup_url)
+            for e in _source_catalogue(ctx)
+            if e.key_env is not None
+        ]
+    )
+    labels = {
+        "environment": "set in the environment",
+        "keychain": "stored",
+        "missing": "missing",
+        "unavailable": "missing (no keychain tool)",
+    }
+    for item in items:
+        status = store.status(item.key_env)
+        _say(f"{labels[status.source]:<27} {item.source_id:<34} {item.key_env}")
+    present = sum(1 for item in items if store.status(item.key_env).present)
+    _say(
+        f"regwatch keys: {present} of {len(items)} keyed sources have a key ({store.backend_label})"
+    )
+    return EXIT_OK
+
+
+def _cmd_keys_remove(ctx: _Context, args: argparse.Namespace) -> int:
+    item = _keyed_source(ctx, args.source_id)
+    removed = ctx.keystore().delete(item.key_env)
+    if removed:
+        _say(f"regwatch keys: removed the key for {item.source_id}")
+    else:
+        _say(f"regwatch keys: no key was stored for {item.source_id}")
+    if ctx.system.environ.get(item.key_env):
+        _say(f"The environment variable {item.key_env} is still set and still supplies a key.")
+    return EXIT_OK
+
+
+# --- run and schedule --------------------------------------------------------
+
+
+def _stamp(moment: dt.datetime) -> str:
+    return moment.astimezone(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _cmd_run(ctx: _Context, args: argparse.Namespace) -> int:
+    started = ctx.clock()
+    register = ctx.register()
+    sources = list(register.sources)
+    captures = capture_sources(
+        sources,
+        ctx.live_fetcher(),
+        ctx.config.snapshots_dir,
+        ctx.config.register.all_paths(),
+        ctx.key_for,
+    )
+    manual = {s.source_id for s in sources if s.mechanism == "manual"}
+    failed = [c for c in captures if not c.captured and c.source_id not in manual]
+    for c in captures:
+        label = "captured" if c.captured else "skipped"
+        _say(f"{label:<10} {c.source_id:<28} {clean_text(c.detail)}")
+    results = _run_check(ctx, register, fetch=False)
+    counts: dict[str, int] = {}
+    for r in results:
+        counts[r.status] = counts.get(r.status, 0) + 1
+        detail = f"  {clean_text(r.detail)}" if r.detail else ""
+        _say(f"{r.status:<10} {r.source_id:<28} {r.origin}{detail}")
+    code = EXIT_OK
+    if any(r.flagged for r in results):
+        code = EXIT_CHANGES
+    if failed or any(r.needs_attention for r in results):
+        code = EXIT_UNVERIFIED
+    ended = ctx.clock()
+    record = {
+        "started": started.astimezone(dt.UTC).isoformat(timespec="seconds"),
+        "ended": ended.astimezone(dt.UTC).isoformat(timespec="seconds"),
+        "sources": len(sources),
+        "captured": sum(1 for c in captures if c.captured),
+        "capture_failed": len(failed),
+        "counts": dict(sorted(counts.items())),
+        "exit_code": code,
+    }
+    path = write_run_record(
+        ctx.config.state_dir, record, _stamp(started), ctx.config.register.all_paths()
+    )
+    summary = ", ".join(f"{k.lower()}={v}" for k, v in sorted(counts.items()))
+    _say(f"regwatch run: {len(results)} sources; {summary}; capture failures={len(failed)}")
+    _say(f"regwatch run: wrote {path}")
+    _say(NOTICE)
+    return code
+
+
+def _schedule_parts(ctx: _Context) -> tuple[list[str], Path, Path]:
+    config = ctx.config
+    arguments = program_arguments(ctx.system.executable, config.config_path)
+    return arguments, config.base_dir, config.state_dir / "schedule.log"
+
+
+def _schedule_every(ctx: _Context, requested: str | None) -> str:
+    if requested:
+        return str(requested)
+    return schedule_cadence(source.cadence for source in ctx.register().sources)
+
+
+def _tool(ctx: _Context, name: str) -> str:
+    path = ctx.system.which(name)
+    if path is None:
+        raise CommandError(f"the {name} command was not found, so no schedule can be managed")
+    return path
+
+
+def _read_crontab(ctx: _Context) -> str:
+    result = ctx.system.runner([_tool(ctx, "crontab"), "-l"], None)
+    if result.returncode == 0:
+        return result.stdout
+    if "no crontab" in result.stderr.lower():
+        return ""
+    raise CommandError(
+        f"crontab -l failed with status {result.returncode}; the crontab was left unchanged"
+    )
+
+
+def _write_crontab(ctx: _Context, text: str) -> None:
+    result = ctx.system.runner([_tool(ctx, "crontab"), "-"], text)
+    if result.returncode != 0:
+        raise CommandError(f"crontab could not install the new table (status {result.returncode})")
+
+
+def _cmd_schedule(ctx: _Context, args: argparse.Namespace) -> int:
+    if args.install and args.remove:
+        raise CommandError("choose one of --install and --remove")
+    system = ctx.system
+    every = _schedule_every(ctx, args.every)
+    arguments, working_dir, log_path = _schedule_parts(ctx)
+    if system.is_macos:
+        return _schedule_launchd(ctx, args, every, arguments, working_dir, log_path)
+    return _schedule_cron(ctx, args, every, arguments, working_dir, log_path)
+
+
+def _schedule_launchd(
+    ctx: _Context,
+    args: argparse.Namespace,
+    every: str,
+    arguments: list[str],
+    working_dir: Path,
+    log_path: Path,
+) -> int:
+    system = ctx.system
+    path = plist_path(system.home())
+    domain = f"gui/{system.uid()}"
+    if args.install:
+        data = plist_bytes(arguments, every, working_dir, log_path)
+        commands = [
+            ["launchctl", "bootout", f"{domain}/{LABEL}"],
+            ["launchctl", "bootstrap", domain, str(path)],
+        ]
+        if args.dry_run:
+            _say(f"regwatch schedule: would write {path}:")
+            for line in data.decode("utf-8").splitlines():
+                _say(f"  {line}")
+            for command in commands:
+                _say("would run: " + " ".join(command))
+            return EXIT_OK
+        launchctl = _tool(ctx, "launchctl")
+        safe_write_bytes(path, data, ctx.config.protected_paths())
+        system.runner([launchctl, "bootout", f"{domain}/{LABEL}"], None)
+        result = system.runner([launchctl, "bootstrap", domain, str(path)], None)
+        if result.returncode != 0:
+            raise CommandError(
+                f"launchctl bootstrap failed with status {result.returncode}; {path} was written "
+                "but is not loaded"
+            )
+        _say(f"regwatch schedule: installed {LABEL} to run {every}, from {path}")
+        _say(
+            f"Output goes to {log_path}, and each run writes a record under {ctx.config.state_dir}."
+        )
+        return EXIT_OK
+    if args.remove:
+        if args.dry_run:
+            _say(f"would run: launchctl bootout {domain}/{LABEL}")
+            _say(f"would remove {path}")
+            return EXIT_OK
+        system.runner([_tool(ctx, "launchctl"), "bootout", f"{domain}/{LABEL}"], None)
+        removed = remove_file(path, ctx.config.protected_paths())
+        _say(
+            f"regwatch schedule: removed {path}"
+            if removed
+            else "regwatch schedule: nothing to remove"
+        )
+        return EXIT_OK
+    installed = path.is_file()
+    _say(f"launchd agent {LABEL}: {'installed' if installed else 'not installed'} at {path}")
+    _say(f"cadence: {every}")
+    _say("command: " + " ".join(arguments))
+    return EXIT_OK
+
+
+def _schedule_cron(
+    ctx: _Context,
+    args: argparse.Namespace,
+    every: str,
+    arguments: list[str],
+    working_dir: Path,
+    log_path: Path,
+) -> int:
+    block = cron_block(arguments, every, working_dir, log_path)
+    if args.dry_run and not args.remove:
+        _say("regwatch schedule: would add this block to your crontab:")
+        for line in block.splitlines():
+            _say(f"  {line}")
+        return EXIT_OK
+    current = _read_crontab(ctx)
+    if args.install:
+        _write_crontab(ctx, replace_block(current, block))
+        _say(f"regwatch schedule: installed {LABEL} in your crontab to run {every}")
+        _say(
+            f"Output goes to {log_path}, and each run writes a record under {ctx.config.state_dir}."
+        )
+        return EXIT_OK
+    existing = installed_block(current)
+    if args.remove:
+        if existing is None:
+            _say("regwatch schedule: nothing to remove")
+            return EXIT_OK
+        if args.dry_run:
+            _say("regwatch schedule: would remove this block from your crontab:")
+            for line in existing.splitlines():
+                _say(f"  {line}")
+            return EXIT_OK
+        _write_crontab(ctx, replace_block(current, None))
+        _say(f"regwatch schedule: removed {LABEL} from your crontab")
+        return EXIT_OK
+    _say(f"crontab block {LABEL}: {'installed' if existing else 'not installed'}")
+    for line in (existing or block).splitlines():
+        _say(f"  {line}")
+    return EXIT_OK
 
 
 # --- parser ------------------------------------------------------------------
@@ -1241,7 +1582,41 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
         epilog=DISCLAIMER,
     )
     _add_sources_parser(sub, handlers)
+    _add_keys_parser(sub, handlers)
+
+    add("run", _cmd_run, "capture every source, check them and write a run record")
+
+    p = add("schedule", _cmd_schedule, "install, show or remove a recurring run")
+    p.add_argument("--install", action="store_true", help="install or replace the schedule")
+    p.add_argument("--remove", action="store_true", help="remove the schedule")
+    p.add_argument("--show", action="store_true", help="show the schedule (the default)")
+    p.add_argument(
+        "--every",
+        choices=list(CADENCES),
+        help="how often to run; default the most frequent cadence among your sources",
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="print what would change and change nothing"
+    )
     return parser, handlers
+
+
+def _add_keys_parser(sub: Any, handlers: dict[str, _Handler]) -> None:
+    keys = sub.add_parser(
+        "keys",
+        help="store, list and remove the API keys some sources need",
+        description="Keep the keys of keyed sources in the system keychain. No key is printed.",
+        epilog=DISCLAIMER,
+    )
+    actions = keys.add_subparsers(dest="keys_command", required=True, metavar="action")
+    handlers["keys set"] = _cmd_keys_set
+    p = actions.add_parser("set", help="prompt for a key and store it", epilog=DISCLAIMER)
+    p.add_argument("source_id", metavar="SOURCE_ID")
+    handlers["keys list"] = _cmd_keys_list
+    actions.add_parser("list", help="show which keyed sources have a key", epilog=DISCLAIMER)
+    handlers["keys remove"] = _cmd_keys_remove
+    p = actions.add_parser("remove", help="delete a stored key", epilog=DISCLAIMER)
+    p.add_argument("source_id", metavar="SOURCE_ID")
 
 
 def _add_sources_parser(sub: Any, handlers: dict[str, _Handler]) -> None:
@@ -1294,11 +1669,13 @@ def main(
     fetcher: Fetcher | None = None,
     today: dt.date | None = None,
     now: dt.datetime | None = None,
+    system: System | None = None,
 ) -> int:
     """Run the command line and return the exit status.
 
-    ``fetcher``, ``today`` and ``now`` exist so tests and embedders can supply a
-    fake network client and a fixed clock.
+    ``fetcher``, ``today``, ``now`` and ``system`` exist so tests and embedders can
+    supply a fake network client, a fixed clock, and a stand-in for the programs
+    that keep keys and install schedules.
     """
     parser, handlers = _build_parser()
     args = parser.parse_args(argv)
@@ -1308,10 +1685,13 @@ def main(
         fetcher=fetcher,
         today=today or moment.date(),
         now=moment,
+        system=system or System(),
     )
+    if now is not None:
+        ctx.clock = lambda: moment
     command = args.command
-    if command == "sources":
-        command = f"sources {args.sources_command}"
+    if command in ("sources", "keys"):
+        command = f"{command} {getattr(args, f'{command}_command')}"
     try:
         return handlers[command](ctx, args)
     except RegisterError as exc:
@@ -1324,6 +1704,8 @@ def main(
         CommandError,
         CatalogueError,
         ConfigError,
+        KeyStoreError,
+        ScheduleError,
         StateError,
         FetchError,
         FocusError,

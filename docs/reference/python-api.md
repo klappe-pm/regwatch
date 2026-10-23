@@ -31,8 +31,9 @@ The one network client. See the [security model](../explanation/security-model.m
 - `check_url(url: str) -> str`: return the lower-cased scheme, or raise `FetchError` for a scheme that is not allowed, a URL that contains a space or a control character, carries credentials or has an invalid port, an `https` URL with no host, or a `file` URL that names a remote host.
 - `is_public_address(address: str) -> bool`: true for a globally routable unicast IP address; false for loopback, link-local, private, unique local, shared, reserved, multicast and unspecified addresses, for the IPv4-mapped form of any of them, for an IPv6 address that embeds one (NAT64 `/96`, 6to4, Teredo and ISATAP addresses are judged by the IPv4 address inside, and every embedded address must be public when there is more than one), for the ranges `::/8`, `fec0::/10` and `64:ff9b::/32` apart from its `/96`, and for text that is not an address.
 - `FetchError`: a fetch was refused or failed. The message is cleaned when the error is created, with control characters and invisible format characters removed and a length of at most 1,000 characters, so it is safe to show.
-- `Fetcher`: a protocol with one method, `fetch(url: str) -> str`. Implement it to supply a fake client in tests.
-- `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url)` returns the body decoded as UTF-8 with undecodable bytes replaced. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network.
+- `Fetcher`: a protocol with one method, `fetch(url: str, *, credential: Credential | None = None) -> str`. Implement it to supply a fake client in tests. `credential` is given only for a source that needs a key.
+- `Credential(placement, name, value)`: frozen dataclass for a key and where it goes, `query` or `header`; the value is hidden from `repr`, and an unsafe value or a reserved header name raises `ValueError` without repeating the value. `Credential.from_auth(auth, value)` builds one from a sources file `auth` value such as `query:api_key`, and `redact(text)` replaces the key in `text` with `[key]`.
+- `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url, *, credential=None)` returns the body decoded as UTF-8 with undecodable bytes replaced. With a credential the URL must be `https`, the key goes only to the host and port of the URL it was given for, a redirect to another host or port drops it, and every `FetchError` is cleaned of it with its cause dropped. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network.
 
 ## `extract`
 
@@ -75,12 +76,45 @@ The source catalogue. See [source catalogue](source-catalogue.md).
 - `CatalogueError`: the catalogue is unreadable or invalid, or a choice cannot be applied.
 - Constants: `FIELDS`, `REGIONS`, `KINDS`, `CATEGORIES`, `MECHANISMS`, `ACCESS`, `CADENCES` and `ACCESS_LABELS`.
 
+## `system`
+
+The one place that starts a program.
+
+- `run_command(args, stdin=None) -> CommandResult`: run an argument list without a shell, with `stdin` on standard input and a 15 second timeout. It never raises for a failed program: one that cannot start returns status 127 and one that runs too long returns 124.
+- `CommandResult`: frozen dataclass with `returncode`, `stdout` (hidden from `repr`) and `stderr`.
+- `System`: frozen dataclass with `runner`, `platform`, `which`, `environ`, `home`, `uid`, `executable`, `read_secret` and `stdin_is_terminal`, plus `is_macos` and `is_linux`. `regwatch.cli.main(..., system=...)` takes one, so tests replace every program regwatch would start.
+
+## `keys`
+
+Keys in the system keychain. See the [security model](../explanation/security-model.md#api-keys).
+
+- `KeyStore(system=None)`: `set(key_env, value)` stores a key and reads it back to confirm it, `get(key_env)` returns the environment variable when set and otherwise the stored key, `stored(key_env)` reads the keychain only, `status(key_env)` returns a `KeyStatus`, and `delete(key_env)` returns true when a key was removed. `backend` is `macos`, `linux` or None, and `backend_label` names it in words.
+- `KeyStatus`: frozen dataclass with `key_env` and `source` (`environment`, `keychain`, `missing` or `unavailable`), and the property `present`.
+- `check_key(value: str) -> str`: return a usable key or raise `KeyStoreError` without repeating it.
+- `KeyStoreError`: a key could not be stored, read or removed; the message never holds a key.
+- Constants: `SERVICE` (`regwatch`) and `MAX_KEY_LENGTH` (4096).
+
+## `schedule`
+
+Builders for the launchd agent and the crontab block.
+
+- `program_arguments(executable, config_path) -> list[str]`: the command a schedule runs, `<executable> -m regwatch --config <config> run`. Raises `ScheduleError` for a relative interpreter path.
+- `plist_bytes(arguments, every, working_dir, log_path) -> bytes` and `plist_path(home) -> Path`: the launchd agent and where it lives.
+- `cron_block(arguments, every, working_dir, log_path) -> str`: the crontab lines between marker comments, every part quoted for the shell; a path with `%` or a line break raises `ScheduleError`.
+- `installed_block(crontab) -> str | None` and `replace_block(crontab, block) -> str`: find, replace or (with None) remove the block, keeping every other line.
+- `schedule_cadence(cadences) -> str`: the most frequent of `hourly`, `daily` and `weekly` among the given cadences, `daily` when none is recognised.
+- Constants: `LABEL` (`io.github.klappe-pm.regwatch`), `CADENCES`, `INTERVAL_SECONDS` and `CRON_TIMES`.
+- `ScheduleError`: a schedule cannot be built or installed.
+
 ## `state`
 
 Snapshots, the last-seen state and the only write path.
 
 - `safe_write_text(path: Path, text: str, protected: Iterable[Path]) -> None`: write UTF-8 text atomically, replacing any unencodable character. Raises `StateError` if `path` is a protected file, compared by identity with `os.path.samefile` when both exist and by case folded name otherwise, or if it is a directory.
 - `safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None`: the same for bytes.
+- `write_run_record(state_dir, record, started, protected, keep=500) -> Path`: write one run record as `runs/run-<started>-<random>.json` under the state directory, where `started` is `YYYYMMDDTHHMMSSZ`, and remove the oldest records beyond `keep`.
+- `list_run_records(state_dir) -> list[Path]`: the run records, oldest first.
+- `remove_file(path, protected) -> bool`: delete a file, refusing a protected one; true when there was one.
 - `update_register_file(path: Path, text: str, register_paths: Iterable[Path]) -> None`: rewrite one register file atomically while every other register file stays protected. Only `sources add` and `sources remove` call it.
 - `snapshot_path(snapshots_dir: Path, source_id: str) -> Path`: the snapshot file for a source id. Raises `StateError` for an id that does not match `SOURCE_ID_RE`, so an id can never escape the directory.
 - `read_snapshot(snapshots_dir: Path, source_id: str) -> str | None`: the stored text, or `None`.
@@ -96,9 +130,11 @@ Snapshots, the last-seen state and the only write path.
 Change detection.
 
 - `SHRINK_RATIO: float` (0.5) and `MIN_PRIOR_LENGTH: int` (20): a signal shorter than `SHRINK_RATIO` times an accepted signal of at least `MIN_PRIOR_LENGTH` characters is `SUSPICIOUS`.
-- `check_sources(sources, seen, snapshots_dir, fetcher=None) -> list[SourceResult]`: compare each source with its accepted hash. With a `fetcher` the content is fetched now; without one the snapshot is read. A fetch or parse failure becomes an `ERROR` result, not an exception. An empty or sharply shorter signal is `SUSPICIOUS`.
+- `fetch_source(source, fetcher, key_for=None) -> str`: fetch one source, adding its key when its entry has `auth`. `key_for` maps a `key_env` name to a key or None; a keyed source without a key raises `FetchError` naming the variable and `regwatch keys set`.
+- `KeyLookup`: the type of `key_for`, `Callable[[str], str | None]`.
+- `check_sources(sources, seen, snapshots_dir, fetcher=None, key_for=None) -> list[SourceResult]`: compare each source with its accepted hash. With a `fetcher` the content is fetched now, keyed sources with their key from `key_for`; without one the snapshot is read. A fetch or parse failure becomes an `ERROR` result, not an exception. An empty or sharply shorter signal is `SUSPICIOUS`.
 - `accept_results(seen, results, now, accept_suspicious=False) -> SeenState`: a copy of `seen` with the hash and signal length from `results` recorded. `SUSPICIOUS` results are skipped unless `accept_suspicious` is true. It does not write anything.
-- `capture_sources(sources, fetcher, snapshots_dir, protected) -> list[CaptureResult]`: fetch each non-manual source and store the raw content.
+- `capture_sources(sources, fetcher, snapshots_dir, protected, key_for=None) -> list[CaptureResult]`: fetch each non-manual source and store the raw content. A snapshot holds the body only, never the request URL, so a key in a query parameter is not stored.
 - `SourceResult`: frozen dataclass with `source_id`, `status`, `origin`, `sha256`, `detail` and `signal_length`; the property `flagged` is true for `NEW`, `CHANGED` and `SUSPICIOUS`, and `needs_attention` is true for `ERROR` and `MISSING`.
 - `CaptureResult`: frozen dataclass with `source_id`, `captured` and `detail`.
 

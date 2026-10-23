@@ -7,6 +7,8 @@ How-to guides are recipes. Each one solves a specific problem for a reader who a
 - [Install](install.md): every supported way to install, upgrade and uninstall the command.
 - [Set Your Focus Areas](set-your-focus-areas.md): choose the focus areas that match your business, add words of your own, and read results ranked by relevance.
 - [Add a Source](add-a-source.md): watch a new feed, web page, API or mailing list archive, and choose its mechanism.
+- [Keep API Keys](keep-api-keys.md): store the key a keyed source needs in the system keychain, or supply it from the environment.
+- [Schedule Runs](schedule-runs.md): capture and check on a schedule with launchd or cron, and read the run records.
 - [Review Flagged Changes](review-flagged-changes.md): what to do, in order, when Regwatch flags a source change, an ingest candidate or a candidate impact.
 - [Troubleshooting](troubleshooting.md): known failure modes matched to their fixes.
 
