@@ -65,6 +65,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- Docs and copy: the `ui` reference no longer says the web app fetches nothing (Run now does what `regwatch run` does), the source catalogue reference no longer calls the web app's catalogue search planned, `keys set`, `keys list` and `keys remove` have help descriptions, and the "Why It Was Flagged" and "Impacts on Your Products" headings are Title Case.
 - `regwatch sources list --jurisdiction` matches in any case, so `US` lists the same sources as `us`, and an unknown `--focus` exits 2 naming the valid focus area ids instead of listing only the entries that serve every area.
 - `regwatch sources verify` sends the stored key for a keyed source and reports `no key`, with the `regwatch keys set` command, when there is none, instead of fetching without it. With no ids it verifies the catalogue entries of your sources file; `--all` verifies the whole catalogue. A missing key also makes the exit status 4.
 - The global search in the web app showed No matches when the request failed; it now shows the error. A catalogue hit opens the catalogue search by its id, not its name, so it finds that one source.

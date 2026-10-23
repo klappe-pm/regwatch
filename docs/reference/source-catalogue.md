@@ -70,7 +70,7 @@ Rules across fields:
 
 ## Search
 
-One function, `rank` in `regwatch/catalogue.py`, orders search results everywhere: `regwatch sources search`, the search in `regwatch init` and the search box planned for the web app.
+One function, `rank` in `regwatch/catalogue.py`, orders search results everywhere: `regwatch sources search`, the search in `regwatch init` and the catalogue search on the Sources page of the web app, which calls it through the local server.
 
 - The match ignores case and looks at the name, id, publisher, jurisdiction, kind, access label (`Free`, `Free Key` or `Paid`), region, category, focus areas and description. The id, jurisdiction, kind, region, category and focus areas are matched by their parts, so `us-ca` is the words `us` and `ca`. The publisher also matches its initials, so `fda` matches U.S. Food and Drug Administration and `efsa` matches European Food Safety Authority.
 - British and American spellings are treated alike in both directions: `aluminium` and `aluminum`, `labelling` and `labeling`, `flavour` and `flavor`, `colour` and `color`, and the `-ise` forms of `organise`, `authorise`, `harmonise` and `standardise`, among others listed as `SPELLINGS` in `regwatch/catalogue.py`.

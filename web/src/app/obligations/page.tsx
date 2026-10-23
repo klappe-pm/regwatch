@@ -146,7 +146,7 @@ export default function ObligationsPage() {
                               <dd>{o.categories.join(", ") || "None"}</dd>
                             </dl>
                             <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                              Impacts on your products
+                              Impacts on Your Products
                             </h3>
                             {o.impacts.length === 0 ? (
                               <p className="text-sm text-muted">None of your products is affected.</p>

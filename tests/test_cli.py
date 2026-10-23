@@ -62,6 +62,22 @@ def test_help_carries_the_disclaimer(capsys: pytest.CaptureFixture[str]) -> None
     assert "Not legal advice" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("action", "phrase"),
+    [
+        ("set", "prompt for it without echoing it"),
+        ("list", "whether its key is stored"),
+        ("remove", "Delete the stored key"),
+    ],
+)
+def test_each_keys_action_has_a_help_description(
+    action: str, phrase: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        main(["keys", action, "--help"])
+    assert phrase in " ".join(capsys.readouterr().out.split())
+
+
 def test_missing_configuration(run, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     result = run("validate", config=tmp_path / "nothing.toml")
     assert result.code == 2

@@ -47,7 +47,7 @@ function Detail({ impact }: { impact: Impact | null }) {
         <dt className="text-muted">Obligation</dt>
         <dd className="font-mono text-xs leading-5">{impact.obligation_id}</dd>
       </dl>
-      <h4 className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Why it was flagged</h4>
+      <h4 className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Why It Was Flagged</h4>
       <ul className="mt-1 list-disc pl-4">
         {impact.reasons.map((reason) => (
           <li key={reason}>{reason}</li>

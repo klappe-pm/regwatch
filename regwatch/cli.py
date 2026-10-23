@@ -1974,13 +1974,37 @@ def _add_keys_parser(sub: Any, handlers: dict[str, _Handler]) -> None:
     )
     actions = keys.add_subparsers(dest="keys_command", required=True, metavar="action")
     handlers["keys set"] = _cmd_keys_set
-    p = actions.add_parser("set", help="prompt for a key and store it", epilog=DISCLAIMER)
-    p.add_argument("source_id", metavar="SOURCE_ID")
+    p = actions.add_parser(
+        "set",
+        help="prompt for a key and store it",
+        description=(
+            "Say where to get a key for a keyed source, prompt for it without echoing it, "
+            "and store it in the system keychain. The key is never printed."
+        ),
+        epilog=DISCLAIMER,
+    )
+    p.add_argument("source_id", metavar="SOURCE_ID", help="a keyed source id")
     handlers["keys list"] = _cmd_keys_list
-    actions.add_parser("list", help="show which keyed sources have a key", epilog=DISCLAIMER)
+    actions.add_parser(
+        "list",
+        help="show which keyed sources have a key",
+        description=(
+            "Show each keyed source and whether its key is stored, set in the environment "
+            "or missing. No key is printed."
+        ),
+        epilog=DISCLAIMER,
+    )
     handlers["keys remove"] = _cmd_keys_remove
-    p = actions.add_parser("remove", help="delete a stored key", epilog=DISCLAIMER)
-    p.add_argument("source_id", metavar="SOURCE_ID")
+    p = actions.add_parser(
+        "remove",
+        help="delete a stored key",
+        description=(
+            "Delete the stored key of a keyed source from the system keychain. "
+            "An environment variable that supplies the key is left alone."
+        ),
+        epilog=DISCLAIMER,
+    )
+    p.add_argument("source_id", metavar="SOURCE_ID", help="a keyed source id")
 
 
 def _add_sources_parser(sub: Any, handlers: dict[str, _Handler]) -> None:

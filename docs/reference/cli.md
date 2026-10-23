@@ -324,7 +324,7 @@ Every CSV field is quoted. A cell, or any part of a cell after a `;`, a `,`, a t
 
 ## `ui`
 
-Starts the local web app and opens it in the browser. The server is the standard library's `ThreadingHTTPServer`, bound to `127.0.0.1` only, and runs until Ctrl+C. It reads the project named by `--config` the same way the other commands do, checks the configuration before it starts, and fetches nothing. See [use the web app](../how-to-guides/use-the-web-app.md) and the [security model](../explanation/security-model.md#the-local-server).
+Starts the local web app and opens it in the browser. The server is the standard library's `ThreadingHTTPServer`, bound to `127.0.0.1` only, and runs until Ctrl+C. It reads the project named by `--config` the same way the other commands do, and checks the configuration before it starts. Only Run now on the Automations page reaches the network: it does what `regwatch run` does, so it fetches every source. Every other page reads and writes local files only. See [use the web app](../how-to-guides/use-the-web-app.md) and the [security model](../explanation/security-model.md#the-local-server).
 
 | option | meaning |
 | --- | --- |
