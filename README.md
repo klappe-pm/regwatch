@@ -149,6 +149,8 @@ Regwatch flags candidates for human review. A qualified person must confirm each
 | `regwatch digest` | Writes a Markdown digest of the register. |
 | `regwatch report` | Writes a change-and-due alert. |
 | `regwatch export` | Writes one flat record per obligation as CSV and JSON. |
+| `regwatch ui` | Opens the local web app in your browser, over the same files. |
+| `regwatch premium` | Turns the premium features on or off, or shows whether they are on. |
 
 Every command accepts `--help`. The [CLI reference](https://github.com/klappe-pm/regwatch/blob/main/docs/reference/cli.md) covers every option, what each command reads and writes, and the exit statuses.
 

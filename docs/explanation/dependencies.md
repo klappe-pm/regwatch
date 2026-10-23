@@ -19,6 +19,8 @@ None. The `dependencies` list in `pyproject.toml` is empty. Each capability that
 | escape output | `html`, `xml.sax.saxutils`, `re` | no alternative is needed |
 | read packaged data | `importlib.resources` | no alternative is needed |
 | command line | `argparse` | no alternative is needed |
+| serve the web app | `http.server`, `secrets`, `hashlib` | the server answers one user on loopback; a web framework would add far more code than the checks it needs, which are written out in `server.py` |
+| open the browser | `webbrowser` | no alternative is needed |
 
 ## Why This Matters Here
 
@@ -34,6 +36,10 @@ regwatch fetches and parses content from the outside world, and it is meant to r
 ## The Bar for a New Dependency
 
 A runtime dependency is added only when all of these hold: the standard library cannot do the job reasonably, the package is widely used and actively maintained, it has no dependencies of its own that matter, and an issue has been opened and agreed first. The justification is then written here, in the table above, before the change merges. See [contributing](../../CONTRIBUTING.md).
+
+## The Web App's Build Dependencies
+
+The pages behind `regwatch ui` are written with Next.js, React and Tailwind CSS and exported as static files into the package, so a user runs them without Node and without any of these packages. They are build dependencies of the pages, like `fonttools` is of the banner: `web/package.json` pins each one exactly, `web/package-lock.json` pins every package beneath them with an integrity hash, `npm ci --ignore-scripts` installs them without running install scripts, and the release workflow rebuilds the pages and fails when the result differs from the committed copy. The icons are Material Symbols Outlined (Apache License 2.0), copied into the build as paths. The built pages load nothing from another origin.
 
 ## Development Dependencies
 

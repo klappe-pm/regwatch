@@ -21,6 +21,7 @@ __all__ = [
     "ConfigError",
     "FetchSettings",
     "IngestSettings",
+    "PremiumSettings",
     "ProfileSettings",
     "RegisterPaths",
     "file_root_is_too_broad",
@@ -113,6 +114,17 @@ class ProfileSettings:
 
 
 @dataclass(frozen=True)
+class PremiumSettings:
+    """The premium toggle, ``[premium] enabled``. Off unless the file turns it on.
+
+    Regwatch is MIT licensed, so this is a product boundary, not a lock: the web app
+    shows premium features with a note while it is off, and anyone can turn it on.
+    """
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class Config:
     """The parsed configuration, with every path made absolute."""
 
@@ -124,6 +136,7 @@ class Config:
     ingest: IngestSettings
     config_path: Path
     profile: ProfileSettings = ProfileSettings()
+    premium: PremiumSettings = PremiumSettings()
 
     def protected_paths(self) -> list[Path]:
         """Files that a user-named output path must never overwrite.
@@ -287,6 +300,13 @@ def _parse_profile(table: dict[str, Any], base: Path) -> ProfileSettings:
     )
 
 
+def _parse_premium(table: dict[str, Any]) -> PremiumSettings:
+    enabled = table.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("[premium] enabled must be true or false")
+    return PremiumSettings(enabled=enabled)
+
+
 def load_config(path: Path) -> Config:
     """Read and validate the configuration file at ``path``.
 
@@ -304,7 +324,9 @@ def load_config(path: Path) -> Config:
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise ConfigError(f"cannot parse configuration file {path}: {exc}") from exc
 
-    unknown_tables = sorted(set(data) - {"register", "state", "fetch", "ingest", "profile"})
+    unknown_tables = sorted(
+        set(data) - {"register", "state", "fetch", "ingest", "profile", "premium"}
+    )
     if unknown_tables:
         raise ConfigError(f"unknown configuration tables: {', '.join(unknown_tables)}")
 
@@ -369,6 +391,7 @@ def load_config(path: Path) -> Config:
         profile=_parse_profile(
             _table(data, "profile", ("focus_areas", "custom_terms", "catalogue")), base
         ),
+        premium=_parse_premium(_table(data, "premium", ("enabled",))),
         ingest=_parse_ingest(
             _table(
                 data,

@@ -1,7 +1,8 @@
 # Publish to PyPI through trusted publishing when a version tag is pushed.
 #
 # Three jobs, each with the least it needs:
-#   build    installs only the hash pinned build tools, checks the tag, builds the distributions.
+#   build    builds the web app from its lockfile and checks it matches the committed copy,
+#            installs only the hash pinned build tools, checks the tag, builds the distributions.
 #   test     installs hash pinned test tools and the wheel that build made, then runs the suite.
 #   publish  needs both, runs in the "pypi" environment, and alone may request a PyPI token.
 # No PyPI token is stored anywhere.
@@ -30,6 +31,27 @@ jobs:
         run: |
           git merge-base --is-ancestor "${GITHUB_SHA}" origin/main || {
             echo "the tagged commit ${GITHUB_SHA} is not an ancestor of origin/main"
+            exit 1
+          }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: build the web app from the lockfile
+        # npm ci installs exactly what web/package-lock.json pins, with its integrity hashes.
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          npm --prefix web ci --ignore-scripts --no-audit --no-fund
+          npm --prefix web run build
+      - name: the committed web app matches the build
+        run: |
+          git diff --exit-code -- regwatch/web || {
+            echo "regwatch/web/ differs from a fresh build; run scripts/build-web.sh and commit it"
+            exit 1
+          }
+          test -z "$(git status --porcelain -- regwatch/web)" || {
+            echo "the build added files under regwatch/web/ that are not committed"
             exit 1
           }
       - name: install the build tools

@@ -12,14 +12,14 @@ Lessons that take you through a task from start to finish. [Getting Started](tut
 
 Recipes for a specific goal, for someone who already knows the basics.
 
-- Use: [Install](how-to-guides/install.md), [Set Your Focus Areas](how-to-guides/set-your-focus-areas.md), [Add a Source](how-to-guides/add-a-source.md), [Review Flagged Changes](how-to-guides/review-flagged-changes.md), [Troubleshooting](how-to-guides/troubleshooting.md).
-- Contribute: [Run the Tests](how-to-guides/run-the-tests.md), [Add a Source Mechanism](how-to-guides/add-a-source-mechanism.md), [Cut a Release](how-to-guides/cut-a-release.md).
+- Use: [Install](how-to-guides/install.md), [Set Your Focus Areas](how-to-guides/set-your-focus-areas.md), [Add a Source](how-to-guides/add-a-source.md), [Review Flagged Changes](how-to-guides/review-flagged-changes.md), [Use the Web App](how-to-guides/use-the-web-app.md), [Troubleshooting](how-to-guides/troubleshooting.md).
+- Contribute: [Run the Tests](how-to-guides/run-the-tests.md), [Add a Source Mechanism](how-to-guides/add-a-source-mechanism.md), [Change the Web App](how-to-guides/change-the-web-app.md), [Cut a Release](how-to-guides/cut-a-release.md).
 
 Index: [How-To Guides](how-to-guides/README.md).
 
 ## Reference
 
-Lookup pages that describe the machinery as it is. [CLI](reference/cli.md) lists every subcommand, option and exit status, [Configuration](reference/configuration.md) lists every key in `regwatch.toml`, [Data Files](reference/data-files.md) lists every field of every register file, [Focus Catalogue](reference/focus-catalogue.md) describes the focus areas and how candidates are matched, [Python API](reference/python-api.md) lists every public function and class, [Source Layout](reference/source-layout.md) describes every module, and [Package Data](reference/package-data.md) describes the packaged field rules. Index: [Reference](reference/README.md).
+Lookup pages that describe the machinery as it is. [CLI](reference/cli.md) lists every subcommand, option and exit status, [Configuration](reference/configuration.md) lists every key in `regwatch.toml`, [Data Files](reference/data-files.md) lists every field of every register file, [Focus Catalogue](reference/focus-catalogue.md) describes the focus areas and how candidates are matched, [Python API](reference/python-api.md) lists every public function and class, [Source Layout](reference/source-layout.md) describes every module, and [Package Data](reference/package-data.md) describes the packaged field rules and the built web app. Index: [Reference](reference/README.md).
 
 ## Explanation
 

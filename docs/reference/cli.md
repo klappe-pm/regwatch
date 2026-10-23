@@ -32,7 +32,7 @@ Argument errors detected by the parser also exit with status 2.
 
 ## What Gets Written
 
-Commands read the register and never write it. Writes go to exactly these places. A path you name is refused if it is a register file, `regwatch.toml`, `seen.json`, `ingest-candidates.json`, or anything inside the state or snapshots directory, whatever its case or links. Paths are compared by identity, not by name.
+Commands read the register and never write it. Writes go to exactly these places. `premium` and the Settings page of `ui` change one setting in `regwatch.toml` through the same atomic writer, keep every comment and every other line, and refuse a file they cannot change safely. A path you name is refused if it is a register file, `regwatch.toml`, `seen.json`, `ingest-candidates.json`, or anything inside the state or snapshots directory, whatever its case or links. Paths are compared by identity, not by name.
 
 | command | writes |
 | --- | --- |
@@ -43,6 +43,8 @@ Commands read the register and never write it. Writes go to exactly these places
 | `brief --out-dir` | `<name>.md` and `<name>.json` in the directory you name |
 | `render` | the rendered files in the directory you name |
 | `digest --out`, `report --out`, `report --json`, `export --csv`, `export --json` | the path you name |
+| `premium on`, `premium off` | one line in `regwatch.toml`: `[premium] enabled` |
+| `ui` | through its Settings page only, one line in `regwatch.toml`: `[profile] focus_areas` or `[premium] enabled` |
 
 ## `init`
 
@@ -77,7 +79,7 @@ Before asking anything but the folder, `init` lists the files that already exist
 
 ## `config`
 
-`regwatch config show` prints the effective configuration: every setting after defaults and path resolution, in the form of the configuration file. Paths are absolute. It prints the register files, the state and snapshots directories, the fetch limits with the User-Agent and `allowed_file_roots` (a comment says when the list is empty and every file source is refused), the ingest filters, and the profile with the catalogue in use, one comment line for each focus area with its label and number of terms. It does not read the register. It exits 2 if the configuration is invalid or names an unknown focus area.
+`regwatch config show` prints the effective configuration: every setting after defaults and path resolution, in the form of the configuration file. Paths are absolute. It prints the register files, the state and snapshots directories, the fetch limits with the User-Agent and `allowed_file_roots` (a comment says when the list is empty and every file source is refused), the ingest filters, and the profile with the catalogue in use, one comment line for each focus area with its label and number of terms, then `[premium] enabled`. It does not read the register. It exits 2 if the configuration is invalid or names an unknown focus area.
 
 ```text
 regwatch config show
@@ -235,3 +237,59 @@ Writes one flat record per obligation, joined with its detail record when there 
 | `--json PATH` | also write the records as JSON |
 
 Every CSV field is quoted. A cell, or any part of a cell after a `;`, a `,`, a tab or a line break, that begins with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed (also after leading whitespace, and in the fullwidth forms) gets a leading apostrophe in the CSV so a spreadsheet does not run it as a formula; the JSON is unchanged. The columns are `obligation_id`, `jurisdiction`, `status`, `effective_date`, `topics`, `summary`, `impacts`, `implications`, `action`, `source_url` and `citations`.
+
+## `ui`
+
+Starts the local web app and opens it in the browser. The server is the standard library's `ThreadingHTTPServer`, bound to `127.0.0.1` only, and runs until Ctrl+C. It reads the project named by `--config` the same way the other commands do, checks the configuration before it starts, and fetches nothing. See [use the web app](../how-to-guides/use-the-web-app.md) and the [security model](../explanation/security-model.md#the-local-server).
+
+| option | meaning |
+| --- | --- |
+| `--port N` | the port on `127.0.0.1`, 0 to 65535; default 0, a free port chosen by the system |
+| `--no-open` | print the address but do not open a browser |
+
+It prints `regwatch ui: serving <project folder> at http://127.0.0.1:<port>/?token=<token>`. The token is 43 random URL-safe characters from `secrets.token_urlsafe`, new for each run. The command exits 0 when stopped, and 2 when the configuration is invalid, the port is taken or out of range, or the installation lacks the built pages.
+
+```text
+regwatch ui --port 8765 --no-open
+```
+
+The JSON interface the pages use is under `/api/`. Every route needs the token, and a route that changes something needs a JSON body and a same-origin `Origin` header.
+
+| route | method | answers |
+| --- | --- | --- |
+| `/api/status` | GET | the version, the project folder name and whether premium is on |
+| `/api/overview` | GET | source counts by status, the sources to review, the highest priority impacts, obligations effective within 90 days, the schedule and supply chain signals |
+| `/api/changes` | GET | every source result, every candidate impact and the unconfirmed ingest candidates, cleaned again |
+| `/api/sources` | GET | the sources in the register with the status of each stored snapshot |
+| `/api/catalogue` | GET | catalogue entries for `q`, filtered by `category`, `region`, `kind` and `access`, with the values present for each filter |
+| `/api/catalogue/add` | POST | adds `source_id` from the catalogue to the sources file |
+| `/api/obligations` | GET | every obligation with its candidate impacts |
+| `/api/briefing` | GET | the document model for `kind` (`tiered`, `daily` or `weekly`) and `tier` (`v1`, `v2` or `v3`) |
+| `/api/briefing/export` | GET | the same briefing as a download in `format` `md`, `html` or `docx` |
+| `/api/automations` | GET | whether premium is on, the schedule and the run records |
+| `/api/automations/run` | POST | runs a capture and a check now |
+| `/api/keys` | GET | for each keyed source, its id, its environment variable and whether a key is stored; never a key |
+| `/api/keys/set` | POST | stores `key` for `source_id`; answers only whether one is stored |
+| `/api/keys/remove` | POST | removes the key for `source_id` |
+| `/api/settings` | GET | the focus areas, the focus catalogue and whether premium is on |
+| `/api/settings/focus` | POST | sets `[profile] focus_areas` to `focus_areas`, ids from the catalogue |
+| `/api/settings/premium` | POST | sets `[premium] enabled` to `enabled`, true or false |
+| `/api/search` | GET | up to 8 sources, changes and obligations each that match `q` |
+
+A route whose feature has not shipped (the catalogue, keys, the schedule, run records and supply chain signals) answers `{"available": false, "command": ...}`, naming the command that will fill it. An error is a JSON object with one short `error` message that never holds file contents: 400 for a bad request, 403 for a refused host, origin or token, 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register, and 500 otherwise.
+
+## `premium`
+
+Turns the premium features on or off, or shows whether they are on: newsletters, document templates, generated copy and runs more often than once a day. While premium is off the web app shows these features with a lock and a note instead of hiding them. Regwatch is MIT licensed, so this is a product boundary, not a lock.
+
+| argument | meaning |
+| --- | --- |
+| `on` | set `[premium] enabled = true` in `regwatch.toml` |
+| `off` | set `[premium] enabled = false` |
+| `status` | change nothing |
+
+Each prints `regwatch premium: on` or `regwatch premium: off`, and while off, the features that are locked. The change keeps every comment and every other line of the file. A file whose `[premium]` setting is written in a form the command cannot change safely, such as the dotted key `premium.enabled`, exits 2 and is left unchanged.
+
+```text
+regwatch premium on
+```
