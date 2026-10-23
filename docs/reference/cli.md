@@ -163,7 +163,7 @@ Installs, shows or removes a recurring `regwatch run`. On macOS it is a launchd 
 | `--install` | install the schedule, replacing an earlier one |
 | `--remove` | remove the schedule |
 | `--show` | show whether it is installed and what it runs; the default |
-| `--every CADENCE` | `hourly`, `daily` or `weekly`; default the most frequent cadence among your sources, or `daily` |
+| `--every CADENCE` | `hourly`, `daily` or `weekly`; default the most frequent cadence among your sources, or `daily`. `hourly` is a premium feature: with premium off, `--every hourly` exits 2 with a message naming `regwatch premium on`, and an hourly default is capped at `daily` with a note saying so |
 | `--dry-run` | print the file or the crontab block and the commands, and change nothing |
 
 Cron times are a minute past the start of the period: `17 * * * *`, `17 6 * * *` and `17 6 * * 1`. A launchd agent repeats every 3,600, 86,400 or 604,800 seconds. A crontab that cannot be read for a reason other than there being none is left unchanged and the command exits 2.
@@ -363,7 +363,7 @@ Only a run started from the Automations page reaches the network, and only one r
 
 ## `premium`
 
-Turns the premium features on or off, or shows whether they are on: newsletters, document templates, generated copy and runs more often than once a day. While premium is off the web app shows these features with a lock and a note instead of hiding them. Regwatch is MIT licensed, so this is a product boundary, not a lock.
+Turns the premium features on or off, or shows whether they are on: newsletters, document templates, generated copy and runs more often than once a day. While premium is off the web app shows these features with a lock and a note instead of hiding them, and `schedule` refuses `--every hourly` and installs a daily run where your sources ask for hourly ones. Regwatch is MIT licensed, so this is a product boundary, not a lock.
 
 | argument | meaning |
 | --- | --- |

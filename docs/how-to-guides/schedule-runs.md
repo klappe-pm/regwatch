@@ -14,7 +14,7 @@ Exit status 3 means there are changes to review and 4 means a source could not b
 
 ## Install the Schedule
 
-Look at what would be installed first, then install it. Without `--every` the cadence is the most frequent one among your sources.
+Look at what would be installed first, then install it. Without `--every` the cadence is the most frequent one among your sources. Hourly runs are a premium feature: with premium off, `--every hourly` is refused and a source that asks for hourly checks is scheduled daily, and `regwatch premium on` allows them.
 
 ```bash
 regwatch --config ~/my-register/regwatch.toml schedule --install --every daily --dry-run

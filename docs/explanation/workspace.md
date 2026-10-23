@@ -58,7 +58,7 @@ This replaces the earlier position that Regwatch reads no credential. It still r
 
 - On macOS it writes a launchd agent in `~/Library/LaunchAgents`, loads it with `launchctl bootstrap`, and points it at the interpreter that runs Regwatch now, by absolute path.
 - Elsewhere it prints the crontab line and, with `--install`, adds it to the user's crontab between marker comments it can later find and remove.
-- The cadence is the most frequent cadence among the chosen sources unless `--every` sets one.
+- The cadence is the most frequent cadence among the chosen sources unless `--every` sets one. Runs more often than daily are a premium feature, so with premium off an hourly cadence is capped at daily and `--every hourly` is refused.
 - Each run writes a run record to the state directory: when it started and ended, the counts by status and the exit code. The web app's activity view reads these records.
 
 Nothing is scheduled without the user saying yes, and `regwatch schedule --remove` takes it all out again.

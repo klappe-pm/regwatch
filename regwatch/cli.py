@@ -1486,10 +1486,33 @@ def _schedule_parts(ctx: _Context) -> tuple[list[str], Path, Path]:
     return arguments, config.base_dir, config.state_dir / "schedule.log"
 
 
-def _schedule_every(ctx: _Context, requested: str | None) -> str:
+# Runs more often than once a day are a premium feature.
+PREMIUM_CADENCES = frozenset({"hourly"})
+
+
+def _schedule_every(ctx: _Context, requested: str | None, *, removing: bool = False) -> str:
+    """The cadence to install: ``--every``, or the most frequent cadence of the sources.
+
+    With premium off, ``--every hourly`` is refused and an hourly default is
+    capped at daily, with a note that names the command that lifts the cap.
+    """
+    premium = ctx.config.premium.enabled
     if requested:
+        if requested in PREMIUM_CADENCES and not premium and not removing:
+            raise CommandError(
+                f"running {requested} is a premium feature; turn it on with "
+                "'regwatch premium on', or choose --every daily or weekly"
+            )
         return str(requested)
-    return schedule_cadence(source.cadence for source in ctx.register().sources)
+    every = schedule_cadence(source.cadence for source in ctx.register().sources)
+    if every in PREMIUM_CADENCES and not premium:
+        _say(
+            f"regwatch schedule: a source asks for {every} checks, but runs more often than "
+            "daily are a premium feature, so the schedule runs daily; "
+            "'regwatch premium on' allows hourly runs"
+        )
+        return "daily"
+    return every
 
 
 def _tool(ctx: _Context, name: str) -> str:
@@ -1520,7 +1543,7 @@ def _cmd_schedule(ctx: _Context, args: argparse.Namespace) -> int:
     if args.install and args.remove:
         raise CommandError("choose one of --install and --remove")
     system = ctx.system
-    every = _schedule_every(ctx, args.every)
+    every = _schedule_every(ctx, args.every, removing=bool(args.remove))
     arguments, working_dir, log_path = _schedule_parts(ctx)
     if system.is_macos:
         return _schedule_launchd(ctx, args, every, arguments, working_dir, log_path)

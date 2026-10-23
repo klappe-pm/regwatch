@@ -346,6 +346,7 @@ def test_schedule_reports_a_failed_bootstrap(run: Run, tmp_path: Path) -> None:
 def test_schedule_installs_and_removes_a_crontab_block(run: Run) -> None:
     fake = FakeSystem("linux")
     fake.crontab = "MAILTO=me\n"
+    run("premium", "on")
     code, out, _ = run("schedule", "--install", "--every", "hourly", fake=fake)
     assert code == 0
     assert fake.crontab.startswith("MAILTO=me\n# BEGIN " + LABEL)
@@ -419,6 +420,57 @@ def test_a_dangling_link_as_the_state_path_stops_the_install(
     code, _, err = run("schedule", "--install", fake=FakeSystem("linux"))
     assert code == 2 and "symbolic link" in err
     assert not (tmp_path / "nowhere").exists()
+
+
+# --- premium: runs more often than daily ----------------------------------------------
+
+
+def make_a_source_hourly(project: Path) -> None:
+    path = project.parent / "register" / "sources.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["sources"][0]["cadence"] = "hourly"
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_without_premium_every_hourly_is_refused(run: Run) -> None:
+    fake = FakeSystem("linux")
+    code, _, err = run("schedule", "--install", "--every", "hourly", fake=fake)
+    assert code == 2
+    assert "premium feature" in err and "regwatch premium on" in err
+    assert fake.crontab is None and fake.calls == []
+    code, _, err = run("schedule", "--install", "--every", "hourly", "--dry-run", fake=fake)
+    assert code == 2
+
+
+def test_without_premium_an_hourly_source_is_scheduled_daily(run: Run, project: Path) -> None:
+    make_a_source_hourly(project)
+    fake = FakeSystem("linux")
+    code, out, _ = run("schedule", "--install", fake=fake)
+    assert code == 0
+    assert "runs daily" in out and "regwatch premium on" in out
+    assert "to run daily" in out
+    assert "\n17 6 * * * cd " in "\n" + (fake.crontab or "")
+
+
+def test_with_premium_hourly_runs_are_allowed(run: Run, project: Path) -> None:
+    make_a_source_hourly(project)
+    run("premium", "on")
+    fake = FakeSystem("linux")
+    code, out, _ = run("schedule", "--install", fake=fake)
+    assert code == 0 and "to run hourly" in out and "premium feature" not in out
+    assert "17 * * * * cd " in (fake.crontab or "")
+
+
+def test_removing_never_asks_for_premium(run: Run) -> None:
+    code, out, _ = run("schedule", "--remove", "--every", "hourly", fake=FakeSystem("linux"))
+    assert code == 0 and "nothing to remove" in out
+
+
+def test_weekly_and_daily_need_no_premium(run: Run) -> None:
+    for every in ("daily", "weekly"):
+        fake = FakeSystem("linux")
+        code, out, _ = run("schedule", "--install", "--every", every, fake=fake)
+        assert code == 0 and f"to run {every}" in out
 
 
 def test_schedule_needs_its_tool_and_one_action(run: Run) -> None:
