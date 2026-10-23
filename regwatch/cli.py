@@ -26,6 +26,7 @@ Each subcommand is one stage of the engine:
     premium   turn the premium features on or off, or show whether they are on
     llm       show or change the language model that writes generated copy
     newsletter build a send-ready newsletter from a period's changes (premium)
+    document  write a briefing, digest or report in your design (premium)
 
 Exit status: 0 success, 1 the register is invalid or nothing could be captured,
 2 a usage, configuration, network or file error, 3 changes were detected and
@@ -72,7 +73,7 @@ from regwatch.config import (
     load_config,
 )
 from regwatch.design import DesignError
-from regwatch.document import DISCLAIMER, Document, DocumentError, Section, make_disclaimer
+from regwatch.document import DISCLAIMER, Document, DocumentError
 from regwatch.export import build_records, records_csv
 from regwatch.fetch import Credential, Fetcher, FetchError
 from regwatch.focus import FocusError, FocusProfile, build_profile, load_catalogue
@@ -141,7 +142,13 @@ from regwatch.state import (
     update_register_file,
     write_tree,
 )
-from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
+from regwatch.synthesis import (
+    daily_brief,
+    digest_document,
+    report_document,
+    upcoming_obligations,
+    weekly_synthesis,
+)
 from regwatch.system import System
 from regwatch.webapi import Api
 from regwatch.workspace import (
@@ -149,6 +156,8 @@ from regwatch.workspace import (
     WorkspaceError,
     add_sources,
     chosen_ids,
+    document_bytes,
+    document_plan,
     fetcher_for,
     find_entries,
     focus_area_ids,
@@ -161,6 +170,7 @@ from regwatch.workspace import (
     premium_refusal,
     run_once,
     source_catalogue,
+    with_summary,
 )
 
 __all__ = ["main"]
@@ -597,35 +607,7 @@ def _cmd_render(ctx: _Context, args: argparse.Namespace) -> int:
 
 
 def _cmd_digest(ctx: _Context, args: argparse.Namespace) -> int:
-    register = ctx.register()
-    upcoming = upcoming_obligations(register.obligations, args.window, ctx.today)
-    names = {j.jurisdiction_id: j.name for j in register.jurisdictions}
-    sections = [
-        Section(
-            f"Effective Within {args.window} Days",
-            paragraphs=[] if upcoming else ["None."],
-            bullets=[
-                f"{o.effective_date}, {o.jurisdiction}: {o.title} ({o.status})" for o in upcoming
-            ],
-        )
-    ]
-    by_jurisdiction: dict[str, list[Any]] = {}
-    for o in register.obligations:
-        by_jurisdiction.setdefault(o.jurisdiction, []).append(o)
-    sections.append(Section("Register By Jurisdiction"))
-    for jid in sorted(by_jurisdiction):
-        bullets = [
-            f"{o.title}: {o.status}, {o.effective_date or 'no date'}"
-            for o in sorted(by_jurisdiction[jid], key=lambda o: o.title)
-        ]
-        sections.append(Section(names.get(jid, jid), level=3, bullets=bullets))
-    doc = Document(
-        "regwatch digest",
-        ctx.today.isoformat(),
-        "Register digest for analyst review",
-        sections,
-        make_disclaimer(register.portfolio.disclaimer),
-    )
+    doc = digest_document(ctx.register(), ctx.today, args.window)
     _emit(ctx, render_markdown(doc), args.out, "digest")
     return EXIT_OK
 
@@ -645,29 +627,7 @@ def _cmd_report(ctx: _Context, args: argparse.Namespace) -> int:
     missing = [r for r in results if r.status == "MISSING"]
     errors = [r for r in results if r.status == "ERROR"]
     upcoming = upcoming_obligations(register.obligations, args.window, ctx.today)
-
-    changes = Section("Source Changes To Review")
-    if flagged:
-        changes.bullets = [f"{r.status}: {r.source_id} ({r.origin})" for r in flagged]
-    else:
-        changes.paragraphs.append("No source changes since the last accepted state.")
-    if missing:
-        changes.paragraphs.append(
-            f"{len(missing)} source(s) have no snapshot; capture one or use --fetch."
-        )
-    changes.bullets += [f"ERROR: {r.source_id} ({r.detail})" for r in errors]
-    due = Section(
-        f"Obligations Effective Within {args.window} Days",
-        paragraphs=[] if upcoming else ["None."],
-        bullets=[f"{o.effective_date}, {o.jurisdiction}: {o.title} ({o.status})" for o in upcoming],
-    )
-    doc = Document(
-        "regwatch report",
-        ctx.today.isoformat(),
-        "Change and due alert",
-        [changes, due],
-        make_disclaimer(register.portfolio.disclaimer),
-    )
+    doc = report_document(register, results, ctx.today, args.window)
     _emit(ctx, render_markdown(doc), args.out, "report")
     if args.json:
         payload = {
@@ -1796,6 +1756,38 @@ def _say_dropped(label: str, dropped: Sequence[str]) -> None:
         _say(f"regwatch {label}: left out a generated passage: {reason}", file=sys.stderr)
 
 
+def _cmd_document(ctx: _Context, args: argparse.Namespace) -> int:
+    """Write a briefing, digest or report that follows the design specification."""
+    _require_premium(ctx, "Documents")
+    config = ctx.config
+    if args.generate and not config.llm.enabled:
+        raise CommandError("generated copy is off; turn it on with 'regwatch llm on'")
+    doc, facts = document_plan(config, ctx.today, args.kind, args.tier)
+    dropped: list[str] = []
+    if args.generate:
+        generated = generated_copy(
+            config,
+            facts,
+            f"the summary that opens a regulatory {args.kind}",
+            ctx.key_for,
+            ctx.poster,
+            ctx.clock,
+        )
+        doc = with_summary(doc, generated)
+        dropped = generated.dropped
+    data = document_bytes(config, doc, args.format)
+    stem = _output_stem(args.out, f"regwatch-{args.kind}-{ctx.today.isoformat()}")
+    path = stem.with_name(f"{stem.name}.{args.format}")
+    ctx.write_bytes(path, data)
+    _say(f"wrote {path}")
+    _say_dropped("document", dropped)
+    _say(f"regwatch document: {doc.title}")
+    if args.format == "html":
+        _say("Open it in a browser and print it to save a PDF.")
+    _say(NOTICE)
+    return EXIT_OK
+
+
 def _cmd_newsletter(ctx: _Context, args: argparse.Namespace) -> int:
     """Write a send-ready newsletter as .eml, .html and .txt. Regwatch never sends it."""
     _require_premium(ctx, "Newsletters")
@@ -2075,6 +2067,17 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
     )
     p.add_argument("--generate", action="store_true", help="have the language model write the copy")
     p.add_argument("--out", help="file stem for the three files; default in the current folder")
+
+    p = add("document", _cmd_document, "write a briefing, digest or report in your design")
+    p.add_argument("--kind", choices=["briefing", "digest", "report"], default="briefing")
+    p.add_argument(
+        "--tier", choices=list(TIERS), default="v2", help="detail level of a briefing (default: v2)"
+    )
+    p.add_argument("--format", choices=["html", "docx", "md"], default="html")
+    p.add_argument(
+        "--generate", action="store_true", help="open with a summary the language model writes"
+    )
+    p.add_argument("--out", help="file stem; the format's suffix is added")
 
     p = add("llm", _cmd_llm, "show or change the language model that writes generated copy")
     p.add_argument("action", choices=["status", "on", "off", "use"])

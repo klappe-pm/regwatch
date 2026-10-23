@@ -12,7 +12,7 @@ Lessons that take you through a task from start to finish. [Getting Started](tut
 
 Recipes for a specific goal, for someone who already knows the basics.
 
-- Use: [Install](how-to-guides/install.md), [Set Your Focus Areas](how-to-guides/set-your-focus-areas.md), [Add a Source](how-to-guides/add-a-source.md), [Keep API Keys](how-to-guides/keep-api-keys.md), [Schedule Runs](how-to-guides/schedule-runs.md), [Review Flagged Changes](how-to-guides/review-flagged-changes.md), [Use the Web App](how-to-guides/use-the-web-app.md), [Send a Newsletter](how-to-guides/send-a-newsletter.md), [Turn On Generated Copy](how-to-guides/turn-on-generated-copy.md), [Troubleshooting](how-to-guides/troubleshooting.md).
+- Use: [Install](how-to-guides/install.md), [Set Your Focus Areas](how-to-guides/set-your-focus-areas.md), [Add a Source](how-to-guides/add-a-source.md), [Keep API Keys](how-to-guides/keep-api-keys.md), [Schedule Runs](how-to-guides/schedule-runs.md), [Review Flagged Changes](how-to-guides/review-flagged-changes.md), [Use the Web App](how-to-guides/use-the-web-app.md), [Send a Newsletter](how-to-guides/send-a-newsletter.md), [Build Documents in Your Design](how-to-guides/build-documents-in-your-design.md), [Turn On Generated Copy](how-to-guides/turn-on-generated-copy.md), [Troubleshooting](how-to-guides/troubleshooting.md).
 - Contribute: [Run the Tests](how-to-guides/run-the-tests.md), [Add a Source Mechanism](how-to-guides/add-a-source-mechanism.md), [Change the Web App](how-to-guides/change-the-web-app.md), [Cut a Release](how-to-guides/cut-a-release.md).
 
 Index: [How-To Guides](how-to-guides/README.md).

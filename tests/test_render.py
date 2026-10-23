@@ -133,7 +133,9 @@ def test_docx_is_a_valid_package() -> None:
         assert sorted(archive.namelist()) == [
             "[Content_Types].xml",
             "_rels/.rels",
+            "word/_rels/document.xml.rels",
             "word/document.xml",
+            "word/styles.xml",
         ]
         for name in archive.namelist():
             ET.fromstring(archive.read(name))

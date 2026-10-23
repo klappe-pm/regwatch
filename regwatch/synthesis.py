@@ -1,7 +1,8 @@
 """Turn register rows, check results and impacts into document models.
 
 Two cadences are produced. The daily brief is short and driven by what changed.
-The weekly synthesis maps the whole register onto the portfolio. Both are
+The weekly synthesis maps the whole register onto the portfolio. The digest lists
+the register by jurisdiction and the report is a change and due alert. All are
 deterministic: they assemble text from structured data and call no external
 service, so the same inputs always give the same document.
 """
@@ -16,7 +17,13 @@ from regwatch.document import Document, Section, make_disclaimer
 from regwatch.impact import SEVERITIES, SEVERITY_RANK, Finding, Impact
 from regwatch.register import Obligation, Register, parse_date
 
-__all__ = ["daily_brief", "upcoming_obligations", "weekly_synthesis"]
+__all__ = [
+    "daily_brief",
+    "digest_document",
+    "report_document",
+    "upcoming_obligations",
+    "weekly_synthesis",
+]
 
 
 def upcoming_obligations(
@@ -234,4 +241,68 @@ def weekly_synthesis(
         generated=today.isoformat(),
         sections=sections,
         disclaimer=make_disclaimer(register.portfolio.disclaimer),
+    )
+
+
+def digest_document(register: Register, today: dt.date, window: int) -> Document:
+    """The register digest: obligations effective within ``window`` days, then every
+    obligation grouped by jurisdiction."""
+    upcoming = upcoming_obligations(register.obligations, window, today)
+    names = {j.jurisdiction_id: j.name for j in register.jurisdictions}
+    sections = [
+        Section(
+            f"Effective Within {window} Days",
+            paragraphs=[] if upcoming else ["None."],
+            bullets=[_due_line(o) for o in upcoming],
+        )
+    ]
+    by_jurisdiction: dict[str, list[Obligation]] = {}
+    for obligation in register.obligations:
+        by_jurisdiction.setdefault(obligation.jurisdiction, []).append(obligation)
+    sections.append(Section("Register By Jurisdiction"))
+    for jid in sorted(by_jurisdiction):
+        bullets = [
+            f"{o.title}: {o.status}, {o.effective_date or 'no date'}"
+            for o in sorted(by_jurisdiction[jid], key=lambda o: o.title)
+        ]
+        sections.append(Section(names.get(jid, jid), level=3, bullets=bullets))
+    return Document(
+        "regwatch digest",
+        today.isoformat(),
+        "Register digest for analyst review",
+        sections,
+        make_disclaimer(register.portfolio.disclaimer),
+    )
+
+
+def report_document(
+    register: Register, results: Iterable[SourceResult], today: dt.date, window: int
+) -> Document:
+    """The change and due alert: source changes to review and obligations coming due."""
+    result_list = list(results)
+    flagged = [r for r in result_list if r.flagged]
+    missing = [r for r in result_list if r.status == "MISSING"]
+    errors = [r for r in result_list if r.status == "ERROR"]
+    upcoming = upcoming_obligations(register.obligations, window, today)
+    changes = Section("Source Changes To Review")
+    if flagged:
+        changes.bullets = [f"{r.status}: {r.source_id} ({r.origin})" for r in flagged]
+    else:
+        changes.paragraphs.append("No source changes since the last accepted state.")
+    if missing:
+        changes.paragraphs.append(
+            f"{len(missing)} source(s) have no snapshot; capture one or use --fetch."
+        )
+    changes.bullets += [f"ERROR: {r.source_id} ({r.detail})" for r in errors]
+    due = Section(
+        f"Obligations Effective Within {window} Days",
+        paragraphs=[] if upcoming else ["None."],
+        bullets=[_due_line(o) for o in upcoming],
+    )
+    return Document(
+        "regwatch report",
+        today.isoformat(),
+        "Change and due alert",
+        [changes, due],
+        make_disclaimer(register.portfolio.disclaimer),
     )

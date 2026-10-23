@@ -207,6 +207,8 @@ Deterministic briefings. They call no external service.
 - `daily_brief(register, results, impacts, today) -> Document`: what changed, what is effective within 30 days, and the act-now and high candidates. Candidates with `in_focus` false are listed under `Flagged Outside Your Focus Areas`.
 - `weekly_synthesis(register, impacts, findings, today) -> Document`: the full analysis of the register against the portfolio. Candidates with `in_focus` false are listed under `Candidate Impact Outside Your Focus Areas`.
 - `upcoming_obligations(obligations, days, today) -> list[Obligation]`: obligations effective from today to `days` days ahead, soonest first.
+- `digest_document(register, today, window) -> Document`: the register digest that `regwatch digest` prints.
+- `report_document(register, results, today, window) -> Document`: the change and due alert that `regwatch report` prints.
 
 ## `briefing`
 
@@ -233,8 +235,11 @@ Delivery formats. HTML and Word output escape all text.
 - `render_webpost(doc: Document, tags: Sequence[str]) -> str`: Markdown with YAML front matter and `draft: true`. Raises `ValueError` for an invalid tag.
 - `render_newsletter_html(doc: Document) -> str`: a self-contained HTML email.
 - `render_newsletter_text(doc: Document) -> str`: the plain text alternative.
-- `render_document_xml(doc: Document) -> str`: the `word/document.xml` part.
-- `docx_bytes(doc: Document) -> bytes`: the bytes of a `.docx` file.
+- `passage_html(passage, tag_color="#4b5866") -> str`: one generated passage with inline styles, for email.
+- `render_document_html(doc, design=None, logo=None) -> str`: a standalone HTML page in the design, with a print stylesheet that sets the page size, and the logo inline.
+- `render_styles_xml(design=None) -> str`: the `word/styles.xml` part with the design's font and colours.
+- `render_document_xml(doc, design=None, logo=None) -> str`: the `word/document.xml` part, with paragraphs in named styles, the page size, header and footer references and a PNG logo.
+- `docx_bytes(doc, design=None, logo=None) -> bytes`: the bytes of a `.docx` file with its styles part, and a header, a footer and a PNG logo when the design has them.
 
 ## `export`
 
@@ -306,6 +311,9 @@ The operations `regwatch sources`, `keys` and `run` share with the web app. Noth
 - `logo_for(config: Config) -> Logo | None`: the checked logo, under the project folder or an allowed file root.
 - `newsletter_plan(config, today, since_days) -> tuple[Register, NewsletterContent]`: the register and the period's items, with sources checked against their snapshots. The period is 1 to 366 days.
 - `newsletter_files(config, register, content, now, generated=None) -> NewsletterFiles`: the newsletter as `subject`, `html` (with the logo inline), `text` and `eml` bytes, with `generated` and the `dropped` reasons.
+- `document_plan(config, today, kind, tier="v2") -> tuple[Document, list[Fact]]`: the `briefing`, `digest` or `report` with the design's title format, and the facts generated copy may use.
+- `with_summary(doc, generated) -> Document`: the document opened by a Summary section of every kept passage.
+- `document_bytes(config, doc, fmt) -> bytes`: the document as `html`, `docx` or `md`, in the design with its logo.
 - `WorkspaceError`: a request the user can fix. It is a `ValueError`.
 
 ## `webapi`

@@ -4,7 +4,8 @@
 app's JSON interface answers in JSON, but both do the same work through these
 functions: read the source catalogue, add catalogue sources to the sources file,
 find the sources that need a key, run a capture and a check with a run record,
-read the state of the schedule, write generated copy and build a newsletter.
+read the state of the schedule, write generated copy, and build a newsletter or a
+designed document.
 Nothing here prints or asks a question.
 """
 
@@ -18,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from regwatch.briefing import TIERS, build_briefing
 from regwatch.catalogue import (
     CatalogueEntry,
     MergeResult,
@@ -27,11 +29,25 @@ from regwatch.catalogue import (
 from regwatch.check import CaptureResult, SourceResult, capture_sources, check_sources
 from regwatch.config import Config, FetchSettings
 from regwatch.design import Logo, load_logo
+from regwatch.document import Document, Section
 from regwatch.fetch import Fetcher, SafeFetcher
 from regwatch.focus import build_profile, load_catalogue
 from regwatch.impact import assess_impacts
 from regwatch.keys import PROVIDER_KEYS, KeyStore, KeyStoreError
-from regwatch.llm import Fact, GenerationResult, Poster, generate, llm_fetcher, provider_for
+from regwatch.llm import (
+    SECTIONS,
+    Fact,
+    GenerationResult,
+    Poster,
+    candidate_facts,
+    change_facts,
+    event_facts,
+    generate,
+    impact_facts,
+    llm_fetcher,
+    obligation_facts,
+    provider_for,
+)
 from regwatch.newsletter import (
     LOGO_CID,
     NewsletterContent,
@@ -42,6 +58,7 @@ from regwatch.newsletter import (
     render_email_text,
 )
 from regwatch.register import Register, load_register, read_json_list
+from regwatch.render import docx_bytes, render_document_html, render_markdown
 from regwatch.schedule import CRON_TIMES, INTERVAL_SECONDS, installed_block, plist_path
 from regwatch.state import (
     MAX_STATE_BYTES,
@@ -52,9 +69,12 @@ from regwatch.state import (
     update_register_file,
     write_run_record,
 )
+from regwatch.synthesis import digest_document, report_document, upcoming_obligations
 from regwatch.system import System
 
 __all__ = [
+    "DOCUMENT_FORMATS",
+    "DOCUMENT_KINDS",
     "RUN_CHANGES",
     "RUN_OK",
     "RUN_UNVERIFIED",
@@ -65,6 +85,8 @@ __all__ = [
     "WorkspaceError",
     "add_sources",
     "chosen_ids",
+    "document_bytes",
+    "document_plan",
     "fetcher_for",
     "find_entries",
     "generated_copy",
@@ -80,6 +102,7 @@ __all__ = [
     "run_once",
     "schedule_state",
     "source_catalogue",
+    "with_summary",
 ]
 
 RUN_OK = 0
@@ -529,3 +552,86 @@ def newsletter_files(
         generated=generated is not None and generated.count > 0,
         dropped=tuple(generated.dropped) if generated is not None else (),
     )
+
+
+# --- documents -------------------------------------------------------------------------
+
+DOCUMENT_KINDS = ("briefing", "digest", "report")
+DOCUMENT_FORMATS = {
+    "html": ("text/html; charset=utf-8", "html"),
+    "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
+    "md": ("text/markdown; charset=utf-8", "md"),
+}
+DOCUMENT_WINDOW_DAYS = 365
+DOCUMENT_FACT_LIMIT = 40
+
+
+def document_plan(
+    config: Config, today: dt.date, kind: str, tier: str = "v2"
+) -> tuple[Document, list[Fact]]:
+    """The document of ``kind`` with the design's title format, and the facts behind it.
+
+    ``briefing`` is the tiered briefing at ``tier``, ``digest`` the register digest
+    and ``report`` the change and due alert, each over a year. Sources are checked
+    against their stored snapshots and never fetched.
+    """
+    if kind not in DOCUMENT_KINDS:
+        raise WorkspaceError(f"the kind must be one of {', '.join(DOCUMENT_KINDS)}")
+    if tier not in TIERS:
+        raise WorkspaceError(f"the tier must be one of {', '.join(TIERS)}")
+    register = load_register(config)
+    upcoming = upcoming_obligations(register.obligations, DOCUMENT_WINDOW_DAYS, today)
+    limit = DOCUMENT_FACT_LIMIT
+    if kind == "briefing":
+        focus = build_profile(config.profile)
+        impacts = assess_impacts(register, today, focus)
+        candidates = read_candidates(config)
+        doc = build_briefing(
+            register, impacts, today, tier=tier, candidates=candidates, focus=focus
+        )
+        events = sorted(register.changelog, key=lambda e: e.date, reverse=True)[:8]
+        urgent = [i for i in impacts if i.severity in ("act-now", "high")][:10]
+        facts = [
+            *event_facts(events),
+            *candidate_facts(candidates[:8]),
+            *impact_facts(urgent),
+            *obligation_facts(upcoming[:10]),
+        ]
+    elif kind == "digest":
+        doc = digest_document(register, today, DOCUMENT_WINDOW_DAYS)
+        facts = obligation_facts(upcoming[:limit])
+    else:
+        results = check_sources(register.sources, load_seen(config.seen_path), config.snapshots_dir)
+        names = {s.source_id: s.name for s in register.sources}
+        doc = report_document(register, results, today, DOCUMENT_WINDOW_DAYS)
+        facts = [*change_facts(results, names)[:limit], *obligation_facts(upcoming[:limit])]
+    doc.title = config.document.title(doc.title, doc.generated)
+    return doc, facts
+
+
+def with_summary(doc: Document, generated: GenerationResult) -> Document:
+    """``doc`` opened by a Summary section that holds every kept generated passage.
+
+    The passages come in the order of their sections, the opening first. With no
+    kept passage the document is returned as it was.
+    """
+    passages = [passage for name in SECTIONS for passage in generated.section(name)]
+    if passages:
+        doc.sections.insert(0, Section("Summary", generated=passages))
+    return doc
+
+
+def document_bytes(config: Config, doc: Document, fmt: str) -> bytes:
+    """``doc`` in ``fmt`` (``html``, ``docx`` or ``md``) with the design and its logo.
+
+    Raises WorkspaceError for an unknown format and DesignError when the logo cannot
+    be used.
+    """
+    if fmt not in DOCUMENT_FORMATS:
+        raise WorkspaceError(f"the format must be one of {', '.join(DOCUMENT_FORMATS)}")
+    if fmt == "md":
+        return render_markdown(doc).encode("utf-8")
+    logo = logo_for(config)
+    if fmt == "html":
+        return render_document_html(doc, config.document, logo).encode("utf-8")
+    return docx_bytes(doc, config.document, logo)

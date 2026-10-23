@@ -49,6 +49,7 @@ Commands read the register. Only `sources add` and `sources remove` write it, an
 | `premium on`, `premium off` | one line in `regwatch.toml`: `[premium] enabled` |
 | `llm on`, `llm off`, `llm use` | lines in the `[llm]` table of `regwatch.toml` |
 | `newsletter` | `<stem>.eml`, `<stem>.html` and `<stem>.txt` at the stem you name, or in the current folder |
+| `document` | `<stem>.<format>` at the stem you name, or in the current folder |
 | any command that writes generated copy | one line per language model call in `llm-calls.jsonl` in the state directory |
 | `ui` | through its Settings page only, one line in `regwatch.toml`: `[profile] focus_areas` or `[premium] enabled` |
 
@@ -324,6 +325,24 @@ Writes one flat record per obligation, joined with its detail record when there 
 | `--json PATH` | also write the records as JSON |
 
 Every CSV field is quoted. A cell, or any part of a cell after a `;`, a `,`, a tab or a line break, that begins with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed (also after leading whitespace, and in the fullwidth forms) gets a leading apostrophe in the CSV so a spreadsheet does not run it as a formula; the JSON is unchanged. The columns are `obligation_id`, `jurisdiction`, `status`, `effective_date`, `topics`, `summary`, `impacts`, `implications`, `action`, `source_url` and `citations`.
+
+## `document`
+
+Writes a briefing, a digest or a report that follows the `[document]` design specification. Documents are a premium feature: with premium off it exits 2 with a message that names `regwatch premium on`. See [build documents in your design](../how-to-guides/build-documents-in-your-design.md).
+
+| option | meaning |
+| --- | --- |
+| `--kind KIND` | `briefing` (the tiered briefing, the default), `digest` (the register by jurisdiction) or `report` (the change and due alert); digests and reports look a year ahead |
+| `--tier TIER` | with `briefing`, `v1`, `v2` (the default) or `v3` |
+| `--format FORMAT` | `html` (the default), `docx` or `md` |
+| `--generate` | open the document with a Summary section the language model writes; needs `regwatch llm on` and exits 2 otherwise |
+| `--out PATH` | the file stem; the format's suffix is added, and a known suffix you give is replaced. Default `regwatch-<kind>-<date>` in the current folder |
+
+The title follows `title_format`. HTML is one standalone page with the design's colours, font, header, footer and logo (PNG or SVG, inline), and a print stylesheet with the page size, so printing it from a browser saves a PDF. Word has a styles part with the font and colours, a header and a footer part when the design has them, the page size, and a PNG logo; an SVG logo is left out of Word. Markdown takes the title format only. Sources are checked against their snapshots and never fetched. With `--generate` every kept passage is labelled Generated and followed by the facts it cites, and each dropped passage is reported on standard error. A logo that is refused exits 2 and nothing is written.
+
+```text
+regwatch document --kind report --format docx --out weekly-report
+```
 
 ## `newsletter`
 
