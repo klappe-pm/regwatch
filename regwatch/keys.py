@@ -20,28 +20,67 @@ log line written here holds a key.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from regwatch.system import CommandResult, System
 
 __all__ = [
+    "KEY_ENV_RE",
+    "KEY_ENV_RULE",
     "MAX_KEY_LENGTH",
     "SERVICE",
     "KeyStatus",
     "KeyStore",
     "KeyStoreError",
     "check_key",
+    "shared_key_errors",
 ]
 
 SERVICE = "regwatch"
 MAX_KEY_LENGTH = 4096
-KEY_ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+# A key variable must be in regwatch's own namespace, so a source cannot name an
+# unrelated variable (a cloud credential, a deploy token) and have its value sent.
+KEY_ENV_RE = re.compile(r"^REGWATCH_KEY_[A-Z0-9_]{1,51}$")
+KEY_ENV_RULE = "REGWATCH_KEY_ followed by 1 to 51 upper case letters, digits and underscores"
 # Quotes and the backslash would need escaping inside the `security -i` command line.
 _REFUSED = frozenset("\"'\\")
 
 
 class KeyStoreError(Exception):
     """A key could not be stored, read or removed. The message never holds the key."""
+
+
+def _host(url: str) -> str:
+    """The lower case host and port of ``url``, as the key would be sent to it."""
+    try:
+        parts = urlsplit(url.strip())
+        port = parts.port
+    except ValueError:
+        return url.strip().lower()
+    host = (parts.hostname or "").lower()
+    return f"{host}:{port}" if port is not None else host
+
+
+def shared_key_errors(sources: Iterable[tuple[str, str, str]]) -> list[str]:
+    """Messages for key variables that sources at different hosts share.
+
+    ``sources`` holds ``(source_id, key_env, url)`` for every keyed source. One key
+    variable names one key, and a key is meant for one service, so two sources that
+    name the same variable must send it to the same host and port. Otherwise a
+    source could borrow a key the user stored for another service.
+    """
+    hosts: dict[str, dict[str, str]] = {}
+    for source_id, key_env, url in sources:
+        if key_env:
+            hosts.setdefault(key_env, {}).setdefault(_host(url), source_id)
+    return [
+        f"the key variable {key_env} is shared by sources at different hosts "
+        f"({', '.join(sorted(by_host.values()))}); each key variable may serve one host"
+        for key_env, by_host in sorted(hosts.items())
+        if len(by_host) > 1
+    ]
 
 
 @dataclass(frozen=True)
@@ -115,10 +154,7 @@ class KeyStore:
     @staticmethod
     def _check_env(key_env: str) -> str:
         if not KEY_ENV_RE.fullmatch(key_env):
-            raise KeyStoreError(
-                f"'{key_env}' is not a key variable name: an upper case letter, then up to 63 "
-                "upper case letters, digits and underscores"
-            )
+            raise KeyStoreError(f"'{key_env}' is not a key variable name: {KEY_ENV_RULE}")
         return key_env
 
     def _run(self, args: list[str], stdin: str | None = None) -> CommandResult:

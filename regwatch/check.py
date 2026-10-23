@@ -19,6 +19,7 @@ from pathlib import Path
 
 from regwatch.extract import ExtractError, extract_signal, signal_hash
 from regwatch.fetch import Credential, Fetcher, FetchError
+from regwatch.keys import KEY_ENV_RE, KEY_ENV_RULE
 from regwatch.register import Source
 from regwatch.state import SeenState, read_snapshot, write_snapshot
 
@@ -81,6 +82,11 @@ def fetch_source(source: Source, fetcher: Fetcher, key_for: KeyLookup | None = N
     """
     if not source.auth:
         return fetcher.fetch(source.url)
+    if not KEY_ENV_RE.fullmatch(source.key_env):
+        raise FetchError(
+            f"the key variable of {source.source_id} must be {KEY_ENV_RULE}; "
+            "no key was read or sent"
+        )
     value = key_for(source.key_env) if key_for is not None else None
     if not value:
         raise FetchError(

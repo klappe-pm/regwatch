@@ -45,7 +45,7 @@ Keys are kept in the operating system keychain, never in a configuration file, a
 
 - macOS: the login keychain, through the `security` command, under the service name `regwatch` and the source's `key_env` as the account.
 - Linux: the Secret Service, through the `secret-tool` command from libsecret.
-- An environment variable named by the source's `key_env` overrides the keychain, so a scheduled job or a container can supply the key without a keychain.
+- An environment variable named by the source's `key_env` overrides the keychain, so a scheduled job or a container can supply the key without a keychain. A `key_env` must start with `REGWATCH_KEY_`, so a source cannot name an unrelated variable, and sources that share one must share a host.
 - `regwatch keys set SOURCE_ID` prompts for the key without echoing it and stores it. `regwatch keys list` shows which keys are stored, never their values. `regwatch keys remove SOURCE_ID` deletes one. The web app's key page calls the same functions and only ever receives whether a key is present.
 
 Using the system commands keeps Regwatch free of runtime dependencies. A key is added to the request only for its own source, only over `https`, and only in the place its `auth` entry names; a redirect to another host drops it. A key is never written to an error message: the fetch client reports the source and the failure, not the URL with its query.

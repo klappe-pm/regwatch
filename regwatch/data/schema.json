@@ -31,7 +31,7 @@
     "cadence": {"required": true},
     "notes": {"required": false},
     "auth": {"required": false, "pattern": "^(query|header):[A-Za-z0-9_-]{1,64}$"},
-    "key_env": {"required": false, "pattern": "^[A-Z][A-Z0-9_]{0,63}$"}
+    "key_env": {"required": false, "pattern": "^REGWATCH_KEY_[A-Z0-9_]{1,51}$"}
   },
   "category_fields": {
     "category_id": {"required": true, "unique": true, "pattern": "^[a-z0-9-]+$"},

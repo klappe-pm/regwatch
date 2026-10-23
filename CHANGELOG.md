@@ -56,6 +56,7 @@ All notable changes to this project are documented in this file. The format foll
 - `regwatch init` looks again right before it writes and creates each file exclusively, so a file or link that appears while it asks is never replaced or followed. It also opens the project folder and `register/` without following a link before it writes anything and creates every file through those open folders (a replacement with `--force` is a temporary file renamed in the same folder), so a folder swapped for a link at the last moment cannot redirect a write.
 - A candidates file that is deeply nested or larger than 20,000,000 bytes is a clean error from `brief` instead of a crash.
 - Configuration: a hand-written `allowed_file_roots` entry of `/`, the home directory or any parent of the home directory is refused, as it already was in `regwatch init`, which now refuses a parent of the home directory too.
+- Key variables: a source's `key_env` must match `REGWATCH_KEY_` followed by 1 to 51 upper case letters, digits and underscores, in the catalogue, an extra catalogue file, the sources file and at fetch time, so a source can no longer name an unrelated environment variable (a cloud credential or a deploy token) and have its value sent. Two sources that name the same key variable must send it to the same host and port; the catalogue and the sources file refuse a variable shared across hosts.
 
 ### Fixed
 

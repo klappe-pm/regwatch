@@ -24,6 +24,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from regwatch.config import Config
+from regwatch.keys import shared_key_errors
 
 __all__ = [
     "Category",
@@ -573,18 +574,25 @@ def _validate_raw(raw: _Raw) -> list[str]:
 def _check_keyed_sources(sources: list[JsonObject]) -> list[str]:
     """A keyed source names both where its key goes and the variable that can supply it.
 
-    Its key is sent only over https, so its address must be an https URL.
+    Its key is sent only over https, so its address must be an https URL, and a
+    key variable shared by two sources must serve one host, so one source cannot
+    borrow a key the user stored for another service. The variable's name is
+    checked against the ``REGWATCH_KEY_`` pattern in the schema.
     """
     errors: list[str] = []
+    keyed: list[tuple[str, str, str]] = []
     for index, source in enumerate(sources, start=1):
         prefix = f"sources entry {index} ({source.get('source_id', '?') or '?'})"
         auth = str(source.get("auth", "") or "").strip()
         key_env = str(source.get("key_env", "") or "").strip()
         if bool(auth) != bool(key_env):
             errors.append(f"{prefix}: fields 'auth' and 'key_env' must be given together")
-        url = str(source.get("url", "") or "").strip().lower()
-        if auth and not url.startswith("https:"):
+        url = str(source.get("url", "") or "").strip()
+        if auth and not url.lower().startswith("https:"):
             errors.append(f"{prefix}: a source with 'auth' must have an https URL")
+        if key_env:
+            keyed.append((str(source.get("source_id", "") or "?"), key_env, url))
+    errors += [f"sources file: {message}" for message in shared_key_errors(keyed)]
     return errors
 
 

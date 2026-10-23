@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from regwatch.fetch import FetchError, check_url
+from regwatch.keys import KEY_ENV_RE, KEY_ENV_RULE, shared_key_errors
 
 __all__ = [
     "ACCESS",
@@ -122,7 +123,6 @@ AUTH_TYPES = ("query", "header")
 
 SOURCE_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 JURISDICTION_RE = re.compile(r"^(?:intl|eu|[a-z]{2}(?:-[a-z0-9]{1,3})?)$")
-KEY_ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 AUTH_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 LANGUAGE_RE = re.compile(r"^[a-z]{2}$")
 _INVISIBLE = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})
@@ -266,8 +266,9 @@ def entry_from_dict(data: object, focus_ids: Iterable[str], where: str = "entry"
                 _pattern(raw_auth["name"], "auth.name", AUTH_NAME_RE, errors),
             )
     key_env = data["key_env"]
-    if key_env is not None:
-        key_env = _pattern(key_env, "key_env", KEY_ENV_RE, errors)
+    if key_env is not None and (not isinstance(key_env, str) or not KEY_ENV_RE.fullmatch(key_env)):
+        errors.append(f"'key_env' must be {KEY_ENV_RULE}")
+        key_env = ""
     signup_url = data["signup_url"]
     if signup_url is not None:
         signup_url = _https(signup_url, "signup_url", errors)
@@ -362,9 +363,16 @@ def parse_source_catalogue(
             continue
         seen.add(entry.source_id)
         entries.append(entry)
+    errors += [f"{label}: {message}" for message in _key_conflicts(entries)]
     if errors:
         raise CatalogueError("; ".join(errors))
     return tuple(entries)
+
+
+def _key_conflicts(entries: Iterable[CatalogueEntry]) -> list[str]:
+    return shared_key_errors(
+        (entry.source_id, entry.key_env, entry.url) for entry in entries if entry.key_env
+    )
 
 
 def _read(path: Path, label: str) -> object:
@@ -400,6 +408,9 @@ def load_source_catalogue(
             raise CatalogueError(
                 f"{label} repeats ids of the shipped catalogue: {', '.join(clashes)}"
             )
+        conflicts = _key_conflicts([*entries, *added])
+        if conflicts:
+            raise CatalogueError(f"{label}: {'; '.join(conflicts)}")
         entries += added
     return tuple(entries)
 

@@ -46,7 +46,7 @@ Every entry has exactly these keys, in any order. A missing key or an unknown ke
 | `homepage` | an `https` URL under the same checks |
 | `access` | `free`, `free-key` or `paid` |
 | `auth` | `null`, or an object with exactly `type` (`query` or `header`) and `name` (1 to 64 letters, digits, hyphens and underscores) |
-| `key_env` | `null`, or an environment variable name: an upper case letter, then up to 63 upper case letters, digits and underscores |
+| `key_env` | `null`, or an environment variable name in regwatch's namespace: `REGWATCH_KEY_` followed by 1 to 51 upper case letters, digits and underscores |
 | `signup_url` | `null`, or an `https` URL under the same checks |
 | `focus_areas` | a list of focus area ids from the focus catalogue, with no repeats; an empty list means every area |
 | `language` | a two letter ISO 639-1 code such as `en` |
@@ -61,10 +61,11 @@ Rules across fields:
 - `auth` and `key_env` are both set or both `null`.
 - A `free-key` entry has `auth`, `key_env` and `signup_url`.
 - A `free` entry has no `auth`.
+- Entries that name the same `key_env` have `url` values with the same host and port, so a key stored for one service is never sent to another.
 
 ## The Extra Catalogue
 
-`[catalogue] extra` in `regwatch.toml` names a file of your own in the same format, for sources the shipped catalogue lacks. Its entries follow every rule above, and an id that the shipped file already uses is refused. Its entries are listed after the shipped ones, and every `sources` action reads both. The focus ids an entry may name are those of the shipped focus catalogue and of the catalogue named in `[profile] catalogue`. The file is protected like the register: no output path may replace it.
+`[catalogue] extra` in `regwatch.toml` names a file of your own in the same format, for sources the shipped catalogue lacks. Its entries follow every rule above, an id that the shipped file already uses is refused, and so is a `key_env` that a shipped entry uses for a different host. Its entries are listed after the shipped ones, and every `sources` action reads both. The focus ids an entry may name are those of the shipped focus catalogue and of the catalogue named in `[profile] catalogue`. The file is protected like the register: no output path may replace it.
 
 ## Search
 

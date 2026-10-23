@@ -92,8 +92,9 @@ Keys in the system keychain. See the [security model](../explanation/security-mo
 - `KeyStore(system=None)`: `set(key_env, value)` stores a key and reads it back to confirm it, `get(key_env)` returns the environment variable when set and otherwise the stored key, `stored(key_env)` reads the keychain only, `status(key_env)` returns a `KeyStatus`, and `delete(key_env)` returns true when a key was removed. `backend` is `macos`, `linux` or None, and `backend_label` names it in words.
 - `KeyStatus`: frozen dataclass with `key_env` and `source` (`environment`, `keychain`, `missing` or `unavailable`), and the property `present`.
 - `check_key(value: str) -> str`: return a usable key or raise `KeyStoreError` without repeating it.
-- `KeyStoreError`: a key could not be stored, read or removed; the message never holds a key.
-- Constants: `SERVICE` (`regwatch`) and `MAX_KEY_LENGTH` (4096).
+- `KeyStoreError`: a key could not be stored, read or removed; the message never holds a key. Every method raises it for a `key_env` that does not match `KEY_ENV_RE`.
+- `shared_key_errors(sources) -> list[str]`: messages for key variables that sources at different hosts share; `sources` holds `(source_id, key_env, url)` tuples.
+- Constants: `SERVICE` (`regwatch`), `MAX_KEY_LENGTH` (4096), `KEY_ENV_RE` (`^REGWATCH_KEY_[A-Z0-9_]{1,51}$`) and `KEY_ENV_RULE`, the same rule in words.
 
 ## `schedule`
 
@@ -131,7 +132,7 @@ Snapshots, the last-seen state and the only write path.
 Change detection.
 
 - `SHRINK_RATIO: float` (0.5) and `MIN_PRIOR_LENGTH: int` (20): a signal shorter than `SHRINK_RATIO` times an accepted signal of at least `MIN_PRIOR_LENGTH` characters is `SUSPICIOUS`.
-- `fetch_source(source, fetcher, key_for=None) -> str`: fetch one source, adding its key when its entry has `auth`. `key_for` maps a `key_env` name to a key or None; a keyed source without a key raises `FetchError` naming the variable and `regwatch keys set`.
+- `fetch_source(source, fetcher, key_for=None) -> str`: fetch one source, adding its key when its entry has `auth`. `key_for` maps a `key_env` name to a key or None; a keyed source without a key raises `FetchError` naming the variable and `regwatch keys set`, and a keyed source whose `key_env` does not start with `REGWATCH_KEY_` raises `FetchError` before `key_for` is called.
 - `KeyLookup`: the type of `key_for`, `Callable[[str], str | None]`.
 - `check_sources(sources, seen, snapshots_dir, fetcher=None, key_for=None) -> list[SourceResult]`: compare each source with its accepted hash. With a `fetcher` the content is fetched now, keyed sources with their key from `key_for`; without one the snapshot is read. A fetch or parse failure becomes an `ERROR` result, not an exception. An empty or sharply shorter signal is `SUSPICIOUS`.
 - `accept_results(seen, results, now, accept_suspicious=False) -> SeenState`: a copy of `seen` with the hash and signal length from `results` recorded. `SUSPICIOUS` results are skipped unless `accept_suspicious` is true. It does not write anything.
