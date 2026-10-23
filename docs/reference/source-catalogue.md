@@ -71,11 +71,12 @@ Rules across fields:
 
 One function, `rank` in `regwatch/catalogue.py`, orders search results everywhere: `regwatch sources search`, the search in `regwatch init` and the search box planned for the web app.
 
-- The match ignores case and looks at the id, name, publisher, jurisdiction, region, kind, category and description.
-- An entry whose id or jurisdiction equals the whole query comes first.
-- The query is split into words of letters and digits, and every word must match somewhere in the entry.
-- A word scores 3 when it equals a whole word of a field, 2 when it starts a word, and 1 when it appears inside a word; the scores of the query words are added, and the highest total comes first.
-- Equal scores keep catalogue order, and an empty query returns every entry in catalogue order.
+- The match ignores case and looks at the name, id, publisher, jurisdiction, kind, access label (`Free`, `Free Key` or `Paid`), region, category, focus areas and description. The id, jurisdiction, kind, region, category and focus areas are matched by their parts, so `us-ca` is the words `us` and `ca`. The publisher also matches its initials, so `fda` matches U.S. Food and Drug Administration and `efsa` matches European Food Safety Authority.
+- British and American spellings are treated alike in both directions: `aluminium` and `aluminum`, `labelling` and `labeling`, `flavour` and `flavor`, `colour` and `color`, and the `-ise` forms of `organise`, `authorise`, `harmonise` and `standardise`, among others listed as `SPELLINGS` in `regwatch/catalogue.py`.
+- The query is split into words of letters and digits, and every word must match somewhere in the entry. A word of one or two letters, such as `ca` or `eu`, matches only a whole word or a part of an id or code, so `ca` finds California and Canada sources but not every entry that mentions cancer.
+- An entry whose id or jurisdiction equals the whole query comes first, and among those the official sources (regulators, legislatures, gazettes and courts) come first, then recall feeds, lobbying registers, data portals and standards bodies, then the rest.
+- Otherwise a query word scores 3 when it equals a whole word of a field, 2 when it starts a word and 1 when it appears inside a word, and the best of these for each query word is added up; the highest total comes first, so a whole word always beats the start of a word. Among equal totals, the weighted sum of every field a word matches in decides: the name counts 4, the id and publisher 3, the jurisdiction, kind and access label 2, and the region, category, focus areas and description 1. A source whose name, id and publisher all name what you typed therefore comes before one that only mentions it.
+- Equal scores put official sources first and otherwise keep catalogue order, and an empty query returns every entry in catalogue order.
 
 ## Choosing a Source
 

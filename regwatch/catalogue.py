@@ -418,56 +418,149 @@ def load_source_catalogue(
 # --- search and filters --------------------------------------------------------
 
 
-def _search_fields(entry: CatalogueEntry) -> tuple[str, ...]:
-    return (
-        entry.source_id,
-        entry.name,
-        entry.publisher,
-        entry.jurisdiction,
-        entry.region,
-        entry.kind,
-        entry.category,
-        entry.description,
-    )
+# British spellings and the American ones they are searched as, so a search for
+# either finds both. Each key is a word start; the rest of the word is kept, so
+# "labelling" becomes "labeling" and "flavours" becomes "flavors".
+SPELLINGS = {
+    "aluminium": "aluminum",
+    "labell": "label",
+    "flavour": "flavor",
+    "colour": "color",
+    "odour": "odor",
+    "fibre": "fiber",
+    "centre": "center",
+    "organis": "organiz",
+    "authoris": "authoriz",
+    "harmonis": "harmoniz",
+    "standardis": "standardiz",
+    "sulph": "sulf",
+    "programme": "program",
+    "catalogue": "catalog",
+    "licence": "license",
+    "defence": "defense",
+}
+# How much a match in each field counts. The id, the jurisdiction, the kind, the
+# region, the category and the focus areas are matched by their hyphen-separated parts.
+SEARCH_WEIGHTS = {
+    "name": 4,
+    "source_id": 3,
+    "publisher": 3,
+    "jurisdiction": 2,
+    "kind": 2,
+    "access_label": 2,
+    "region": 1,
+    "category": 1,
+    "focus_areas": 1,
+    "description": 1,
+}
+# Within one match quality, a publisher's own official sources come before the rest.
+_KIND_TIERS = {
+    "regulator": 0,
+    "legislature": 0,
+    "gazette": 0,
+    "court": 0,
+    "recalls": 1,
+    "lobbying-disclosure": 1,
+    "data-portal": 1,
+    "standards": 1,
+}
+_ACRONYM_SKIP = frozenset(
+    {"and", "of", "the", "for", "de", "du", "des", "la", "le", "et", "on", "in"}
+)
+SHORT_TOKEN = 2
+"""A query word this short (such as ``ca``) matches only a whole word or id part."""
 
 
-def _token_score(token: str, fields: Sequence[str], words: Sequence[Sequence[str]]) -> int:
-    best = 0
-    for text, field_words in zip(fields, words, strict=True):
-        if token in field_words:
-            return 3
-        if any(word.startswith(token) for word in field_words):
-            best = max(best, 2)
-        elif token in text:
-            best = max(best, 1)
-    return best
+def _spelling(word: str) -> str:
+    for british, american in SPELLINGS.items():
+        if word.startswith(british):
+            return american + word[len(british) :]
+    return word
+
+
+def _words(text: str) -> list[str]:
+    return [_spelling(word) for word in _WORD.findall(text.lower())]
+
+
+def _acronym(text: str) -> str:
+    """The initials of a publisher's name: U.S. Food and Drug Administration is ``fda``."""
+    parts = [w for w in _WORD.findall(text.lower()) if len(w) > 1 and w not in _ACRONYM_SKIP]
+    return "".join(part[0] for part in parts) if len(parts) > 1 else ""
+
+
+def _search_fields(entry: CatalogueEntry) -> list[tuple[list[str], int]]:
+    acronym = _acronym(entry.publisher)
+    values = {
+        "name": _words(entry.name),
+        "source_id": _words(entry.source_id),
+        "publisher": _words(entry.publisher) + ([acronym] if acronym else []),
+        "jurisdiction": _words(entry.jurisdiction),
+        "kind": _words(entry.kind),
+        "access_label": _words(entry.access_label),
+        "region": _words(entry.region),
+        "category": _words(entry.category),
+        "focus_areas": [word for area in entry.focus_areas for word in _words(area)],
+        "description": _words(entry.description),
+    }
+    return [(values[name], weight) for name, weight in SEARCH_WEIGHTS.items()]
+
+
+def _match(token: str, words: Sequence[str]) -> int:
+    """3 for a whole word, 2 for the start of a word, 1 inside a word, 0 for none."""
+    if token in words:
+        return 3
+    if len(token) <= SHORT_TOKEN:
+        return 0
+    if any(word.startswith(token) for word in words):
+        return 2
+    return 1 if any(token in word for word in words) else 0
 
 
 def rank(entries: Sequence[CatalogueEntry], text: str) -> list[CatalogueEntry]:
     """Entries that match ``text``, best first. The one ranking every surface uses.
 
-    The match is case-insensitive over the id, name, publisher, jurisdiction,
-    region, kind, category and description. An entry whose id or jurisdiction
-    equals the whole query comes first. Every word of the query must match
-    somewhere; a whole word scores above the start of a word, which scores above
-    a match inside a word. Ties keep catalogue order. An empty query returns
-    every entry in catalogue order.
+    The match is case-insensitive over the name, id, publisher (and the initials
+    of its name), jurisdiction, kind, access label, region, category, focus areas
+    and description, with British and American spellings treated alike. Every
+    word of the query must match somewhere. A query word of one or two letters
+    matches only a whole word or a part of an id or code, so ``ca`` finds
+    ``us-ca`` and not Canada's "Cancer". An entry whose id or jurisdiction equals
+    the whole query comes first, its official sources (regulators, legislatures,
+    gazettes and courts) before the rest. Otherwise entries are ordered by how
+    well each word matches (a whole word above the start of a word above a match
+    inside a word), then by the weighted sum of the fields it matches in
+    (``SEARCH_WEIGHTS``), then official sources first. Ties keep catalogue order.
+    An empty query returns every entry in catalogue order.
     """
     query = text.strip().lower()
     if not query:
         return list(entries)
-    tokens = _WORD.findall(query)
-    scored: list[tuple[int, int, int, CatalogueEntry]] = []
+    tokens = [_spelling(token) for token in _WORD.findall(query)]
+    scored: list[tuple[tuple[int, ...], CatalogueEntry]] = []
     for index, entry in enumerate(entries):
         exact = 0 if query in (entry.source_id, entry.jurisdiction) else 1
-        fields = tuple(field.lower() for field in _search_fields(entry))
-        words = tuple(_WORD.findall(field) for field in fields)
-        scores = [_token_score(token, fields, words) for token in tokens]
-        if exact and (not tokens or not all(scores)):
+        fields = _search_fields(entry)
+        quality = 0
+        weighted = 0
+        matched = True
+        for token in tokens:
+            levels = [_match(token, words) for words, _weight in fields]
+            quality += max(levels)
+            weighted += sum(
+                level * weight for level, (_w, weight) in zip(levels, fields, strict=True)
+            )
+            matched = matched and max(levels) > 0
+        if exact and (not tokens or not matched):
             continue
-        scored.append((exact, -sum(scores), index, entry))
-    scored.sort(key=lambda item: item[:3])
-    return [item[3] for item in scored]
+        tier = _KIND_TIERS.get(entry.kind, 2)
+        key = (
+            (exact, tier, -quality, -weighted, index)
+            if exact == 0
+            else (exact, -quality, -weighted, tier, index)
+        )
+        scored.append((key, entry))
+    scored.sort(key=lambda item: item[0])
+    return [entry for _key, entry in scored]
 
 
 def _in_jurisdiction(entry: CatalogueEntry, jurisdiction: str) -> bool:

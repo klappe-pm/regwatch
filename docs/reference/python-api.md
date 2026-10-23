@@ -66,7 +66,7 @@ The source catalogue. See [source catalogue](source-catalogue.md).
 - `load_source_catalogue(focus_ids: Iterable[str], extra: Path | None = None) -> tuple[CatalogueEntry, ...]`: the shipped entries followed by those of the extra file. Raises `CatalogueError`.
 - `parse_source_catalogue(data: object, focus_ids: Iterable[str], label: str = ...) -> tuple[CatalogueEntry, ...]`: validate a decoded catalogue file. Raises `CatalogueError` naming every invalid entry.
 - `entry_from_dict(data: object, focus_ids: Iterable[str], where: str = "entry") -> CatalogueEntry`: validate and build one entry.
-- `rank(entries: Sequence[CatalogueEntry], text: str) -> list[CatalogueEntry]`: the one search ranking, best match first.
+- `rank(entries: Sequence[CatalogueEntry], text: str) -> list[CatalogueEntry]`: the one search ranking, best match first, as the [source catalogue](source-catalogue.md#search) describes. `SEARCH_WEIGHTS` holds the field weights and `SPELLINGS` the British word starts and their American forms.
 - `filter_entries(entries, *, region=None, jurisdiction=None, kind=None, category=None, access=None, focus=None, chosen=None) -> list[CatalogueEntry]`: the entries that pass every filter given.
 - `entry_to_source(entry: CatalogueEntry, jurisdiction_id: str | None = None) -> dict[str, str]`: the sources file entry for a chosen catalogue entry.
 - `merge_sources(sources, jurisdictions, entries) -> MergeResult`: add entries to a sources list with the jurisdictions they need. Raises `CatalogueError`, changing nothing, when an id is already used by a different entry.

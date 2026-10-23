@@ -313,6 +313,151 @@ def test_search_covers_kind_category_region_and_publisher() -> None:
     assert ids(rank(entries, "canadian")) == ["bb-x"]
 
 
+def test_fields_are_weighted_name_first_and_description_last() -> None:
+    entries = [
+        build(source_id="aa-desc", name="Notices", description="About widgets."),
+        build(source_id="bb-cat", name="Notices", category="packaging-materials"),
+        build(source_id="cc-kind", name="Notices", kind="lobbying-disclosure"),
+        build(source_id="dd-pub", name="Notices", publisher="Widget Office"),
+        build(source_id="ee-name", name="Widget Notices"),
+    ]
+    assert ids(rank(entries, "widget")) == ["ee-name", "dd-pub", "aa-desc"]
+    assert ids(rank(entries, "packaging lobbying")) == []
+    assert ids(rank(entries, "lobbying")) == ["cc-kind"]
+    assert ids(rank(entries, "materials")) == ["bb-cat"]
+
+
+def test_the_access_label_and_focus_areas_are_searched() -> None:
+    entries = [
+        build(source_id="aa-x"),
+        entry_from_dict(keyed(source_id="bb-x"), FOCUS),
+        build(source_id="cc-x", focus_areas=["pet-food"]),
+    ]
+    assert ids(rank(entries, "free key")) == ["bb-x"]
+    assert ids(rank(entries, "pet")) == ["cc-x"]
+
+
+@pytest.mark.parametrize(
+    ("british", "american"),
+    [
+        ("aluminium", "aluminum"),
+        ("labelling", "labeling"),
+        ("flavour", "flavor"),
+        ("colouring", "coloring"),
+        ("organisation", "organization"),
+        ("sulphites", "sulfites"),
+    ],
+)
+def test_british_and_american_spellings_find_each_other(british: str, american: str) -> None:
+    entries = [
+        build(source_id="aa-british", name=f"{british.title()} Notices"),
+        build(source_id="bb-american", name=f"{american.title()} Notices"),
+        build(source_id="cc-other", name="Other Notices"),
+    ]
+    assert ids(rank(entries, british)) == ["aa-british", "bb-american"]
+    assert ids(rank(entries, american)) == ["aa-british", "bb-american"]
+
+
+def test_a_short_word_matches_only_a_whole_word_or_an_id_part() -> None:
+    entries = [
+        build(source_id="aa-cancer", name="Cancer Registry", description="Canada and more."),
+        build(source_id="us-ca-board", jurisdiction="us-ca", name="Board"),
+        build(source_id="bb-ca", name="Ca Notices"),
+    ]
+    assert ids(rank(entries, "ca")) == ["bb-ca", "us-ca-board"]
+    assert ids(rank(entries, "can")) == ["aa-cancer"]
+
+
+def test_a_publisher_is_found_by_its_initials() -> None:
+    entries = [
+        build(source_id="aa-one", name="FDA Notices", publisher="Food and Drug Agency Elsewhere"),
+        build(
+            source_id="bb-two", name="FDA Notices", publisher="U.S. Food and Drug Administration"
+        ),
+    ]
+    assert ids(rank(entries, "fda")) == ["bb-two", "aa-one"]
+
+
+def test_an_exact_jurisdiction_lists_its_official_sources_first() -> None:
+    entries = [
+        build(source_id="zz-news", name="ZZ News", kind="news"),
+        build(source_id="zz-portal", name="ZZ Portal", kind="data-portal"),
+        build(source_id="zz-gazette", name="Gazette", kind="gazette"),
+    ]
+    assert ids(rank(entries, "zz")) == ["zz-gazette", "zz-portal", "zz-news"]
+
+
+# The shipped catalogue: what a person typing these words should see first.
+CATALOGUE = load_source_catalogue(FOCUS)
+
+
+def top(query: str, count: int) -> list[str]:
+    return ids(rank(CATALOGUE, query))[:count]
+
+
+def test_fda_lists_the_fda_own_sources_first() -> None:
+    by_id = {entry.source_id: entry for entry in CATALOGUE}
+    own = [i for i in top("fda", 25) if by_id[i].publisher.endswith("Food and Drug Administration")]
+    assert top("fda", 10) == own[:10]
+    assert all(i.startswith(("us-fda-", "us-openfda-")) for i in top("fda", 10))
+
+
+def test_aluminium_and_aluminum_find_the_same_sources() -> None:
+    assert ids(rank(CATALOGUE, "aluminium")) == ids(rank(CATALOGUE, "aluminum"))
+    assert {
+        "eu-european-aluminium-feed",
+        "us-aluminum-association-feed",
+        "gb-lme-aluminium",
+        "us-cme-aluminum",
+    } <= set(top("aluminium", 5))
+
+
+def test_california_lists_california_sources() -> None:
+    assert all(i.startswith("us-ca-") for i in top("california", 10))
+
+
+def test_pet_food_lists_the_pet_food_sources_first() -> None:
+    assert set(top("pet food", 4)) == {
+        "us-pet-food-processing",
+        "eu-fediaf-pet-food",
+        "us-pfi-rss",
+        "us-pet-food-industry-rss",
+    }
+
+
+def test_eu_lists_the_eu_institutions_near_the_top() -> None:
+    found = top("eu", 10)
+    assert all(i.startswith("eu-") for i in found)
+    assert "eu-eur-lex-official-journal" in found
+    assert "eu-commission-food-safety-news" in found
+    assert any(i.startswith("eu-efsa-") for i in found)
+    assert not any(i in found for i in ("eu-beveragedaily-rss", "eu-foodnavigator-rss"))
+
+
+def test_packaging_lists_packaging_sources() -> None:
+    by_id = {entry.source_id: entry for entry in CATALOGUE}
+    assert all("Packaging" in by_id[i].name for i in top("packaging", 10))
+
+
+def test_lobbying_lists_the_us_disclosure_records_first() -> None:
+    assert top("lobbying", 2) == ["us-house-lobbying-disclosure", "us-senate-lda-api"]
+    assert {"eu-transparency-register", "ca-registry-of-lobbyists"} <= set(top("lobbying", 8))
+
+
+def test_a_jurisdiction_code_lists_only_that_jurisdiction_first() -> None:
+    count = sum(1 for entry in CATALOGUE if entry.jurisdiction == "us-ca")
+    found = rank(CATALOGUE, "us-ca")
+    assert [e.jurisdiction for e in found[:count]] == ["us-ca"] * count
+    assert found[0].kind in ("regulator", "legislature", "gazette", "court")
+
+
+def test_free_key_lists_exactly_the_free_key_sources() -> None:
+    found = rank(CATALOGUE, "free key")
+    assert {e.source_id for e in found} == {
+        e.source_id for e in CATALOGUE if e.access == "free-key"
+    }
+
+
 # --- filters -------------------------------------------------------------------------
 
 
