@@ -1,0 +1,36 @@
+{
+  "name": "regwatch-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The pages behind regwatch ui, built to static files that ship inside the Python package.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "typecheck": "node scripts/make-icons.mjs && tsc --noEmit",
+    "build": "node scripts/make-icons.mjs && next build && node scripts/copy-export.mjs",
+    "dev": "node scripts/make-icons.mjs && next dev",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "next": "15.5.28",
+    "react": "19.1.9",
+    "react-dom": "19.1.9"
+  },
+  "devDependencies": {
+    "@material-symbols/svg-400": "0.47.5",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "22.20.5",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.29"
+    }
+  }
+}

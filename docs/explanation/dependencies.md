@@ -1,0 +1,53 @@
+# Dependencies
+
+This page justifies regwatch's dependencies, one by one, for a reader deciding whether to trust it or considering adding something. The short version is that there are no runtime dependencies at all: the package needs only the Python 3.11 standard library. Development tools are separate and are listed at the end.
+
+## Runtime Dependencies
+
+None. The `dependencies` list in `pyproject.toml` is empty. Each capability that might have called for a package is covered by the standard library, as follows.
+
+| need | standard library module | why no package |
+| --- | --- | --- |
+| read configuration | `tomllib` | TOML parsing is in the standard library from Python 3.11, which is why that is the minimum version |
+| fetch over https | `socket`, `ssl`, `http.client`, `ipaddress` | one small client that vets the address it connects to, with a timeout, a total deadline, a size limit and a scheme allowlist, is easier to audit than a general purpose HTTP library, and it needs no certificate bundle of its own because it uses the system store |
+| parse JSON | `json` | no alternative is needed |
+| parse HTML | `html.parser` | only the visible text is needed, not a tree |
+| parse feeds | `xml.etree.ElementTree` | made safe by refusing any DTD or entity declaration; see the [security model](security-model.md) |
+| read the register | `csv`, `json` | the register is a CSV file and JSON files |
+| hash content | `hashlib` | no alternative is needed |
+| build a Word document | `zipfile` and string building | a `.docx` file is a zip of XML parts; the document model is plain, so a document library would add far more code than it saves |
+| escape output | `html`, `xml.sax.saxutils`, `re` | no alternative is needed |
+| read packaged data | `importlib.resources` | no alternative is needed |
+| command line | `argparse` | no alternative is needed |
+| serve the web app | `http.server`, `secrets`, `hashlib` | the server answers one user on loopback; a web framework would add far more code than the checks it needs, which are written out in `server.py` |
+| open the browser | `webbrowser` | no alternative is needed |
+
+## Why This Matters Here
+
+regwatch fetches and parses content from the outside world, and it is meant to run on machines that hold a confidential register. Every dependency would be code that runs in that position, with its own releases and its own vulnerabilities. Keeping the list empty keeps the part that needs auditing to the size of this repository, and keeps `pipx install` from pulling in anything else.
+
+## What the Choice Costs
+
+- Feeds that declare a DTD are refused rather than parsed with a hardened library.
+- The Word output is plain: headings, paragraphs and bullets, with no styles or tables.
+- There is no retry logic or connection pooling. A failed fetch is reported and the next run tries again.
+- There is no HTML tree, so a source cannot be narrowed to one element of a page. Choose a page, a feed or an API that lists only what you care about.
+
+## The Bar for a New Dependency
+
+A runtime dependency is added only when all of these hold: the standard library cannot do the job reasonably, the package is widely used and actively maintained, it has no dependencies of its own that matter, and an issue has been opened and agreed first. The justification is then written here, in the table above, before the change merges. See [contributing](../../CONTRIBUTING.md).
+
+## The Web App's Build Dependencies
+
+The pages behind `regwatch ui` are written with Next.js, React and Tailwind CSS and exported as static files into the package, so a user runs them without Node and without any of these packages. They are build dependencies of the pages, like `fonttools` is of the banner: `web/package.json` pins each one exactly, `web/package-lock.json` pins every package beneath them with an integrity hash, `npm ci --ignore-scripts` installs them without running install scripts, and the release workflow rebuilds the pages and fails when the result differs from the committed copy. The icons are Material Symbols Outlined (Apache License 2.0), copied into the build as paths. The built pages load nothing from another origin.
+
+## Development Dependencies
+
+These are installed with `pip install -e '.[test,lint]'` and are not needed to run regwatch. The `test` extra holds `pytest` and `pytest-cov`, and the `lint` extra holds `ruff` and `mypy`. The `test` extra requires `pytest` 9.0.3 or newer, because earlier releases carry CVE-2025-71176. `pytest` depends on `Pygments`, and releases of `Pygments` below 2.20.0 carry CVE-2026-4539, so the hash-pinned `requirements/ci.txt` that the release workflow installs from holds a newer one.
+
+| package | used for |
+| --- | --- |
+| `pytest` | the test runner |
+| `pytest-cov` | the coverage report |
+| `ruff` | linting and formatting |
+| `mypy` | strict type checking of the package |
