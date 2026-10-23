@@ -167,6 +167,47 @@ def test_schedule_and_first_run_by_flag(home: Path, run: Run) -> None:
     assert len(list((directory / "state" / "runs").iterdir())) == 1
 
 
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_a_missing_scheduler_does_not_stop_init(home: Path, run: Run, platform: str) -> None:
+    """Without crontab or launchctl, init says so, then still runs and gives its guidance."""
+    fake = FakeSystem(platform, tools=())
+    directory = home / "work"
+    code, out, err = run(
+        "init",
+        "--dir",
+        str(directory),
+        "--yes",
+        "--sources",
+        "ca-cfia-recalls-rss",
+        "--schedule",
+        "--first-run",
+        fake=fake,
+        fetcher=KeyedFetcher(),
+    )
+    tool = "launchctl" if platform == "darwin" else "crontab"
+    assert f"the {tool} command was not found" in err
+    assert "no schedule was installed" in out and "schedule --install" in out
+    assert "regwatch run: 1 sources" in out
+    assert "Next, describe your products" in out
+    assert code == 3  # the first run's result is kept
+    assert_valid(directory)
+
+
+def test_a_missing_scheduler_without_a_first_run_exits_2(home: Path, run: Run) -> None:
+    code, out, err = run(
+        "init",
+        "--dir",
+        str(home / "work"),
+        "--yes",
+        "--schedule",
+        "--no-first-run",
+        fake=FakeSystem("linux", tools=()),
+    )
+    assert code == 2
+    assert "crontab command was not found" in err
+    assert "Next, describe your products" in out
+
+
 def test_no_schedule_and_no_first_run_are_not_asked(
     home: Path, run: Run, answers: Callable[..., list[str]]
 ) -> None:

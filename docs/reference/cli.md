@@ -67,8 +67,8 @@ Creates a project: `regwatch.toml`, a register that validates with the sources y
 | `--yes` | take the default for every question without a flag and do not ask to confirm |
 | `--force` | replace files that already exist |
 | `--sources ID,ID` | catalogue sources to watch, separated by commas; an empty value chooses none. Without it the sources are chosen interactively, and `--yes` chooses none. An id not in the catalogue exits 2 and writes nothing. |
-| `--schedule`, `--no-schedule` | after writing, install a recurring run as `schedule --install` does, or do not ask. Without either the question is asked, and `--yes` does not schedule. |
-| `--first-run`, `--no-first-run` | after writing, run `regwatch run` once, or do not ask. Without either the question is asked when sources were chosen, and `--yes` does not run. With a first run, the exit status is that of `run`. |
+| `--schedule`, `--no-schedule` | after writing, install a recurring run as `schedule --install` does, or do not ask. Without either the question is asked, and `--yes` does not schedule. When the schedule cannot be installed, for example because `crontab` or `launchctl` is missing, init prints the error and the command to install it later, then goes on to the first run and its closing guidance. |
+| `--first-run`, `--no-first-run` | after writing, run `regwatch run` once, or do not ask. Without either the question is asked when sources were chosen, and `--yes` does not run. With a first run, the exit status is that of `run`. A schedule that was asked for and not installed makes the exit status 2 when it would otherwise be 0. |
 
 The questions come in this order: the project folder, focus areas, custom terms, jurisdictions, sources, local file roots, the contact, and the confirmation. After the files are written come the keys of chosen keyed sources, the schedule and the first run. A closed input stream after the files are written counts as no.
 

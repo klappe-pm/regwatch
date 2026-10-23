@@ -1139,11 +1139,24 @@ def _init_after(ctx: _Context, args: argparse.Namespace, plan: InitPlan) -> int:
         schedule = not args.yes and _offer(
             "Run capture and check on a schedule (launchd on macOS, cron elsewhere)? [y/N]: "
         )
+    scheduled = True
     if schedule:
-        _cmd_schedule(
-            project,
-            argparse.Namespace(install=True, remove=False, every=None, dry_run=False, show=False),
-        )
+        try:
+            _cmd_schedule(
+                project,
+                argparse.Namespace(
+                    install=True, remove=False, every=None, dry_run=False, show=False
+                ),
+            )
+        except (CommandError, ScheduleError, StateError, RegisterError, OSError) as exc:
+            # The files are written; a missing crontab or launchctl must not stop the
+            # first run or the closing guidance, so say what failed and go on.
+            scheduled = False
+            _say(f"error: {clean_text(str(exc))}", file=sys.stderr)
+            _say(
+                "regwatch init: no schedule was installed; once that is fixed, run "
+                f"regwatch --config {project.config_path} schedule --install"
+            )
     else:
         _say(f"To schedule runs later: regwatch --config {project.config_path} schedule --install")
     first = args.first_run
@@ -1153,9 +1166,10 @@ def _init_after(ctx: _Context, args: argparse.Namespace, plan: InitPlan) -> int:
             and bool(plan.sources)
             and _offer("Run a first capture and check now? [y/N]: ")
         )
-    if first:
-        return _cmd_run(project, argparse.Namespace())
-    return EXIT_OK
+    code = _cmd_run(project, argparse.Namespace()) if first else EXIT_OK
+    # A schedule that was asked for and not installed is an error the exit status keeps,
+    # unless the first run already reports something to look at.
+    return EXIT_ERROR if not scheduled and code == EXIT_OK else code
 
 
 def _cmd_init(ctx: _Context, args: argparse.Namespace) -> int:
