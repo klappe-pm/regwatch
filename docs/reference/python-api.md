@@ -172,6 +172,20 @@ The document model shared by every briefing and renderer.
 - `Document(title, generated, subtitle="", sections=[], disclaimer=DISCLAIMER)`: a titled, dated list of sections. `to_dict()` returns a JSON-serialisable form. `Document.from_dict(data)` builds one from parsed JSON, checks every field, and always restores the disclaimer. Raises `DocumentError`.
 - `DocumentError`: a document model is malformed.
 
+## `design`
+
+The logo of the design specification; the rest of `[document]` is checked in `config` (`DocumentDesign`, `check_color`, `contrast_with_white`, `check_title_format`, `FONTS`).
+
+- `load_logo(path: Path | None, roots) -> Logo | None`: the checked logo, or None when none is set. Raises `DesignError` for a logo outside `roots`, a link, a file that is not regular or larger than 300,000 bytes, a bad PNG, or an SVG that is not plain drawing.
+- `clean_svg(text: str) -> bytes`: the SVG written out again from its parsed tree, or `DesignError` naming the element or attribute that is refused.
+- `Logo(kind, data, width=0, height=0)`: `kind` is `png` or `svg`; `media_type` and `data_uri` give it as an image.
+
+## `newsletter`
+
+- `newsletter_content(register, results, impacts, candidates, today, since_days) -> NewsletterContent`: the period's changed sources, change log events, candidates and act now or high severity impacts; `facts()` gives them as facts for generated copy.
+- `build_newsletter(register, content, design, generated=None) -> Document`: the newsletter as a document, with generated passages in place of the fixed sentences they cover.
+- `render_email_html(doc, design, footer, *, logo=None, logo_src="") -> str`, `render_email_text(doc, design, footer) -> str` and `email_bytes(subject, text, html_body, now, logo=None) -> bytes`: the HTML email, the text part and the `.eml` file.
+
 ## `llm`
 
 Generated copy. See [the language model stage](../explanation/security-model.md#the-language-model-stage).
@@ -286,6 +300,12 @@ The operations `regwatch sources`, `keys` and `run` share with the web app. Noth
 - `run_once(config, fetcher, key_for, clock, register=None) -> RunOutcome`: `regwatch run`: captures, checks and writes a run record. `RunOutcome` holds the captures, the results, the failed captures, the counts, the code (0, 3 or 4), the record and its path. `RUN_OK`, `RUN_CHANGES` and `RUN_UNVERIFIED` name the codes.
 - `read_run_records(config: Config, limit: int = 50) -> list[dict]`: the newest run records first, with only their known fields; an unreadable record is skipped.
 - `schedule_state(config: Config, system: System, now: datetime) -> ScheduleState`: the installed schedule, read without changing anything. `ScheduleState` has `via` (`launchd` or `cron`), `installed`, `every`, `next_run` (exact for cron; for launchd the last run plus the interval) and `note`.
+- `premium_refusal(feature: str) -> str`: the message for a premium feature used while premium is off; it names `regwatch premium on`.
+- `read_candidates(config: Config) -> list[dict]`: the ingest candidates as stored, or none when the file is missing or unreadable.
+- `generated_copy(config, facts, purpose, key_for, poster=None, now=...) -> GenerationResult`: one generated copy call with the configured provider, recorded in `llm-calls.jsonl`. Raises `WorkspaceError` when `[llm]` is off.
+- `logo_for(config: Config) -> Logo | None`: the checked logo, under the project folder or an allowed file root.
+- `newsletter_plan(config, today, since_days) -> tuple[Register, NewsletterContent]`: the register and the period's items, with sources checked against their snapshots. The period is 1 to 366 days.
+- `newsletter_files(config, register, content, now, generated=None) -> NewsletterFiles`: the newsletter as `subject`, `html` (with the logo inline), `text` and `eml` bytes, with `generated` and the `dropped` reasons.
 - `WorkspaceError`: a request the user can fix. It is a `ValueError`.
 
 ## `webapi`

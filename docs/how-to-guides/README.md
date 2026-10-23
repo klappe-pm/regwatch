@@ -11,6 +11,7 @@ How-to guides are recipes. Each one solves a specific problem for a reader who a
 - [Schedule Runs](schedule-runs.md): capture and check on a schedule with launchd or cron, and read the run records.
 - [Review Flagged Changes](review-flagged-changes.md): what to do, in order, when Regwatch flags a source change, an ingest candidate or a candidate impact.
 - [Use the Web App](use-the-web-app.md): open the local web app, find your way around it, change settings and turn premium features on.
+- [Send a Newsletter](send-a-newsletter.md): build a send-ready newsletter from a period's changes in your own design, check it and send it from your mail program.
 - [Turn On Generated Copy](turn-on-generated-copy.md): choose a language model provider, store its key and have it write the opening and summaries of newsletters and documents.
 - [Troubleshooting](troubleshooting.md): known failure modes matched to their fixes.
 

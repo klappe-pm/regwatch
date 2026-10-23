@@ -106,3 +106,29 @@ Optional table, written by `regwatch llm` and the Settings page of `regwatch ui`
 | `timeout_seconds` | number | 180 | the deadline of one call, above 0 and at most 600; it replaces the `[fetch]` timeouts for this call only |
 
 Each call is recorded in `llm-calls.jsonl` in the state directory: the time, the provider, the model, the token counts, the duration, the outcome and how many passages were kept and dropped. The prompt, the answer and the key are never recorded.
+
+## Document
+
+Optional table: the design specification that newsletters and documents follow. The Settings page of `regwatch ui` writes it. Every value is checked when the file is loaded, apart from the logo, which is checked each time a newsletter or a document is built.
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `title_format` | string | `"{title}"` | the title of every newsletter and document, 1 to 200 characters; it may use `{title}`, `{date}` and `{organisation}` and no other braces |
+| `organisation` | string | `""` | your organisation's name, at most 120 characters; also the logo's alternative text |
+| `primary_color` | string | `"#1d5a92"` | headings and the title band, written `#rrggbb`; it must reach a contrast of 4.5:1 against white (WCAG 2.2 AA) |
+| `accent_color` | string | `"#a8481a"` | rules under headings, written `#rrggbb`, with the same 4.5:1 contrast |
+| `font` | string | `"system"` | one of `system`, `Arial`, `Helvetica`, `Verdana`, `Tahoma`, `Trebuchet MS`, `Georgia`, `Times New Roman`, `Garamond` and `Courier New`, each rendered with its fallbacks |
+| `logo` | string | none | a `.png` or `.svg` file of at most 300,000 bytes inside the project folder or one of `allowed_file_roots`, and not a symbolic link. A PNG may be at most 4,000 by 4,000 pixels. An SVG is refused when it holds a script, a style, an event attribute, an image, a link or any element or attribute outside a short drawing list; see the [security model](../explanation/security-model.md#the-design-specification-and-its-logo). Email uses a PNG logo only. |
+| `header` | string | `""` | a line above the title, at most 200 characters |
+| `footer` | string | `""` | a closing line, such as an address, at most 300 characters |
+| `page_size` | string | `"a4"` | `a4` or `letter`, for printed and Word documents |
+
+Text values may not hold control characters.
+
+## Newsletter
+
+Optional table.
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `footer` | string | `"You receive this newsletter because you asked for it. Reply to this message to stop."` | the reply or unsubscribe line at the end of every newsletter, at most 300 characters |

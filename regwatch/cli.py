@@ -25,6 +25,7 @@ Each subcommand is one stage of the engine:
     ui        open the local web app in the browser
     premium   turn the premium features on or off, or show whether they are on
     llm       show or change the language model that writes generated copy
+    newsletter build a send-ready newsletter from a period's changes (premium)
 
 Exit status: 0 success, 1 the register is invalid or nothing could be captured,
 2 a usage, configuration, network or file error, 3 changes were detected and
@@ -70,6 +71,7 @@ from regwatch.config import (
     FetchSettings,
     load_config,
 )
+from regwatch.design import DesignError
 from regwatch.document import DISCLAIMER, Document, DocumentError, Section, make_disclaimer
 from regwatch.export import build_records, records_csv
 from regwatch.fetch import Credential, Fetcher, FetchError
@@ -77,7 +79,7 @@ from regwatch.focus import FocusError, FocusProfile, build_profile, load_catalog
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.ingest import IngestError, build_query_url, candidates_document, parse_candidates
 from regwatch.keys import KeyStore, KeyStoreError
-from regwatch.llm import LLM_KEYS, GenerationError
+from regwatch.llm import LLM_KEYS, GenerationError, Poster
 from regwatch.onboarding import (
     SCAFFOLD_NAMES,
     InitPlan,
@@ -144,14 +146,19 @@ from regwatch.system import System
 from regwatch.webapi import Api
 from regwatch.workspace import (
     KeyedSource,
+    WorkspaceError,
     add_sources,
     chosen_ids,
     fetcher_for,
     find_entries,
     focus_area_ids,
+    generated_copy,
     key_lookup,
     keyed_source,
     keyed_sources,
+    newsletter_files,
+    newsletter_plan,
+    premium_refusal,
     run_once,
     source_catalogue,
 )
@@ -191,6 +198,7 @@ class _Context:
     now: dt.datetime
     system: System = field(default_factory=System)
     clock: Callable[[], dt.datetime] = field(default=lambda: dt.datetime.now(dt.UTC))
+    poster: Poster | None = None
     _config: Config | None = field(default=None, init=False)
 
     def keystore(self) -> KeyStore:
@@ -1769,7 +1777,55 @@ PREMIUM_HINT = "turn it on with 'regwatch premium on'"
 def _require_premium(ctx: _Context, feature: str) -> None:
     """Refuse a premium feature while premium is off, naming the command that turns it on."""
     if not ctx.config.premium.enabled:
-        raise CommandError(f"{feature} is a premium feature; {PREMIUM_HINT}")
+        raise CommandError(premium_refusal(feature))
+
+
+OUTPUT_SUFFIXES = (".eml", ".html", ".txt", ".md", ".docx")
+
+
+def _output_stem(out: str | None, default: str) -> Path:
+    """The path ``--out`` names without a known suffix, or ``default`` in the current folder."""
+    if not out:
+        return Path(default)
+    path = Path(out)
+    return path.with_suffix("") if path.suffix.lower() in OUTPUT_SUFFIXES else path
+
+
+def _say_dropped(label: str, dropped: Sequence[str]) -> None:
+    for reason in dropped:
+        _say(f"regwatch {label}: left out a generated passage: {reason}", file=sys.stderr)
+
+
+def _cmd_newsletter(ctx: _Context, args: argparse.Namespace) -> int:
+    """Write a send-ready newsletter as .eml, .html and .txt. Regwatch never sends it."""
+    _require_premium(ctx, "Newsletters")
+    config = ctx.config
+    if args.generate and not config.llm.enabled:
+        raise CommandError("generated copy is off; turn it on with 'regwatch llm on'")
+    register, content = newsletter_plan(config, ctx.today, args.since)
+    generated = None
+    if args.generate:
+        generated = generated_copy(
+            config,
+            content.facts(),
+            f"the newsletter for {content.start.isoformat()} to {content.end.isoformat()}",
+            ctx.key_for,
+            ctx.poster,
+            ctx.clock,
+        )
+    files = newsletter_files(config, register, content, ctx.now, generated)
+    stem = _output_stem(args.out, f"regwatch-newsletter-{ctx.today.isoformat()}")
+    written = [stem.with_name(stem.name + suffix) for suffix in (".eml", ".html", ".txt")]
+    ctx.write_bytes(written[0], files.eml)
+    ctx.write_text(written[1], files.html)
+    ctx.write_text(written[2], files.text)
+    for path in written:
+        _say(f"wrote {path}")
+    _say_dropped("newsletter", files.dropped)
+    copy = "generated" if files.generated else "fixed sentences"
+    _say(f"regwatch newsletter: {files.subject}; opening and summaries: {copy}")
+    _say("Regwatch does not send email. Review the newsletter, then send it from your mail tool.")
+    return EXIT_OK
 
 
 def _cmd_llm(ctx: _Context, args: argparse.Namespace) -> int:
@@ -2009,6 +2065,17 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
     p = add("premium", _cmd_premium, "turn the premium features on or off, or show their state")
     p.add_argument("action", choices=["on", "off", "status"])
 
+    p = add(
+        "newsletter",
+        _cmd_newsletter,
+        "write a send-ready newsletter from a period's changes as .eml, .html and .txt",
+    )
+    p.add_argument(
+        "--since", type=int, default=7, metavar="DAYS", help="the period in days (default: 7)"
+    )
+    p.add_argument("--generate", action="store_true", help="have the language model write the copy")
+    p.add_argument("--out", help="file stem for the three files; default in the current folder")
+
     p = add("llm", _cmd_llm, "show or change the language model that writes generated copy")
     p.add_argument("action", choices=["status", "on", "off", "use"])
     p.add_argument(
@@ -2112,12 +2179,14 @@ def main(
     today: dt.date | None = None,
     now: dt.datetime | None = None,
     system: System | None = None,
+    poster: Poster | None = None,
 ) -> int:
     """Run the command line and return the exit status.
 
-    ``fetcher``, ``today``, ``now`` and ``system`` exist so tests and embedders can
-    supply a fake network client, a fixed clock, and a stand-in for the programs
-    that keep keys and install schedules.
+    ``fetcher``, ``today``, ``now``, ``system`` and ``poster`` exist so tests and
+    embedders can supply a fake network client, a fixed clock, a stand-in for the
+    programs that keep keys and install schedules, and a fake for the language model
+    calls of generated copy.
     """
     parser, handlers = _build_parser()
     args = parser.parse_args(argv)
@@ -2128,6 +2197,7 @@ def main(
         today=today or moment.date(),
         now=moment,
         system=system or System(),
+        poster=poster,
     )
     if now is not None:
         ctx.clock = lambda: moment
@@ -2155,6 +2225,8 @@ def main(
         ServerError,
         DocumentError,
         GenerationError,
+        WorkspaceError,
+        DesignError,
         ValueError,
         OSError,
     ) as exc:

@@ -48,6 +48,7 @@ Commands read the register. Only `sources add` and `sources remove` write it, an
 | `schedule --install`, `schedule --remove` | on macOS `~/Library/LaunchAgents/io.github.klappe-pm.regwatch.plist`; elsewhere your crontab, between regwatch's marker lines only |
 | `premium on`, `premium off` | one line in `regwatch.toml`: `[premium] enabled` |
 | `llm on`, `llm off`, `llm use` | lines in the `[llm]` table of `regwatch.toml` |
+| `newsletter` | `<stem>.eml`, `<stem>.html` and `<stem>.txt` at the stem you name, or in the current folder |
 | any command that writes generated copy | one line per language model call in `llm-calls.jsonl` in the state directory |
 | `ui` | through its Settings page only, one line in `regwatch.toml`: `[profile] focus_areas` or `[premium] enabled` |
 
@@ -323,6 +324,22 @@ Writes one flat record per obligation, joined with its detail record when there 
 | `--json PATH` | also write the records as JSON |
 
 Every CSV field is quoted. A cell, or any part of a cell after a `;`, a `,`, a tab or a line break, that begins with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed (also after leading whitespace, and in the fullwidth forms) gets a leading apostrophe in the CSV so a spreadsheet does not run it as a formula; the JSON is unchanged. The columns are `obligation_id`, `jurisdiction`, `status`, `effective_date`, `topics`, `summary`, `impacts`, `implications`, `action`, `source_url` and `citations`.
+
+## `newsletter`
+
+Writes a send-ready newsletter for the last `--since` days as three files: an `.eml` file, a standalone `.html` file and a `.txt` file. Regwatch never sends email; open the `.eml` in a mail program (it carries `X-Unsent: 1`, which some open as a draft) or paste the HTML into your mail tool, and send it yourself. Newsletters are a premium feature: with premium off it exits 2 with a message that names `regwatch premium on`. See [send a newsletter](../how-to-guides/send-a-newsletter.md).
+
+| option | meaning |
+| --- | --- |
+| `--since DAYS` | the period, 1 to 366 days; default 7 |
+| `--generate` | have the language model write the opening and the section summaries; needs `regwatch llm on` and exits 2 otherwise |
+| `--out PATH` | the file stem; a `.eml`, `.html` or `.txt` suffix is dropped. Default `regwatch-newsletter-<date>` in the current folder |
+
+It covers the sources whose stored snapshot changed or could not be read, the change log events and ingest candidates dated in the period, and up to 10 candidate impacts of act now or high severity, those in your focus areas first. Sources are checked against their snapshots and never fetched. The HTML is a table 600 pixels wide with inline styles only, in the colours, font and logo of the `[document]` design, and ends with the `[newsletter] footer` line and the disclaimer. The `.eml` is `multipart/alternative` with the text and the HTML, a PNG logo as a related image, a subject and no recipient. Without `--generate` the opening and each summary are fixed sentences built from the data. With it, they are generated passages labelled Generated and followed by the facts they cite; a section whose passage was dropped keeps its fixed sentence, and each dropped passage is reported on standard error. A logo that is refused exits 2 and nothing is written.
+
+```text
+regwatch newsletter --since 30 --out issue-42
+```
 
 ## `ui`
 

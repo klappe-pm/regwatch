@@ -4,7 +4,8 @@
 app's JSON interface answers in JSON, but both do the same work through these
 functions: read the source catalogue, add catalogue sources to the sources file,
 find the sources that need a key, run a capture and a check with a run record,
-and read the state of the schedule. Nothing here prints or asks a question.
+read the state of the schedule, write generated copy and build a newsletter.
+Nothing here prints or asks a question.
 """
 
 from __future__ import annotations
@@ -25,15 +26,29 @@ from regwatch.catalogue import (
 )
 from regwatch.check import CaptureResult, SourceResult, capture_sources, check_sources
 from regwatch.config import Config, FetchSettings
+from regwatch.design import Logo, load_logo
 from regwatch.fetch import Fetcher, SafeFetcher
-from regwatch.focus import load_catalogue
+from regwatch.focus import build_profile, load_catalogue
+from regwatch.impact import assess_impacts
 from regwatch.keys import PROVIDER_KEYS, KeyStore, KeyStoreError
+from regwatch.llm import Fact, GenerationResult, Poster, generate, llm_fetcher, provider_for
+from regwatch.newsletter import (
+    LOGO_CID,
+    NewsletterContent,
+    build_newsletter,
+    email_bytes,
+    newsletter_content,
+    render_email_html,
+    render_email_text,
+)
 from regwatch.register import Register, load_register, read_json_list
 from regwatch.schedule import CRON_TIMES, INTERVAL_SECONDS, installed_block, plist_path
 from regwatch.state import (
     MAX_STATE_BYTES,
+    append_call_record,
     list_run_records,
     load_seen,
+    make_state_dir,
     update_register_file,
     write_run_record,
 )
@@ -44,6 +59,7 @@ __all__ = [
     "RUN_OK",
     "RUN_UNVERIFIED",
     "KeyedSource",
+    "NewsletterFiles",
     "RunOutcome",
     "ScheduleState",
     "WorkspaceError",
@@ -51,9 +67,15 @@ __all__ = [
     "chosen_ids",
     "fetcher_for",
     "find_entries",
+    "generated_copy",
     "key_lookup",
     "keyed_source",
     "keyed_sources",
+    "logo_for",
+    "newsletter_files",
+    "newsletter_plan",
+    "premium_refusal",
+    "read_candidates",
     "read_run_records",
     "run_once",
     "schedule_state",
@@ -384,3 +406,126 @@ def schedule_state(config: Config, system: System, now: dt.datetime) -> Schedule
     )
     next_run = _iso(_next_cron(every, now)) if every else None
     return ScheduleState("cron", True, every, next_run)
+
+
+# --- premium content -------------------------------------------------------------
+
+PREMIUM_HINT = "turn it on with 'regwatch premium on'"
+MAX_SINCE_DAYS = 366
+
+
+def premium_refusal(feature: str) -> str:
+    """The message for a premium feature used while premium is off."""
+    return f"{feature} is a premium feature; {PREMIUM_HINT}"
+
+
+def read_candidates(config: Config) -> list[dict[str, Any]]:
+    """The ingest candidates as stored, or none when the file is missing or unreadable.
+
+    The file is untrusted; every builder cleans each field it uses.
+    """
+    path = config.candidates_path
+    if not path.is_file():
+        return []
+    try:
+        if path.stat().st_size > MAX_STATE_BYTES:
+            return []
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError):
+        return []
+    items = data.get("candidates", []) if isinstance(data, dict) else []
+    return [item for item in items if isinstance(item, dict)]
+
+
+def generated_copy(
+    config: Config,
+    facts: Sequence[Fact],
+    purpose: str,
+    key_for: Callable[[str], str | None],
+    poster: Poster | None = None,
+    now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.UTC),
+) -> GenerationResult:
+    """Ask the configured provider for copy written from ``facts``, and record the call.
+
+    Raises WorkspaceError when generated copy is off, and GenerationError when it
+    cannot be written. The call is recorded in ``llm-calls.jsonl`` in the state
+    directory with the provider, the model, the tokens and the duration only.
+    """
+    if not config.llm.enabled:
+        raise WorkspaceError("generated copy is off; turn it on with 'regwatch llm on'")
+    provider = provider_for(config.llm, poster or llm_fetcher(config), key_for)
+    protected = config.register.all_paths()
+
+    def record(entry: dict[str, object]) -> None:
+        make_state_dir(config.state_dir)
+        append_call_record(config.llm_calls_path, entry, protected)
+
+    return generate(
+        provider, facts, purpose, max_tokens=config.llm.max_tokens, record=record, now=now
+    )
+
+
+def logo_for(config: Config) -> Logo | None:
+    """The checked logo of the design specification, under the project folder or a file root."""
+    return load_logo(config.document.logo, [config.base_dir, *config.fetch.allowed_file_roots])
+
+
+def newsletter_plan(
+    config: Config, today: dt.date, since_days: int
+) -> tuple[Register, NewsletterContent]:
+    """The register and the items of the newsletter for the last ``since_days`` days.
+
+    Sources are checked against their stored snapshots, never fetched.
+    """
+    if not 1 <= since_days <= MAX_SINCE_DAYS:
+        raise WorkspaceError(f"the period must be 1 to {MAX_SINCE_DAYS} days")
+    register = load_register(config)
+    impacts = assess_impacts(register, today, build_profile(config.profile))
+    results = check_sources(register.sources, load_seen(config.seen_path), config.snapshots_dir)
+    content = newsletter_content(
+        register, results, impacts, read_candidates(config), today, since_days
+    )
+    return register, content
+
+
+@dataclass(frozen=True)
+class NewsletterFiles:
+    """One newsletter in every form: the subject, the standalone HTML, the text and the .eml."""
+
+    subject: str
+    html: str
+    text: str
+    eml: bytes
+    generated: bool
+    dropped: tuple[str, ...] = ()
+
+
+def newsletter_files(
+    config: Config,
+    register: Register,
+    content: NewsletterContent,
+    now: dt.datetime,
+    generated: GenerationResult | None = None,
+) -> NewsletterFiles:
+    """Render the newsletter with the design specification and the closing line.
+
+    The standalone HTML carries a PNG logo as a ``data:`` address and the ``.eml``
+    as a related image part. Raises DesignError when the logo cannot be used.
+    """
+    design = config.document
+    footer = config.newsletter.footer
+    logo = logo_for(config)
+    doc = build_newsletter(register, content, design, generated)
+    text = render_email_text(doc, design, footer)
+    page = render_email_html(
+        doc, design, footer, logo=logo, logo_src=logo.data_uri if logo is not None else ""
+    )
+    mail = render_email_html(doc, design, footer, logo=logo, logo_src=f"cid:{LOGO_CID}")
+    return NewsletterFiles(
+        subject=doc.title,
+        html=page,
+        text=text,
+        eml=email_bytes(doc.title, text, mail, now, logo),
+        generated=generated is not None and generated.count > 0,
+        dropped=tuple(generated.dropped) if generated is not None else (),
+    )
