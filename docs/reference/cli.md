@@ -47,6 +47,8 @@ Commands read the register. Only `sources add` and `sources remove` write it, an
 | `run` | snapshots, and one run record in `runs/` in the state directory |
 | `schedule --install`, `schedule --remove` | on macOS `~/Library/LaunchAgents/io.github.klappe-pm.regwatch.plist`; elsewhere your crontab, between regwatch's marker lines only |
 | `premium on`, `premium off` | one line in `regwatch.toml`: `[premium] enabled` |
+| `llm on`, `llm off`, `llm use` | lines in the `[llm]` table of `regwatch.toml` |
+| any command that writes generated copy | one line per language model call in `llm-calls.jsonl` in the state directory |
 | `ui` | through its Settings page only, one line in `regwatch.toml`: `[profile] focus_areas` or `[premium] enabled` |
 
 `keys set` and `keys remove` change the system keychain, never a file.
@@ -145,7 +147,7 @@ Keeps the keys that keyed sources need in the system keychain: the macOS login k
 | `list` | each keyed source with `stored`, `set in the environment`, `missing` or `missing (no keychain tool)`; with a configuration the keyed sources of your sources file, without one the keyed catalogue sources |
 | `remove SOURCE_ID` | delete the stored key; says so when the environment variable still supplies one |
 
-`SOURCE_ID` is a keyed source in your sources file or in the catalogue. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, a key too long for the line `security` reads on macOS (3,906 to 4,006 characters depending on the key name), or a machine with neither keychain tool exits 2; the last two name the environment variable to use instead.
+`SOURCE_ID` is a keyed source in your sources file or in the catalogue, or `llm-anthropic` or `llm-openai` for the key of a language model provider, kept under the fixed variable `REGWATCH_KEY_ANTHROPIC` or `REGWATCH_KEY_OPENAI`. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, a key too long for the line `security` reads on macOS (3,906 to 4,006 characters depending on the key name), or a machine with neither keychain tool exits 2; the last two name the environment variable to use instead.
 
 ## `run`
 
@@ -376,4 +378,23 @@ Each prints `regwatch premium: on` or `regwatch premium: off`, and while off, th
 
 ```text
 regwatch premium on
+```
+
+## `llm`
+
+Shows or changes the language model behind generated copy, the `[llm]` table in `regwatch.toml`. Generated copy is a premium feature: with premium off, `on`, `off` and `use` exit 2 with a message that names `regwatch premium on`, and `status` still works. See [turn on generated copy](../how-to-guides/turn-on-generated-copy.md).
+
+| argument | meaning |
+| --- | --- |
+| `status` | change nothing |
+| `on`, `off` | set `[llm] enabled` |
+| `use PROVIDER` | set `[llm] provider` to `anthropic`, `openai` or `ollama`, and `[llm] model` to `--model`, or to empty for the provider's default |
+| `--model NAME` | with `use`, the model name |
+
+Each prints `regwatch llm: <on or off>, <provider>, <model>`, then where the provider's key comes from (`environment`, `keychain`, `missing` or `unavailable`) with the `keys set` command that stores one, or for Ollama a note when `allow_private_hosts` is not set. The provider keys are kept with `keys set llm-anthropic` and `keys set llm-openai`.
+
+```text
+regwatch llm use anthropic
+regwatch keys set llm-anthropic
+regwatch llm on
 ```

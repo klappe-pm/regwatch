@@ -92,3 +92,17 @@ Optional table, written by `regwatch premium` and the Settings page of `regwatch
 | key | type | default | meaning |
 | --- | --- | --- | --- |
 | `enabled` | boolean | false | turns on the premium features: newsletters, document templates, generated copy and runs more often than once a day. While it is false, the web app shows them with a lock and a note. |
+
+## LLM
+
+Optional table, written by `regwatch llm` and the Settings page of `regwatch ui`. It configures generated copy, the stage that asks a language model to write the opening and the summaries of a newsletter or a document from the structured facts regwatch already has. It is off by default and works only while premium features are on; see [turn on generated copy](../how-to-guides/turn-on-generated-copy.md). The table holds no key: the Anthropic key is `REGWATCH_KEY_ANTHROPIC` and the OpenAI key `REGWATCH_KEY_OPENAI`, kept in the system keychain with `regwatch keys set llm-anthropic` or `regwatch keys set llm-openai`, or set in the environment.
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `enabled` | boolean | false | turns generated copy on |
+| `provider` | string | `"anthropic"` | `anthropic` (the Messages API), `openai` (Chat Completions) or `ollama` (a local model on `127.0.0.1:11434`, which needs `allow_private_hosts = true` under `[fetch]`) |
+| `model` | string | `""` | the model name, letters, digits and `. _ : / -`, at most 100 characters; empty means the provider's default: `claude-opus-5-5`, `gpt-5-mini` or `llama3.2` |
+| `max_tokens` | integer | 4000 | the most tokens one answer may use, 256 to 32000 |
+| `timeout_seconds` | number | 180 | the deadline of one call, above 0 and at most 600; it replaces the `[fetch]` timeouts for this call only |
+
+Each call is recorded in `llm-calls.jsonl` in the state directory: the time, the provider, the model, the token counts, the duration, the outcome and how many passages were kept and dropped. The prompt, the answer and the key are never recorded.

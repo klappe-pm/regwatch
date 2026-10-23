@@ -19,12 +19,19 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from regwatch.config import FOCUS_ID_RE, load_config
+from regwatch.config import FOCUS_ID_RE, LLM_PROVIDERS, MODEL_RE, load_config
 from regwatch.state import safe_write_text
 
-__all__ = ["SettingsError", "edit_setting", "set_focus_areas", "set_premium", "set_setting"]
+__all__ = [
+    "SettingsError",
+    "edit_setting",
+    "set_focus_areas",
+    "set_llm",
+    "set_premium",
+    "set_setting",
+]
 
-SettingValue = bool | list[str]
+SettingValue = bool | int | str | list[str]
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -35,6 +42,11 @@ class SettingsError(ValueError):
 def _literal(value: SettingValue) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        # A JSON string is a valid TOML basic string, with ASCII escapes for the rest.
+        return json.dumps(value)
     # JSON strings are valid TOML basic strings: both escape quotes, backslashes and controls.
     return "[" + ", ".join(json.dumps(item) for item in value) + "]"
 
@@ -131,3 +143,29 @@ def set_focus_areas(config_path: Path, focus_areas: Iterable[str], known: Iterab
     if bad:
         raise SettingsError("unknown focus areas: " + ", ".join(sorted(bad))[:200])
     set_setting(config_path, "profile", "focus_areas", chosen)
+
+
+def set_llm(
+    config_path: Path,
+    *,
+    enabled: bool | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+) -> None:
+    """Change ``[llm] enabled``, ``provider`` and ``model``; each one left as None is kept.
+
+    A provider must be one regwatch knows and a model a plain model name (empty means
+    the provider's default). Each setting is changed and checked on its own.
+    """
+    if provider is not None and provider not in LLM_PROVIDERS:
+        raise SettingsError(f"the provider must be one of {', '.join(LLM_PROVIDERS)}")
+    if model is not None and model and not MODEL_RE.fullmatch(model):
+        raise SettingsError(
+            "a model name holds letters, digits and . _ : / - only, at most 100 characters"
+        )
+    if provider is not None:
+        set_setting(config_path, "llm", "provider", provider)
+    if model is not None:
+        set_setting(config_path, "llm", "model", model)
+    if enabled is not None:
+        set_setting(config_path, "llm", "enabled", enabled)

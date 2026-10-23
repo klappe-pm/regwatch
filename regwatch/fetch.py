@@ -31,7 +31,11 @@ The shipped SafeFetcher is deliberately small and enforces these rules:
 - a key for a source that needs one (a ``Credential``) is sent only over
   ``https``, only to the host and port of the URL it was given for, and only in
   the query parameter or header its source names; a redirect to another host
-  drops it, and it is removed from every error message.
+  drops it, and it is removed from every error message;
+- ``post_json`` sends a JSON body with the same checks, limits and deadline. It
+  follows no redirect, and it speaks plain ``http`` only to a loopback address
+  written as an IP literal, only with ``allow_private_hosts`` set and never with
+  a key: that is how a local model server on ``127.0.0.1`` is reached.
 
 Tests and embedders can supply any object with a matching ``fetch`` method, and
 ``SafeFetcher`` takes a resolver, a connector and a TLS wrapper so that it can be
@@ -44,6 +48,7 @@ import contextlib
 import html
 import http.client
 import ipaddress
+import json
 import os
 import re
 import socket
@@ -53,7 +58,7 @@ import threading
 import time
 import unicodedata
 import urllib.request
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -64,6 +69,7 @@ from regwatch.sanitize import clean_text
 __all__ = [
     "ALLOWED_SCHEMES",
     "CHUNK_BYTES",
+    "MAX_POST_BYTES",
     "MAX_REDIRECTS",
     "Credential",
     "FetchError",
@@ -76,6 +82,8 @@ __all__ = [
 ALLOWED_SCHEMES = frozenset({"https", "file"})
 MAX_REDIRECTS = 5
 CHUNK_BYTES = 16384
+# The largest JSON body ``post_json`` sends.
+MAX_POST_BYTES = 1_000_000
 REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 # The three dots (ideographic full stop, fullwidth full stop, halfwidth ideographic full
 # stop) that the idna codec reads as a label separator.
@@ -114,7 +122,10 @@ class FetchError(Exception):
 
 
 _CREDENTIAL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-_RESERVED_HEADERS = frozenset({"host", "user-agent", "accept", "connection", "content-length"})
+_CREDENTIAL_SCHEME = re.compile(r"^[A-Za-z]{0,20}$")
+_RESERVED_HEADERS = frozenset(
+    {"host", "user-agent", "accept", "connection", "content-length", "content-type"}
+)
 MAX_KEY_CHARACTERS = 4096
 REDACTED = "[key]"
 
@@ -125,12 +136,15 @@ class Credential:
 
     The key is hidden from ``repr``, and a value that could not be sent safely
     (empty, too long, or holding a space, a control character, a quote or a
-    backslash) is refused without being repeated in the message.
+    backslash) is refused without being repeated in the message. ``scheme`` is a
+    word sent before a header key, such as ``Bearer`` in an ``Authorization``
+    header; it is letters only.
     """
 
     placement: str
     name: str
     value: str = field(repr=False)
+    scheme: str = ""
 
     def __post_init__(self) -> None:
         if self.placement not in ("query", "header"):
@@ -139,6 +153,10 @@ class Credential:
             raise ValueError("a key parameter or header name is 1 to 64 letters, digits, - or _")
         if self.placement == "header" and self.name.lower() in _RESERVED_HEADERS:
             raise ValueError(f"the key cannot be sent in the {self.name} header")
+        if not _CREDENTIAL_SCHEME.fullmatch(self.scheme) or (
+            self.scheme and self.placement != "header"
+        ):
+            raise ValueError("a key scheme is up to 20 letters, and only for a header key")
         value = self.value
         if (
             not value
@@ -149,6 +167,11 @@ class Credential:
                 "the key must be 1 to 4096 printable ASCII characters without spaces, quotes "
                 "or backslashes"
             )
+
+    @property
+    def header_value(self) -> str:
+        """The value of the header that carries the key, with its scheme word when it has one."""
+        return f"{self.scheme} {self.value}" if self.scheme else self.value
 
     @classmethod
     def from_auth(cls, auth: str, value: str) -> Credential:
@@ -325,6 +348,73 @@ class SafeFetcher:
         # a snapshot, a hash or a printed line.
         return credential.redact(data.decode("utf-8", errors="replace"))
 
+    def post_json(
+        self,
+        url: str,
+        payload: Mapping[str, object],
+        *,
+        credential: Credential | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> str:
+        """Send ``payload`` as a JSON body to ``url`` and return the response body.
+
+        The address checks, the size limit and the deadline are the ones ``fetch``
+        applies. No redirect is followed: a POST that is answered with one is an
+        error. ``url`` is ``https``, or plain ``http`` to a loopback address written
+        as an IP literal (``127.0.0.1`` or ``::1``) when ``allow_private_hosts`` is
+        set and no key is sent. ``headers`` are extra headers that carry no secret;
+        they cannot replace the headers the client sets. Every error raised with a
+        ``credential`` is cleaned of the key, with its cause dropped, and a body
+        that echoes the key has it replaced.
+        """
+        try:
+            body = json.dumps(payload, ensure_ascii=True).encode("ascii")
+        except (TypeError, ValueError) as exc:
+            raise FetchError("the request body cannot be written as JSON") from exc
+        if len(body) > MAX_POST_BYTES:
+            raise FetchError(f"the request body is larger than {MAX_POST_BYTES} bytes")
+        extra = _check_headers(headers or {})
+        try:
+            tls = self._post_scheme(url, credential) == "https"
+            deadline = time.monotonic() + self.total_timeout_seconds
+            data, location = self._request(
+                url, deadline, credential, method="POST", body=body, extra=extra, tls=tls
+            )
+            if location is not None:
+                raise FetchError("the server answered with a redirect; a POST is not redirected")
+        except FetchError as exc:
+            if credential is None:
+                raise
+            raise FetchError(exc.raw, redact=credential.redact) from None
+        text = data.decode("utf-8", errors="replace")
+        return credential.redact(text) if credential is not None else text
+
+    def _post_scheme(self, url: str, credential: Credential | None) -> str:
+        """``https`` or ``http`` for a POST to ``url``, or a FetchError saying why neither."""
+        if any(ord(char) < 0x21 or 0x7F <= ord(char) <= 0x9F for char in url):
+            raise FetchError("URL contains a space or a control character")
+        try:
+            parts = urlsplit(url)
+            _ = parts.port
+        except ValueError as exc:
+            raise FetchError(f"invalid URL: {exc}") from exc
+        scheme = parts.scheme.lower()
+        if "@" in parts.netloc:
+            raise FetchError("URLs that carry credentials are not allowed")
+        if scheme == "https" and parts.hostname:
+            return "https"
+        if scheme != "http":
+            raise FetchError("a request with a body is sent only over https")
+        if credential is not None:
+            raise FetchError("a key is sent only over https; refused")
+        if not _is_loopback_literal(parts.hostname or ""):
+            raise FetchError("plain http is allowed only to 127.0.0.1 or ::1")
+        if not self.allow_private_hosts:
+            raise FetchError(
+                "a request to this machine needs allow_private_hosts; set it under [fetch]"
+            )
+        return "http"
+
     def _limit(self, data: bytes) -> bytes:
         if len(data) > self.max_bytes:
             raise FetchError(f"response is larger than the limit of {self.max_bytes} bytes")
@@ -432,30 +522,43 @@ class SafeFetcher:
         raise FetchError(f"more than {MAX_REDIRECTS} redirects")
 
     def _request(
-        self, url: str, deadline: float, credential: Credential | None = None
+        self,
+        url: str,
+        deadline: float,
+        credential: Credential | None = None,
+        *,
+        method: str = "GET",
+        body: bytes | None = None,
+        extra: Mapping[str, str] | None = None,
+        tls: bool = True,
     ) -> tuple[bytes, str | None]:
         parts = urlsplit(url)
         host = _wire_host(parts.hostname or "")
-        port = parts.port or 443
+        default_port = 443 if tls else 80
+        port = parts.port or default_port
         addresses = self._vet(host, port, deadline)
         query = parts.query
         headers = {
-            "Host": _host_header(host, port),
+            "Host": _host_header(host, port, default_port),
             "User-Agent": self.user_agent,
             "Accept": "text/html,application/json,application/xml,*/*",
             "Connection": "close",
+            **(extra or {}),
         }
+        if body is not None:
+            headers["Content-Type"] = "application/json"
         if credential is not None and credential.placement == "query":
             query = _with_parameter(query, credential.name, credential.value)
         elif credential is not None:
-            headers[credential.name] = credential.value
+            headers[credential.name] = credential.header_value
         target = _wire_text((parts.path or "/") + (f"?{query}" if query else ""))
         sock: socket.socket | None = None
         watchdog: threading.Timer | None = None
         expired = threading.Event()
         try:
             sock = self._connect(addresses, port, deadline)
-            sock = self._wrapper(sock, host)
+            if tls:
+                sock = self._wrapper(sock, host)
             watchdog = threading.Timer(
                 max(0.001, deadline - time.monotonic()), _expire, args=(sock, expired)
             )
@@ -463,7 +566,7 @@ class SafeFetcher:
             watchdog.start()
             connection = http.client.HTTPConnection(host, port)
             connection.sock = sock
-            connection.request("GET", target, headers=headers)
+            connection.request(method, target, body=body, headers=headers)
             response = connection.getresponse()
             if response.status in REDIRECT_STATUSES:
                 location = response.getheader("Location")
@@ -582,10 +685,33 @@ def _utf8_header(value: str) -> str:
         return value
 
 
-def _host_header(host: str, port: int) -> str:
+def _host_header(host: str, port: int, default_port: int = 443) -> str:
     """The Host header value: an IPv6 literal is bracketed, and a non-default port is appended."""
     name = f"[{host}]" if ":" in host else host
-    return name if port == 443 else f"{name}:{port}"
+    return name if port == default_port else f"{name}:{port}"
+
+
+_HEADER_NAME = re.compile(r"^[A-Za-z0-9-]{1,64}$")
+
+
+def _check_headers(headers: Mapping[str, str]) -> dict[str, str]:
+    """Extra request headers, refused when a name or value could split or replace a header."""
+    checked: dict[str, str] = {}
+    for name, value in headers.items():
+        if not _HEADER_NAME.fullmatch(name) or name.lower() in _RESERVED_HEADERS:
+            raise FetchError(f"the header name {clean_text(name, 64)!r} cannot be sent")
+        if len(value) > 200 or any(not 0x20 <= ord(ch) <= 0x7E for ch in value):
+            raise FetchError(f"the value of the {name} header cannot be sent")
+        checked[name] = value
+    return checked
+
+
+def _is_loopback_literal(host: str) -> bool:
+    """True for an IP literal in 127.0.0.0/8 or ``::1``; a name never counts."""
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def _is_ip_literal(host: str) -> bool:

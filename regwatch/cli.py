@@ -24,6 +24,7 @@ Each subcommand is one stage of the engine:
     schedule  install, show or remove a recurring run with launchd or cron
     ui        open the local web app in the browser
     premium   turn the premium features on or off, or show whether they are on
+    llm       show or change the language model that writes generated copy
 
 Exit status: 0 success, 1 the register is invalid or nothing could be captured,
 2 a usage, configuration, network or file error, 3 changes were detected and
@@ -63,6 +64,7 @@ from regwatch.catalogue import (
 from regwatch.check import SourceResult, accept_results, capture_sources, check_sources
 from regwatch.config import (
     DEFAULT_CONFIG_NAME,
+    LLM_PROVIDERS,
     Config,
     ConfigError,
     FetchSettings,
@@ -75,6 +77,7 @@ from regwatch.focus import FocusError, FocusProfile, build_profile, load_catalog
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.ingest import IngestError, build_query_url, candidates_document, parse_candidates
 from regwatch.keys import KeyStore, KeyStoreError
+from regwatch.llm import LLM_KEYS, GenerationError
 from regwatch.onboarding import (
     SCAFFOLD_NAMES,
     InitPlan,
@@ -122,7 +125,7 @@ from regwatch.schedule import (
     schedule_cadence,
 )
 from regwatch.server import LocalServer, ServerError, web_root
-from regwatch.settings import set_premium
+from regwatch.settings import set_llm, set_premium
 from regwatch.state import (
     MAX_STATE_BYTES,
     AlreadyExistsError,
@@ -1273,6 +1276,12 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
     )
     _say("[premium]")
     row("enabled", config.premium.enabled)
+    _say("[llm]")
+    row("enabled", config.llm.enabled)
+    row("provider", config.llm.provider)
+    row("model", config.llm.effective_model)
+    row("max_tokens", config.llm.max_tokens)
+    row("timeout_seconds", config.llm.timeout_seconds)
     for area in focus.areas:
         _say(f"# focus area {area.focus_id}: {area.label}, {len(area.terms)} terms")
     if not focus.active:
@@ -1754,6 +1763,43 @@ def _cmd_premium(ctx: _Context, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+PREMIUM_HINT = "turn it on with 'regwatch premium on'"
+
+
+def _require_premium(ctx: _Context, feature: str) -> None:
+    """Refuse a premium feature while premium is off, naming the command that turns it on."""
+    if not ctx.config.premium.enabled:
+        raise CommandError(f"{feature} is a premium feature; {PREMIUM_HINT}")
+
+
+def _cmd_llm(ctx: _Context, args: argparse.Namespace) -> int:
+    """Show or change the generated copy settings, ``[llm]`` in regwatch.toml."""
+    if args.action != "status":
+        _require_premium(ctx, "Generated copy")
+        if args.action == "use":
+            if args.provider is None:
+                raise CommandError("name a provider: anthropic, openai or ollama")
+            set_llm(ctx.config_path, provider=args.provider, model=args.model or "")
+        else:
+            set_llm(ctx.config_path, enabled=args.action == "on")
+    config = load_config(ctx.config_path)
+    llm = config.llm
+    _say(f"regwatch llm: {'on' if llm.enabled else 'off'}, {llm.provider}, {llm.effective_model}")
+    key_env = LLM_KEYS.get(llm.provider)
+    if key_env:
+        where = ctx.keystore().status(key_env).source
+        hint = f"; run 'regwatch keys set llm-{llm.provider}'"
+        _say(f"key {key_env}: {where}" + ("" if where in ("environment", "keychain") else hint))
+    elif not config.fetch.allow_private_hosts:
+        _say(
+            "Ollama runs on this machine at 127.0.0.1, which regwatch refuses unless "
+            "allow_private_hosts = true is set under [fetch]"
+        )
+    if not config.premium.enabled:
+        _say(f"Generated copy is a premium feature; {PREMIUM_HINT}.")
+    return EXIT_OK
+
+
 # --- parser ------------------------------------------------------------------
 
 _Handler = Callable[[_Context, argparse.Namespace], int]
@@ -1962,6 +2008,13 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
 
     p = add("premium", _cmd_premium, "turn the premium features on or off, or show their state")
     p.add_argument("action", choices=["on", "off", "status"])
+
+    p = add("llm", _cmd_llm, "show or change the language model that writes generated copy")
+    p.add_argument("action", choices=["status", "on", "off", "use"])
+    p.add_argument(
+        "provider", nargs="?", choices=list(LLM_PROVIDERS), help="with use: the provider"
+    )
+    p.add_argument("--model", help="with use: the model name; default the provider's default")
     return parser, handlers
 
 
@@ -2101,6 +2154,7 @@ def main(
         IngestError,
         ServerError,
         DocumentError,
+        GenerationError,
         ValueError,
         OSError,
     ) as exc:

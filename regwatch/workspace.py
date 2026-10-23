@@ -27,7 +27,7 @@ from regwatch.check import CaptureResult, SourceResult, capture_sources, check_s
 from regwatch.config import Config, FetchSettings
 from regwatch.fetch import Fetcher, SafeFetcher
 from regwatch.focus import load_catalogue
-from regwatch.keys import KeyStore, KeyStoreError
+from regwatch.keys import PROVIDER_KEYS, KeyStore, KeyStoreError
 from regwatch.register import Register, load_register, read_json_list
 from regwatch.schedule import CRON_TIMES, INTERVAL_SECONDS, installed_block, plist_path
 from regwatch.state import (
@@ -177,6 +177,9 @@ def keyed_source(
     for entry in catalogue:
         if entry.source_id == source_id and entry.key_env is not None:
             return KeyedSource(entry.source_id, entry.key_env, entry.signup_url)
+    if source_id in PROVIDER_KEYS:
+        key_env, signup = PROVIDER_KEYS[source_id]
+        return KeyedSource(source_id, key_env, signup)
     raise WorkspaceError(f"'{source_id}' is not a source that needs a key")
 
 

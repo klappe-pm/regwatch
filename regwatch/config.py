@@ -17,11 +17,14 @@ from typing import Any
 
 __all__ = [
     "DEFAULT_CONFIG_NAME",
+    "DEFAULT_MODELS",
+    "LLM_PROVIDERS",
     "CatalogueSettings",
     "Config",
     "ConfigError",
     "FetchSettings",
     "IngestSettings",
+    "LlmSettings",
     "PremiumSettings",
     "ProfileSettings",
     "RegisterPaths",
@@ -132,6 +135,31 @@ class PremiumSettings:
     enabled: bool = False
 
 
+LLM_PROVIDERS = ("anthropic", "openai", "ollama")
+DEFAULT_MODELS = {"anthropic": "claude-opus-5-5", "openai": "gpt-5-mini", "ollama": "llama3.2"}
+MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$")
+
+
+@dataclass(frozen=True)
+class LlmSettings:
+    """The generated copy stage, ``[llm]``. Off unless the file turns it on.
+
+    ``model`` is empty for the provider's default. ``max_tokens`` caps one answer and
+    ``timeout_seconds`` is the whole deadline of one call.
+    """
+
+    enabled: bool = False
+    provider: str = "anthropic"
+    model: str = ""
+    max_tokens: int = 4000
+    timeout_seconds: float = 180.0
+
+    @property
+    def effective_model(self) -> str:
+        """The model a call names: the configured one, or the provider's default."""
+        return self.model or DEFAULT_MODELS[self.provider]
+
+
 @dataclass(frozen=True)
 class Config:
     """The parsed configuration, with every path made absolute."""
@@ -146,6 +174,12 @@ class Config:
     profile: ProfileSettings = ProfileSettings()
     catalogue: CatalogueSettings = CatalogueSettings()
     premium: PremiumSettings = PremiumSettings()
+    llm: LlmSettings = LlmSettings()
+
+    @property
+    def llm_calls_path(self) -> Path:
+        """File that records each generated copy call: provider, model, tokens and duration."""
+        return self.state_dir / "llm-calls.jsonl"
 
     def protected_paths(self) -> list[Path]:
         """Files that a user-named output path must never overwrite.
@@ -325,6 +359,31 @@ def _parse_premium(table: dict[str, Any]) -> PremiumSettings:
     return PremiumSettings(enabled=enabled)
 
 
+def _parse_llm(table: dict[str, Any]) -> LlmSettings:
+    enabled = table.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("[llm] enabled must be true or false")
+    provider = table.get("provider", "anthropic")
+    if provider not in LLM_PROVIDERS:
+        raise ConfigError(f"[llm] provider must be one of {', '.join(LLM_PROVIDERS)}")
+    model = table.get("model", "")
+    if not isinstance(model, str) or (model and not MODEL_RE.fullmatch(model)):
+        raise ConfigError(
+            "[llm] model must be a model name of letters, digits and . _ : / - "
+            "(at most 100 characters), or empty for the provider's default"
+        )
+    timeout = table.get("timeout_seconds", LlmSettings.timeout_seconds)
+    if isinstance(timeout, bool) or not isinstance(timeout, int | float) or not 0 < timeout <= 600:
+        raise ConfigError("[llm] timeout_seconds must be a number above 0 and at most 600")
+    return LlmSettings(
+        enabled=enabled,
+        provider=provider,
+        model=model,
+        max_tokens=_integer(table, "max_tokens", "llm", LlmSettings.max_tokens, 256, 32000),
+        timeout_seconds=float(timeout),
+    )
+
+
 def load_config(path: Path) -> Config:
     """Read and validate the configuration file at ``path``.
 
@@ -343,7 +402,17 @@ def load_config(path: Path) -> Config:
         raise ConfigError(f"cannot parse configuration file {path}: {exc}") from exc
 
     unknown_tables = sorted(
-        set(data) - {"register", "state", "fetch", "ingest", "profile", "catalogue", "premium"}
+        set(data)
+        - {
+            "register",
+            "state",
+            "fetch",
+            "ingest",
+            "profile",
+            "catalogue",
+            "premium",
+            "llm",
+        }
     )
     if unknown_tables:
         raise ConfigError(f"unknown configuration tables: {', '.join(unknown_tables)}")
@@ -411,6 +480,9 @@ def load_config(path: Path) -> Config:
             _table(data, "profile", ("focus_areas", "custom_terms", "catalogue")), base
         ),
         premium=_parse_premium(_table(data, "premium", ("enabled",))),
+        llm=_parse_llm(
+            _table(data, "llm", ("enabled", "provider", "model", "max_tokens", "timeout_seconds"))
+        ),
         ingest=_parse_ingest(
             _table(
                 data,

@@ -11,6 +11,9 @@ become a link, an image, raw HTML, a heading, a list item or a horizontal rule, 
 the punctuation that makes a renderer link bare text is escaped too. Plain text carries
 text as it is. Every value first loses its control characters, which removes
 terminal escape sequences. Every format ends with the disclaimer.
+
+A generated passage is rendered in every format with a plain "Generated" label and
+the facts it was written from beneath it, escaped like every other value.
 """
 
 from __future__ import annotations
@@ -23,13 +26,15 @@ import zipfile
 from collections.abc import Sequence
 from xml.sax.saxutils import escape as xml_escape
 
-from regwatch.document import Document
+from regwatch.document import GENERATED_LABEL, Document, GeneratedPassage
 from regwatch.sanitize import clean_text, escape_markdown
 
 __all__ = [
+    "FACTS_LABEL",
     "FORMATS",
     "TAG_RE",
     "docx_bytes",
+    "passage_html",
     "render_document_xml",
     "render_markdown",
     "render_newsletter_html",
@@ -52,6 +57,18 @@ def _md(text: str) -> str:
     return escape_markdown(clean_text(text))
 
 
+FACTS_LABEL = "Written from these facts"
+
+
+def _passage_markdown(passage: GeneratedPassage) -> list[str]:
+    lines = [f"{GENERATED_LABEL}: {_md(passage.text)}", ""]
+    if passage.facts:
+        lines += [f"{FACTS_LABEL}:", ""]
+        lines += [f"- {_md(fact)}" for fact in passage.facts]
+        lines.append("")
+    return lines
+
+
 def render_markdown(doc: Document) -> str:
     """Render ``doc`` as Markdown. Every value is escaped, so it renders as literal text."""
     lines = [f"# {_md(doc.title)}", ""]
@@ -60,6 +77,8 @@ def render_markdown(doc: Document) -> str:
     lines += [f"Generated {_md(doc.generated)}.", ""]
     for section in doc.sections:
         lines += ["#" * section.level + f" {_md(section.heading)}", ""]
+        for passage in section.generated:
+            lines += _passage_markdown(passage)
         for paragraph in section.paragraphs:
             lines += [_md(paragraph), ""]
         for bullet in section.bullets:
@@ -101,6 +120,10 @@ def render_newsletter_text(doc: Document) -> str:
     lines += [f"Generated {_line(doc.generated)}.", ""]
     for section in doc.sections:
         lines += [_line(section.heading).upper(), ""]
+        for passage in section.generated:
+            lines += [f"[{GENERATED_LABEL}] {_line(passage.text)}"]
+            lines += [f"    from {_line(fact)}" for fact in passage.facts]
+            lines.append("")
         for paragraph in section.paragraphs:
             lines += [_line(paragraph), ""]
         for bullet in section.bullets:
@@ -109,6 +132,34 @@ def render_newsletter_text(doc: Document) -> str:
             lines.append("")
     lines += ["-----", _line(doc.disclaimer)]
     return "\n".join(lines).rstrip() + "\n"
+
+
+def passage_html(passage: GeneratedPassage, tag_color: str = "#4b5866") -> str:
+    """One generated passage as an HTML block with inline styles: the label, the text, the facts.
+
+    Every piece of text is escaped. The label is a quiet bordered tag, so a reader
+    sees at once that a model wrote the text, and the facts follow in a smaller size.
+    """
+    esc = html.escape
+    parts = [
+        '<div style="margin:0 0 12px 0;padding:8px 10px;border-left:3px solid #d6dee7;">',
+        '<p style="margin:0 0 6px 0;font-size:14px;line-height:1.5;">'
+        f'<span style="display:inline-block;margin-right:6px;padding:0 4px;border:1px solid '
+        f'{tag_color};color:{tag_color};font-size:11.5px;line-height:16px;letter-spacing:0.02em;">'
+        f"{GENERATED_LABEL}</span>{esc(_line(passage.text))}</p>",
+    ]
+    if passage.facts:
+        parts.append(
+            f'<p style="margin:0;color:#4b5866;font-size:12px;line-height:1.4;">{FACTS_LABEL}:</p>'
+        )
+        parts.append(
+            '<ul style="margin:2px 0 0 0;padding-left:18px;color:#4b5866;font-size:12px;'
+            'line-height:1.4;">'
+        )
+        parts += [f"<li>{esc(_line(fact))}</li>" for fact in passage.facts]
+        parts.append("</ul>")
+    parts.append("</div>")
+    return "".join(parts)
 
 
 def render_newsletter_html(doc: Document) -> str:
@@ -143,6 +194,7 @@ def render_newsletter_html(doc: Document) -> str:
             'padding-bottom:4px;">'
             f"{esc(_line(section.heading))}</h2>"
         )
+        body += [passage_html(passage) for passage in section.generated]
         for paragraph in section.paragraphs:
             body.append(
                 '<p style="margin:0 0 10px 0;font-size:14px;line-height:1.5;">'
@@ -191,8 +243,15 @@ _ROOT_RELS = (
 _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
-def _para(text: str, *, bold: bool = False, size: int | None = None, bullet: bool = False) -> str:
-    properties = "<w:b/>" if bold else ""
+def _para(
+    text: str,
+    *,
+    bold: bool = False,
+    italic: bool = False,
+    size: int | None = None,
+    bullet: bool = False,
+) -> str:
+    properties = ("<w:b/>" if bold else "") + ("<w:i/>" if italic else "")
     if size is not None:
         properties += f'<w:sz w:val="{size}"/><w:szCs w:val="{size}"/>'
     run_properties = f"<w:rPr>{properties}</w:rPr>" if properties else ""
@@ -214,6 +273,9 @@ def render_document_xml(doc: Document) -> str:
     parts.append(_para(f"Generated {doc.generated}.", size=18))
     for section in doc.sections:
         parts.append(_para(section.heading, bold=True, size=28 if section.level <= 2 else 24))
+        for passage in section.generated:
+            parts.append(_para(f"{GENERATED_LABEL}: {passage.text}", italic=True))
+            parts += [_para(f"From {fact}", bullet=True, size=18) for fact in passage.facts]
         parts += [_para(paragraph) for paragraph in section.paragraphs]
         parts += [_para(bullet, bullet=True) for bullet in section.bullets]
     parts.append(_para(doc.disclaimer, size=18))

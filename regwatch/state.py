@@ -24,6 +24,7 @@ __all__ = [
     "AlreadyExistsError",
     "SeenState",
     "StateError",
+    "append_call_record",
     "list_run_records",
     "load_seen",
     "make_state_dir",
@@ -380,6 +381,40 @@ def write_run_record(
     for old in records[: max(0, len(records) - keep)]:
         remove_file(old, protected_paths)
     return path
+
+
+KEEP_CALL_RECORDS = 1000
+
+
+def append_call_record(
+    path: Path,
+    record: Mapping[str, object],
+    protected: Iterable[Path],
+    keep: int = KEEP_CALL_RECORDS,
+) -> None:
+    """Add one JSON line to the call log at ``path`` and keep only the newest ``keep`` lines.
+
+    The file is rewritten atomically through ``safe_write_text``, like every other
+    write. A line that is not JSON (a hand edit) is dropped. Only what the caller
+    passes is written; the generated copy stage passes the provider, the model, the
+    token counts, the duration and the outcome, never a key or a prompt.
+    """
+    lines: list[str] = []
+    if path.is_file():
+        try:
+            if path.stat().st_size <= MAX_STATE_BYTES:
+                lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as exc:
+            raise StateError(f"cannot read {path}: {exc}") from exc
+    kept: list[str] = []
+    for line in lines:
+        try:
+            if isinstance(json.loads(line), dict):
+                kept.append(line)
+        except ValueError:
+            continue
+    kept.append(json.dumps(record, sort_keys=True))
+    safe_write_text(path, "\n".join(kept[-keep:]) + "\n", protected)
 
 
 def list_run_records(state_dir: Path) -> list[Path]:

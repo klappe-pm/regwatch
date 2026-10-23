@@ -15,7 +15,7 @@ Reads `regwatch.toml`. See [configuration](configuration.md) for the keys.
 - `DEFAULT_CONFIG_NAME: str`: `"regwatch.toml"`.
 - `load_config(path: Path) -> Config`: parse and validate a configuration file. Raises `ConfigError`.
 - `ConfigError`: the configuration file is missing, unreadable or invalid.
-- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path`, `profile`, `catalogue` and `premium`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files, and the focus catalogue and the extra source catalogue when they are configured, which a user-named output must never overwrite.
+- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path`, `profile`, `catalogue`, `premium` and `llm`, plus the properties `seen_path`, `candidates_path` and `llm_calls_path`. `LlmSettings` holds `enabled`, `provider`, `model`, `max_tokens` and `timeout_seconds`, and `effective_model` is the model a call names. `protected_paths()` returns the register files, the configuration file, the two state files, and the focus catalogue and the extra source catalogue when they are configured, which a user-named output must never overwrite.
 - `CatalogueSettings`: frozen dataclass with `extra`, the `[catalogue]` table.
 - `ProfileSettings`: frozen dataclass with `focus_areas`, `custom_terms` and `catalogue`, the `[profile]` table.
 - `PremiumSettings`: frozen dataclass with `enabled`, the `[premium]` table; false unless the file turns it on.
@@ -33,8 +33,8 @@ The one network client. See the [security model](../explanation/security-model.m
 - `is_public_address(address: str) -> bool`: true for a globally routable unicast IP address; false for loopback, link-local, private, unique local, shared, reserved, multicast and unspecified addresses, for the IPv4-mapped form of any of them, for an IPv6 address that embeds one (NAT64 `/96`, 6to4, Teredo and ISATAP addresses are judged by the IPv4 address inside, and every embedded address must be public when there is more than one), for the ranges `::/8`, `fec0::/10` and `64:ff9b::/32` apart from its `/96`, and for text that is not an address.
 - `FetchError(message="", redact=None)`: a fetch was refused or failed. The message is cleaned when the error is created, with control characters and invisible format characters removed and a length of at most 1,000 characters, so it is safe to show. `redact`, a function such as `Credential.redact`, removes a secret before the message is cleaned and cut and again after cleaning. `raw` holds the message before it was cut, for rebuilding the error with a `redact` function; it is never shown.
 - `Fetcher`: a protocol with one method, `fetch(url: str, *, credential: Credential | None = None) -> str`. Implement it to supply a fake client in tests. `credential` is given only for a source that needs a key.
-- `Credential(placement, name, value)`: frozen dataclass for a key and where it goes, `query` or `header`; the value is hidden from `repr`, and an unsafe value or a reserved header name raises `ValueError` without repeating the value. `Credential.from_auth(auth, value)` builds one from a sources file `auth` value such as `query:api_key`, and `redact(text)` replaces the key in `text` with `[key]`, as written, percent-encoded, HTML-escaped and JSON-escaped.
-- `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url, *, credential=None)` returns the body decoded as UTF-8 with undecodable bytes replaced. With a credential the URL must be `https`, the key goes only to the host and port of the URL it was given for, a redirect to another host or port drops it, every `FetchError` is cleaned of it with its cause dropped, and the returned body has the key replaced with `[key]` wherever the server echoed it. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network.
+- `Credential(placement, name, value, scheme="")`: frozen dataclass for a key and where it goes, `query` or `header`; `scheme` is a word of letters sent before a header key, such as `Bearer`, and `header_value` is what the header carries; the value is hidden from `repr`, and an unsafe value or a reserved header name raises `ValueError` without repeating the value. `Credential.from_auth(auth, value)` builds one from a sources file `auth` value such as `query:api_key`, and `redact(text)` replaces the key in `text` with `[key]`, as written, percent-encoded, HTML-escaped and JSON-escaped.
+- `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url, *, credential=None)` returns the body decoded as UTF-8 with undecodable bytes replaced. With a credential the URL must be `https`, the key goes only to the host and port of the URL it was given for, a redirect to another host or port drops it, every `FetchError` is cleaned of it with its cause dropped, and the returned body has the key replaced with `[key]` wherever the server echoed it. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network. `post_json(url, payload, *, credential=None, headers=None)` sends a JSON body with the same checks and limits, follows no redirect, and allows plain `http` only to a loopback IP literal with `allow_private_hosts` set and no key.
 
 ## `extract`
 
@@ -167,9 +167,24 @@ The document model shared by every briefing and renderer.
 
 - `DISCLAIMER: str`: the standard statement that nothing produced is legal advice.
 - `make_disclaimer(extra: str = "") -> str`: the standard disclaimer followed by `extra`.
-- `Section(heading, level=2, paragraphs=[], bullets=[])`: a heading with paragraphs and bullets. Level 2 is a section, 3 and 4 are subsections.
+- `Section(heading, level=2, paragraphs=[], bullets=[], generated=[])`: a heading with paragraphs, bullets and generated passages. Level 2 is a section, 3 and 4 are subsections.
+- `GeneratedPassage(text, cites=[], facts=[], provider="", model="")`: text a language model wrote, the ids it cites, the facts behind them as `id: text` lines, and what wrote it. A section's `generated` key is present in `to_dict()` only when it holds a passage.
 - `Document(title, generated, subtitle="", sections=[], disclaimer=DISCLAIMER)`: a titled, dated list of sections. `to_dict()` returns a JSON-serialisable form. `Document.from_dict(data)` builds one from parsed JSON, checks every field, and always restores the disclaimer. Raises `DocumentError`.
 - `DocumentError`: a document model is malformed.
+
+## `llm`
+
+Generated copy. See [the language model stage](../explanation/security-model.md#the-language-model-stage).
+
+- `Fact(fact_id, section, text)`: one structured fact with its id; `line` is `id: text`.
+- `change_facts(results, names)`, `event_facts(events)`, `candidate_facts(candidates)`, `impact_facts(impacts)`, `obligation_facts(obligations) -> list[Fact]`: facts from check results, change log events, ingest candidates, impacts and obligations, each cleaned and cut to 400 characters.
+- `Provider`: a protocol with `name`, `model` and `complete(system, prompt, max_tokens) -> Completion`. `AnthropicProvider(poster, key, model)`, `OpenAIProvider(poster, key, model)` and `OllamaProvider(poster, model)` implement it over any `Poster`, an object with `post_json`.
+- `provider_for(settings: LlmSettings, poster, key_for) -> Provider`: the provider `[llm]` names, with its key from `key_for(key_env)`. Raises `GenerationError` when a key is missing.
+- `llm_fetcher(config: Config) -> SafeFetcher`: the fetch client for a call, with the `[llm]` deadline.
+- `generate(provider, facts, purpose, *, max_tokens, record=None) -> GenerationResult`: one call; `record` receives the provider, the model, the token counts, the duration and the outcome. Raises `GenerationError`.
+- `parse_passages(text, facts, provider="", model="") -> GenerationResult`: the passages that cite only the given facts, by section, with the reasons any were dropped.
+- `GenerationResult`: `passages` by section, `dropped`, `provider`, `model`, `section(name)` and `count`.
+- `LLM_KEYS`: the fixed key variable of each provider; `KEY_IDS`: the ids `regwatch keys` uses for them.
 
 ## `synthesis`
 
@@ -248,9 +263,10 @@ What `regwatch init` writes and the checks on its answers. Nothing here prints o
 
 Changes one setting in `regwatch.toml` and keeps the rest of the file.
 
-- `edit_setting(text: str, table: str, key: str, value: bool | list[str]) -> str`: the text with `[table] key` set, replacing its line (or every line of a value that spans several) or adding it. Raises `SettingsError` unless the result parses to the old settings with exactly that value changed.
-- `set_setting(config_path: Path, table: str, key: str, value: bool | list[str]) -> None`: load and validate the configuration, edit it and write it atomically through `state.safe_write_text`, with the register files protected.
+- `edit_setting(text: str, table: str, key: str, value: bool | int | str | list[str]) -> str`: the text with `[table] key` set, replacing its line (or every line of a value that spans several) or adding it. Raises `SettingsError` unless the result parses to the old settings with exactly that value changed.
+- `set_setting(config_path: Path, table: str, key: str, value: bool | int | str | list[str]) -> None`: load and validate the configuration, edit it and write it atomically through `state.safe_write_text`, with the register files protected.
 - `set_premium(config_path: Path, enabled: bool) -> None`: set `[premium] enabled`.
+- `set_llm(config_path: Path, *, enabled=None, provider=None, model=None) -> None`: set `[llm] enabled`, `provider` and `model`; each one left as None is kept. A provider must be `anthropic`, `openai` or `ollama`.
 - `set_focus_areas(config_path: Path, focus_areas, known) -> None`: set `[profile] focus_areas` to ids that are in `known`, without repeats. Raises `SettingsError` for any other id.
 - `SettingsError`: the setting could not be changed and the file was left as it was. It is a `ValueError`.
 
