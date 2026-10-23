@@ -62,6 +62,7 @@ Rules across fields:
 - A `free-key` entry has `auth`, `key_env` and `signup_url`.
 - A `free` entry has no `auth`.
 - Entries that name the same `key_env` have `url` values with the same host and port, so a key stored for one service is never sent to another.
+- In the shipped file, an `api` entry's `url` is a data address: never a page ending in `.html`, `.htm` or `.aspx`, a documentation path such as `docs`, `swagger-ui` or `developers`, or the bare root of a site. A test checks this. A source whose API could not be confirmed is listed as `html` (its page is watched) or `manual` (read by hand), with a note saying why.
 
 ## The Extra Catalogue
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from importlib import resources
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -109,6 +111,72 @@ def test_the_shipped_descriptions_use_no_dash_as_punctuation() -> None:
         for key in ("name", "description", "notes"):
             value = entry[key] or ""
             assert " - " not in value and "--" not in value, entry["source_id"]
+
+
+# A path that names a page or documentation rather than data: an .html, .htm or .aspx
+# page, a documentation folder, a Swagger or ReDoc viewer, or the bare root of a site.
+DOCUMENTATION_PATH = re.compile(
+    r"(?:\.html?|\.aspx)$"
+    r"|(?:^|/)(?:docs?|documentation|swagger(?:-ui)?|redoc|api-?docs|developers?|reference|guide)(?:/|$)",
+    re.IGNORECASE,
+)
+
+
+def is_documentation(url: str) -> bool:
+    path = urlsplit(url).path
+    return path.strip("/") == "" or bool(DOCUMENTATION_PATH.search(path))
+
+
+@pytest.mark.parametrize(
+    ("url", "documentation"),
+    [
+        ("https://api.census.gov/data.html", True),
+        ("https://laws.e-gov.go.jp/api/2/swagger-ui", True),
+        ("https://apiportal.wto.org/", True),
+        ("https://example.org/docs/api", True),
+        ("https://example.org/Pages/Home.aspx", True),
+        ("https://api.example.org/v1/documents.json", False),
+        ("https://api.example.org/v2/", False),
+    ],
+)
+def test_the_documentation_rule(url: str, documentation: bool) -> None:
+    assert is_documentation(url) is documentation
+
+
+def test_no_api_entry_points_at_a_page_or_its_documentation() -> None:
+    """An api source must name a data address, not a web page about the API."""
+    wrong = [
+        entry.source_id
+        for entry in load_source_catalogue(FOCUS)
+        if entry.mechanism == "api" and is_documentation(entry.url)
+    ]
+    assert wrong == []
+
+
+def test_the_reviewed_entries_hold_their_corrections() -> None:
+    by_id = {entry.source_id: entry for entry in load_source_catalogue(FOCUS)}
+    expected = {
+        "us-fda-food-facility-registration": {"category": "regulation"},
+        "intl-mintel": {"category": "industry-news"},
+        "us-legiscan-api": {"category": "regulation", "mechanism": "manual"},
+        "jp-egov-law-api": {"mechanism": "html"},
+        "eu-publications-office-sparql": {"mechanism": "html"},
+        "us-census-api-catalog": {"mechanism": "html", "access": "free", "key_env": None},
+        "intl-wto-api-portal": {"mechanism": "html", "access": "free", "key_env": None},
+        "intl-eping-wto": {"mechanism": "manual", "access": "free"},
+        "ca-health-canada-news-atom": {"mechanism": "rss"},
+    }
+    for source_id, fields in expected.items():
+        for name, value in fields.items():
+            assert getattr(by_id[source_id], name) == value, (source_id, name)
+    # A dated snapshot of the whole title was over the size limit and never changed.
+    assert "/versions/title-21.json" in by_id["us-ecfr-title-21"].url
+    assert not re.search(r"\d{4}-\d{2}-\d{2}", by_id["us-ecfr-title-21"].url)
+    assert "dept=departmentofhealth&" in by_id["ca-health-canada-news-atom"].url
+    assert urlsplit(by_id["ca-bc-liquor-cannabis-lcrb"].url).hostname == "www2.gov.bc.ca"
+    assert "OFPCHS" in by_id["us-md-food-regulator"].url
+    assert "series_id=PCU332431332431" in by_id["us-fred-api"].url
+    assert by_id["us-bls-public-api"].url.endswith("/timeseries/data/PCU332431332431")
 
 
 def test_jurisdiction_names() -> None:

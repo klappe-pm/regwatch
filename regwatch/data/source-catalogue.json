@@ -240,7 +240,7 @@
       "kind": "data-portal",
       "category": "commodities-and-forecasts",
       "mechanism": "api",
-      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/PCU332431332431",
       "homepage": "https://www.bls.gov/developers/",
       "access": "free-key",
       "auth": {
@@ -252,10 +252,10 @@
       "focus_areas": [],
       "language": "en",
       "cadence": "weekly",
-      "description": "Producer Price Index and other BLS time series.",
-      "verified": true,
+      "description": "Producer Price Index for metal can manufacturing (aluminium and steel cans), series PCU332431332431.",
+      "verified": false,
       "checked": "2026-10-23",
-      "notes": "Endpoint returned 405 to GET, so it expects POST with a JSON body. Docs page returned 403 to the check client."
+      "notes": "One series per source: change the series id at the end of the address for another. A GET for one series answered JSON; the unregistered daily limit stopped a check of this id, which FRED lists from BLS."
     },
     {
       "source_id": "us-cme-aluminum",
@@ -338,7 +338,7 @@
       "kind": "data-portal",
       "category": "commodities-and-forecasts",
       "mechanism": "api",
-      "url": "https://api.stlouisfed.org/fred/series/observations",
+      "url": "https://api.stlouisfed.org/fred/series/observations?series_id=PCU332431332431&file_type=json",
       "homepage": "https://fred.stlouisfed.org/",
       "access": "free-key",
       "auth": {
@@ -350,10 +350,10 @@
       "focus_areas": [],
       "language": "en",
       "cadence": "weekly",
-      "description": "Producer price and economic time series, including PPI series for packaging inputs.",
+      "description": "Producer Price Index for metal can manufacturing (aluminium and steel cans), series PCU332431332431.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": "Endpoint answered 400 'api_key is not set'. Add series_id for the PPI series you want. fred.stlouisfed.org web pages did not load from the check host."
+      "notes": "One series per source: change series_id in the address for another, such as WPU10250105 for aluminium sheet and strip. The series page on fred.stlouisfed.org was confirmed; the API answers 400 without a key."
     },
     {
       "source_id": "us-ice-softs",
@@ -526,7 +526,7 @@
       "jurisdiction": "us",
       "region": "north-america",
       "kind": "regulator",
-      "category": "construction-and-facilities",
+      "category": "regulation",
       "mechanism": "html",
       "url": "https://www.fda.gov/food/guidance-regulation-food-and-dietary-supplements/registration-food-facilities-and-other-submissions",
       "homepage": "https://www.fda.gov/",
@@ -1358,8 +1358,8 @@
       "jurisdiction": "us",
       "region": "north-america",
       "kind": "aggregator",
-      "category": "industry-news",
-      "mechanism": "api",
+      "category": "regulation",
+      "mechanism": "manual",
       "url": "https://legiscan.com/legiscan",
       "homepage": "https://legiscan.com/",
       "access": "free-key",
@@ -1375,7 +1375,7 @@
       "description": "Bill text, status, votes and sessions for all 50 states, DC and Congress through a keyed pull API.",
       "verified": false,
       "checked": "2026-10-23",
-      "notes": "Free public key with a monthly query cap; paid Pull and Push tiers offer higher volume. Operation is passed as the op parameter. Landing page returned HTTP 403 to an automated check; terms and key requirement from public documentation, not confirmed live."
+      "notes": "Review by hand: the API at api.legiscan.com needs a key and an op parameter, and returned HTTP 403 to a check without a key, so no API address is confirmed. Free key with a monthly query cap; paid Pull and Push tiers offer more."
     },
     {
       "source_id": "us-lexisnexis",
@@ -2247,15 +2247,12 @@
       "region": "global",
       "kind": "data-portal",
       "category": "logistics-and-trade",
-      "mechanism": "api",
+      "mechanism": "html",
       "url": "https://apiportal.wto.org/",
       "homepage": "https://apiportal.wto.org/",
-      "access": "free-key",
-      "auth": {
-        "type": "header",
-        "name": "Ocp-Apim-Subscription-Key"
-      },
-      "key_env": "REGWATCH_KEY_WTO",
+      "access": "free",
+      "auth": null,
+      "key_env": null,
       "signup_url": "https://apiportal.wto.org/",
       "focus_areas": [],
       "language": "en",
@@ -2263,7 +2260,7 @@
       "description": "Developer portal for WTO statistics APIs.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": "Portal page loaded; individual API paths were not tested."
+      "notes": "Watched as a page; reading it needs no key. The APIs it lists need a free subscription key sent as the Ocp-Apim-Subscription-Key header; no API path was confirmed, so add one as its own source."
     },
     {
       "source_id": "intl-wto-tariff-download-facility",
@@ -2535,15 +2532,12 @@
       "region": "north-america",
       "kind": "data-portal",
       "category": "manufacturing-and-chemicals",
-      "mechanism": "api",
-      "url": "https://api.census.gov/data.html",
+      "mechanism": "html",
+      "url": "https://www.census.gov/data/developers/data-sets.html",
       "homepage": "https://www.census.gov/data/developers/data-sets.html",
-      "access": "free-key",
-      "auth": {
-        "type": "query",
-        "name": "key"
-      },
-      "key_env": "REGWATCH_KEY_CENSUS",
+      "access": "free",
+      "auth": null,
+      "key_env": null,
       "signup_url": "https://api.census.gov/data/key_signup.html",
       "focus_areas": [],
       "language": "en",
@@ -2551,7 +2545,7 @@
       "description": "Catalog of Census datasets including manufacturing, trade and construction.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": null
+      "notes": "Watched as a page; reading it needs no key. The machine catalog at api.census.gov/data.html is over 2.8 MB, larger than the fetch limit. Each dataset's API needs a free key; add a dataset as its own source."
     },
     {
       "source_id": "us-chemical-week",
@@ -3545,7 +3539,7 @@
       "jurisdiction": "intl",
       "region": "global",
       "kind": "industry",
-      "category": "policy-and-lobbying",
+      "category": "industry-news",
       "mechanism": "manual",
       "url": "https://www.mintel.com",
       "homepage": "https://www.mintel.com",
@@ -4869,7 +4863,7 @@
       "region": "asia-pacific",
       "kind": "legislature",
       "category": "regulation",
-      "mechanism": "api",
+      "mechanism": "html",
       "url": "https://laws.e-gov.go.jp/api/2/swagger-ui",
       "homepage": "https://laws.e-gov.go.jp",
       "access": "free",
@@ -4882,7 +4876,7 @@
       "description": "API documentation for retrieving Japanese laws and revisions.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": "URL is the Swagger page, not a data endpoint."
+      "notes": "URL is the Swagger documentation page, watched as a page for changes to the API. The laws endpoint answered but ignored its sort order, so no data address that shows new laws first is confirmed."
     },
     {
       "source_id": "jp-egov-public-comment",
@@ -5764,7 +5758,7 @@
       "region": "europe",
       "kind": "data-portal",
       "category": "regulation",
-      "mechanism": "api",
+      "mechanism": "html",
       "url": "https://publications.europa.eu/webapi/rdf/sparql",
       "homepage": "https://op.europa.eu/en/web/eu-vocabularies/sparql-endpoint",
       "access": "free",
@@ -5777,7 +5771,7 @@
       "description": "Public SPARQL endpoint over the CELLAR repository holding EUR-Lex legislation metadata and texts.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": "Endpoint answers with a query form. Query for new acts by date and CELEX class. No key needed."
+      "notes": "Without a query the endpoint answers with its HTML query form, which is what regwatch watches. To follow new acts, run a SPARQL query by date and CELEX class yourself. No key needed."
     },
     {
       "source_id": "eu-rasff-window",
@@ -6666,7 +6660,7 @@
       "region": "global",
       "kind": "data-portal",
       "category": "regulation",
-      "mechanism": "api",
+      "mechanism": "manual",
       "url": "https://eping.wto.org",
       "homepage": "https://eping.wto.org",
       "access": "free",
@@ -6676,10 +6670,10 @@
       "focus_areas": [],
       "language": "en",
       "cadence": "daily",
-      "description": "Searchable alerts for new WTO SPS and TBT notifications; free registration enables email alerts and API use.",
+      "description": "Searchable alerts for new WTO SPS and TBT notifications; free registration enables email alerts.",
       "verified": false,
       "checked": "2026-10-23",
-      "notes": "Free registration is needed to subscribe to alerts; no public API was confirmed."
+      "notes": "Review by hand or register for its email alerts: the site is an application that a page check cannot read, and no public API was confirmed, so regwatch does not fetch it."
     },
     {
       "source_id": "intl-fao-food-safety",
@@ -7259,8 +7253,8 @@
       "region": "north-america",
       "kind": "regulator",
       "category": "regulation",
-      "mechanism": "api",
-      "url": "https://api.io.canada.ca/io-server/gc/news/en/v2?dept=departmenthealth&type=newsreleases&sort=publishedDate&orderBy=desc&pick=50&format=atom",
+      "mechanism": "rss",
+      "url": "https://api.io.canada.ca/io-server/gc/news/en/v2?dept=departmentofhealth&type=newsreleases&sort=publishedDate&orderBy=desc&pick=50&format=atom",
       "homepage": "https://www.canada.ca/en/health-canada/news.html",
       "access": "free",
       "auth": null,
@@ -7272,7 +7266,7 @@
       "description": "Atom feed of Health Canada news releases from the Canada News Centre API.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": null
+      "notes": "The department is departmentofhealth; departmenthealth answers with an empty feed."
     },
     {
       "source_id": "ca-health-products-recalls-rss",
@@ -7359,8 +7353,8 @@
       "kind": "regulator",
       "category": "regulation",
       "mechanism": "html",
-      "url": "https://www.bcliquorstores.com",
-      "homepage": "https://www.bcldb.com",
+      "url": "https://www2.gov.bc.ca/gov/content/employment-business/business/liquor-regulation-licensing",
+      "homepage": "https://www2.gov.bc.ca/gov/content/employment-business/business/liquor-regulation-licensing",
       "access": "free",
       "auth": null,
       "key_env": null,
@@ -7371,10 +7365,10 @@
       ],
       "language": "en",
       "cadence": "weekly",
-      "description": "BC Liquor Distribution Branch pages for liquor and cannabis suppliers; the regulator branch site was not confirmed.",
+      "description": "Liquor and cannabis licensing, compliance and policy from the regulator, BC's Liquor and Cannabis Regulation Branch.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": "Page confirmed is the BCLDB retail site and bcldb.com; the regulation branch address was unreachable."
+      "notes": "The branch's section of gov.bc.ca, about 550 KB."
     },
     {
       "source_id": "ca-on-agco-alcohol-cannabis",
@@ -7853,7 +7847,7 @@
       "kind": "gazette",
       "category": "regulation",
       "mechanism": "api",
-      "url": "https://www.ecfr.gov/api/versioner/v1/structure/2026-10-01/title-21.json",
+      "url": "https://www.ecfr.gov/api/versioner/v1/versions/title-21.json",
       "homepage": "https://www.ecfr.gov/current/title-21",
       "access": "free",
       "auth": null,
@@ -7869,10 +7863,10 @@
       ],
       "language": "en",
       "cadence": "weekly",
-      "description": "Structure of CFR Title 21 (food, cosmetics, supplements, animal food) at a given date.",
+      "description": "Every amendment to CFR Title 21 (food, cosmetics, supplements, animal food), by section and date.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": "Change the date in the path to the date being compared. No key needed."
+      "notes": "Lists each version of every Title 21 section with its amendment and issue dates, so a new amendment changes it; about 270 KB. No key needed."
     },
     {
       "source_id": "us-ecfr-titles-api",
@@ -11656,7 +11650,7 @@
       "kind": "regulator",
       "category": "regulation",
       "mechanism": "html",
-      "url": "https://health.maryland.gov/",
+      "url": "https://health.maryland.gov/phpa/OEHFP/OFPCHS/Pages/Home.aspx",
       "homepage": "https://health.maryland.gov/",
       "access": "free",
       "auth": null,
@@ -11670,10 +11664,10 @@
       ],
       "language": "en",
       "cadence": "weekly",
-      "description": "Food safety rules, licensing and guidance from the Maryland Department of Health.",
+      "description": "Food safety rules, licensing and guidance from the Office of Food Protection, Maryland Department of Health.",
       "verified": true,
       "checked": "2026-10-23",
-      "notes": null
+      "notes": "The Office of Food Protection's own page, not the department home page."
     },
     {
       "source_id": "us-md-legislature",
