@@ -102,6 +102,9 @@ def test_matching_by_focus_keeps_entries_for_every_area() -> None:
     assert all(not e.focus_areas or "alcoholic-beverages" in e.focus_areas for e in found)
     assert any(e.focus_areas for e in found)
     assert len(found) < len(CATALOGUE)
+    # An entry that lists no focus area serves every area, so it is kept.
+    general = {e.source_id for e in CATALOGUE if not e.focus_areas}
+    assert general and general <= ids(found)
 
 
 # --- flags ------------------------------------------------------------------------------

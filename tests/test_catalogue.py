@@ -329,11 +329,13 @@ def test_an_unreadable_extra_file_is_a_catalogue_error(tmp_path: Path) -> None:
 
 
 def entries_for_search() -> list[CatalogueEntry]:
+    # The match inside a word (dd-seafood) comes before the match at the start of a
+    # word (cc-foodstuff) in catalogue order, so only the ranking can put it after.
     return [
         build(source_id="aa-one", name="Bulletin of Things", jurisdiction="aa", description="x."),
         build(source_id="bb-alerts", name="Food Alerts", jurisdiction="bb", description="Alerts."),
-        build(source_id="cc-foodstuff", name="Foodstuffs Notices", jurisdiction="cc"),
         build(source_id="dd-seafood", name="Seafood Board", jurisdiction="dd"),
+        build(source_id="cc-foodstuff", name="Foodstuffs Notices", jurisdiction="cc"),
         build(source_id="ee-misc", name="Misc", jurisdiction="ee", publisher="Food Office"),
         build(source_id="bb", name="Bee Bee", jurisdiction="zz", kind="news"),
     ]
@@ -357,7 +359,12 @@ def test_ranking_is_case_insensitive_and_needs_every_word() -> None:
 def test_an_exact_id_or_jurisdiction_comes_first() -> None:
     entries = entries_for_search()
     assert ids(rank(entries, "bb"))[:2] == ["bb-alerts", "bb"]
-    assert ids(rank(entries, "cc-foodstuff"))[0] == "cc-foodstuff"
+    # An earlier entry that matches both words better, but is not the id, comes second.
+    rival = build(source_id="ab-cc-foodstuff-news", name="CC Foodstuff News", jurisdiction="ab")
+    assert ids(rank([rival, *entries], "cc-foodstuff"))[:2] == [
+        "cc-foodstuff",
+        "ab-cc-foodstuff-news",
+    ]
     assert ids(rank(entries, "zz")) == ["bb"]
 
 
