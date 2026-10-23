@@ -47,4 +47,12 @@ Then run the tests, which check that the build has every page and refers to no o
 
 ## Change a Dependency
 
-Pin every version exactly in `web/package.json`, choose a release that is at least two weeks old, and commit the updated `web/package-lock.json`. A test fails on a range such as `^15.5.0` and on a lock entry without an integrity hash.
+Pin every version exactly in `web/package.json`, choose a release that is at least two weeks old, and commit the updated `web/package-lock.json`. A test fails on a range such as `^15.5.0` and on a lock entry without an integrity hash (a package bundled inside another is covered by its parent's hash).
+
+Check the lockfile against the published advisories before you commit, and keep it clean:
+
+```bash
+npm --prefix ~/regwatch/web audit --package-lock-only
+```
+
+When a fix exists only in a release newer than two weeks, take that release and say why in the commit. When a package you depend on pins a vulnerable copy of another package, pin a fixed copy under `overrides` in `web/package.json`, exactly as for any other version; `next` pins its own `postcss` this way. A test checks that no copy of `next` or `postcss` in the lockfile is older than the release that fixed the advisories found so far, so add a package to `FIXED_IN` in `tests/test_web_build.py` when you fix another.

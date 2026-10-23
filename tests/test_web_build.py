@@ -116,7 +116,41 @@ def test_every_web_dependency_is_pinned_exactly() -> None:
     for group in ("dependencies", "devDependencies"):
         for name, version in package[group].items():
             assert re.fullmatch(r"\d+\.\d+\.\d+", version), f"{name} {version}"
+    for parent, pins in package.get("overrides", {}).items():
+        for name, version in pins.items():
+            assert re.fullmatch(r"\d+\.\d+\.\d+", version), f"{parent} > {name} {version}"
     lock = json.loads((ROOT / "web" / "package-lock.json").read_text(encoding="utf-8"))
-    for name, entry in lock["packages"].items():
-        if name:
-            assert entry.get("integrity", "").startswith("sha512-"), name
+    packages = lock["packages"]
+    for name, entry in packages.items():
+        if not name:
+            continue
+        if entry.get("inBundle"):
+            # A bundled package ships inside its parent's tarball, so the parent's
+            # hash covers it and it has none of its own.
+            parent = name.rpartition("/node_modules/")[0]
+            assert packages[parent]["integrity"].startswith("sha512-"), name
+            continue
+        assert entry.get("integrity", "").startswith("sha512-"), name
+
+
+# The first release of each package that is clear of the advisories `npm audit` reported:
+# GHSA-2464-fhr4-w9xw and GHSA-p3m5-59mp-jv5r for next, and GHSA-qx2v-qp2m-jg93,
+# GHSA-6g55-p6wh-862q, GHSA-fxqj-rqcc-2cmp and GHSA-r28c-9q8g-f849 for postcss.
+FIXED_IN = {"next": (15, 5, 28), "postcss": (8, 5, 23)}
+
+
+@pytest.mark.repo_only
+def test_no_locked_package_is_older_than_its_security_fix() -> None:
+    """Every copy in the lockfile, nested ones included, is at or past its fixed release."""
+    import json
+
+    lock = json.loads((ROOT / "web" / "package-lock.json").read_text(encoding="utf-8"))
+    seen: dict[str, list[str]] = {}
+    for path, entry in lock["packages"].items():
+        name = path.rpartition("node_modules/")[2]
+        if name in FIXED_IN:
+            version = tuple(int(part) for part in entry["version"].split("."))
+            seen.setdefault(name, []).append(path)
+            assert version >= FIXED_IN[name], f"{path} {entry['version']}"
+    assert set(seen) == set(FIXED_IN), seen
+    assert "node_modules/next/node_modules/postcss" in seen["postcss"]
