@@ -26,7 +26,7 @@ The format of each file is in [data files](data-files.md).
 
 ## State
 
-Optional table. regwatch writes its own state here and nowhere else apart from output paths you name.
+Optional table. regwatch writes its own state here and nowhere else apart from output paths you name and the two settings that `regwatch premium` and the web app's Settings page change in this file.
 
 | key | type | default | meaning |
 | --- | --- | --- | --- |
@@ -84,3 +84,11 @@ Optional table. Filters for `ingest`, which reads a Federal Register style API.
 | `per_page` | integer | 100 | page size requested, 1 to 1000 |
 
 When both `cfr_parts` and `terms` are empty, every returned document is a candidate. Otherwise a document is a candidate if it matches either filter.
+
+## Premium
+
+Optional table, written by `regwatch premium` and the Settings page of `regwatch ui`.
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `enabled` | boolean | false | turns on the premium features: newsletters, document templates, generated copy and runs more often than once a day. While it is false, the web app shows them with a lock and a note. |

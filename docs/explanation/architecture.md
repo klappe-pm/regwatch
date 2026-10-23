@@ -33,8 +33,9 @@ The modules form layers, and each imports only from the ones below it.
 2. `register`, `focus`, `catalogue`, `keys`, `state`: the data model, the focus catalogue and profile, the source catalogue with its one search ranking, and the one write path.
 3. `check`, `ingest`, `impact`: the engine's analysis. They take loaded data and return values. `impact` ranks by the focus profile it is given and never drops a candidate.
 4. `document`, `synthesis`, `briefing`, `render`, `export`: turning analysis into output. `synthesis` and `briefing` build a `Document`; `render` turns a `Document` into text or bytes.
-5. `onboarding`: the files `regwatch init` writes and the checks on its answers. Pure functions; the questions and the printing stay in `cli`.
-6. `cli`: the only module that prints, asks questions, parses arguments or sets an exit status.
+5. `onboarding`, `settings`: the files `regwatch init` writes and the checks on its answers, and the change of one setting in `regwatch.toml`. The questions and the printing stay in `cli`.
+6. `webapi`, `server`: the JSON interface over the same loaded data, and the local server that carries it and the built pages to the browser.
+7. `cli`: the only module that prints, asks questions, parses arguments or sets an exit status.
 
 Analysis and output functions are pure. They take loaded data and an explicit date and return a value, with no clock reads, no file access and no printing. That is what makes them testable with plain dataclasses and what lets a script call them.
 
@@ -45,7 +46,8 @@ There are four places where data crosses from one trust level to another, and ea
 - Network to process. `fetch.py` is the only module that opens a connection. It checks the scheme, the address, the size, the time and the redirect target, and returns text.
 - Text to structure. `extract.py` and `ingest.py` are the only modules that parse fetched text. They return strings and plain dicts of bounded, type-checked values, and they never evaluate content. `sanitize.py` cleans every such value, and `render.py` escapes it again for the output format.
 - Process to programs. `system.py` is the only module that starts a program: the keychain tools, `launchctl` and `crontab`. It passes an argument list with no shell and a timeout, and a key travels only on standard input.
-- Process to disk. `state.py` is the only module that writes. It refuses the register files (apart from the one rewrite of the sources or jurisdictions file that `sources add` and `sources remove` ask for) and any output path that is a symbolic link, writes atomically, keeps an existing file's permissions and rejects a source id that is not a plain identifier.
+- Process to disk. `state.py` is the only module that writes; `settings.py` hands it the edited configuration. It refuses the register files (apart from the one rewrite of the sources or jurisdictions file that `sources add` and `sources remove` ask for) and any output path that is a symbolic link, writes atomically, keeps an existing file's permissions and rejects a source id that is not a plain identifier.
+- Browser to process. `server.py` is the only module that listens. It answers only on `127.0.0.1`, only to its own host name and origin, and only with the token, and serves only files inside the built web app.
 
 A change that adds a way across one of these boundaries somewhere else is a change to the security model, and needs the justification described in [contributing](../../CONTRIBUTING.md).
 

@@ -48,8 +48,8 @@ path = "regwatch/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["regwatch"]
-# Ship every file under regwatch/, including the non-Python package data.
-artifacts = ["regwatch/data/**"]
+# Ship every file under regwatch/, including the non-Python package data and the built web app.
+artifacts = ["regwatch/data/**", "regwatch/web/**"]
 
 [tool.hatch.build.targets.sdist]
 include = [

@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+/* Colours. A quiet neutral surface, light blue for structure and selection, and one warm
+   accent kept for priority. Every text pair meets WCAG 2.2 AA (4.5:1) and every control
+   border 3:1, in both themes. */
+:root {
+  color-scheme: light;
+  --surface: #f6f8fa;
+  --raised: #ffffff;
+  --ink: #17212b;
+  --muted: #4b5866;
+  --line: #d6dee7;
+  --control: #768799;
+  --selection: #e3eef9;
+  --structure: #1d5a92;
+  --on-structure: #ffffff;
+  --accent: #a8481a;
+  --accent-soft: #fbede4;
+  --ok: #2e6b3f;
+  --focus: #1d5a92;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #0f151b;
+    --raised: #151d26;
+    --ink: #e5ecf3;
+    --muted: #a5b3c2;
+    --line: #2a3642;
+    --control: #6c7f93;
+    --selection: #1b3550;
+    --structure: #86bdee;
+    --on-structure: #0f151b;
+    --accent: #f2a06a;
+    --accent-soft: #3a2416;
+    --ok: #86c79a;
+    --focus: #86bdee;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #0f151b;
+  --raised: #151d26;
+  --ink: #e5ecf3;
+  --muted: #a5b3c2;
+  --line: #2a3642;
+  --control: #6c7f93;
+  --selection: #1b3550;
+  --structure: #86bdee;
+  --on-structure: #0f151b;
+  --accent: #f2a06a;
+  --accent-soft: #3a2416;
+  --ok: #86c79a;
+  --focus: #86bdee;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-control: var(--control);
+  --color-selection: var(--selection);
+  --color-structure: var(--structure);
+  --color-on-structure: var(--on-structure);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", sans-serif;
+  /* The smallest text is 12px; body text is 15px. */
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-base: 15px;
+  --text-base--line-height: 24px;
+  --text-lg: 17px;
+  --text-lg--line-height: 24px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+}
+
+html {
+  font-size: 15px;
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+  main {
+    padding: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

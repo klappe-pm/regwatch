@@ -22,6 +22,8 @@ Each subcommand is one stage of the engine:
     keys      store, list and remove the API keys some sources need
     run       capture, then check, and write a run record (what a schedule runs)
     schedule  install, show or remove a recurring run with launchd or cron
+    ui        open the local web app in the browser
+    premium   turn the premium features on or off, or show whether they are on
 
 Exit status: 0 success, 1 the register is invalid or nothing could be captured,
 2 a usage, configuration, network or file error, 3 changes were detected and
@@ -36,6 +38,7 @@ import json
 import os
 import re
 import sys
+import webbrowser
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -119,6 +122,8 @@ from regwatch.schedule import (
     replace_block,
     schedule_cadence,
 )
+from regwatch.server import LocalServer, ServerError, web_root
+from regwatch.settings import set_premium
 from regwatch.state import (
     MAX_STATE_BYTES,
     AlreadyExistsError,
@@ -134,6 +139,7 @@ from regwatch.state import (
 )
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
 from regwatch.system import System
+from regwatch.webapi import Api
 
 __all__ = ["main"]
 
@@ -1233,6 +1239,8 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
         "catalogue",
         config.profile.catalogue if config.profile.catalogue else "shipped with regwatch",
     )
+    _say("[premium]")
+    row("enabled", config.premium.enabled)
     for area in focus.areas:
         _say(f"# focus area {area.focus_id}: {area.label}, {len(area.terms)} terms")
     if not focus.active:
@@ -1709,6 +1717,38 @@ def _schedule_cron(
     return EXIT_OK
 
 
+# --- workspace commands ------------------------------------------------------
+
+
+def _cmd_ui(ctx: _Context, args: argparse.Namespace) -> int:
+    if not 0 <= args.port <= 65535:
+        raise CommandError("--port must be from 0 to 65535")
+    ctx.config  # noqa: B018 (load and validate the configuration before starting)
+    server = LocalServer(Api(ctx.config_path.resolve()), web_root(), args.port)
+    _say(f"regwatch ui: serving {ctx.config.base_dir} at {server.url}")
+    _say("regwatch ui: the address holds a private token; press Ctrl+C to stop")
+    if not args.no_open:
+        webbrowser.open(server.url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        _say()
+    finally:
+        server.server_close()
+    _say("regwatch ui: stopped")
+    return EXIT_OK
+
+
+def _cmd_premium(ctx: _Context, args: argparse.Namespace) -> int:
+    if args.action != "status":
+        set_premium(ctx.config_path, args.action == "on")
+    enabled = load_config(ctx.config_path).premium.enabled
+    _say(f"regwatch premium: {'on' if enabled else 'off'}")
+    if not enabled:
+        _say("Newsletters, documents, generated copy and runs more often than daily are locked.")
+    return EXIT_OK
+
+
 # --- parser ------------------------------------------------------------------
 
 _Handler = Callable[[_Context, argparse.Namespace], int]
@@ -1910,6 +1950,13 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
     p.add_argument(
         "--dry-run", action="store_true", help="print what would change and change nothing"
     )
+
+    p = add("ui", _cmd_ui, "open the local web app in the browser")
+    p.add_argument("--port", type=int, default=0, help="port on 127.0.0.1 (default: a free one)")
+    p.add_argument("--no-open", action="store_true", help="print the address but open no browser")
+
+    p = add("premium", _cmd_premium, "turn the premium features on or off, or show their state")
+    p.add_argument("action", choices=["on", "off", "status"])
     return parser, handlers
 
 
@@ -2022,6 +2069,7 @@ def main(
         FetchError,
         FocusError,
         IngestError,
+        ServerError,
         DocumentError,
         ValueError,
         OSError,

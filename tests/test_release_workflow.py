@@ -168,3 +168,20 @@ def test_every_sdist_include_is_anchored() -> None:
     patterns = re.findall(r'"([^"]+)"', include.group(1))
     assert patterns
     assert all(pattern.startswith("/") for pattern in patterns), patterns
+
+
+def test_the_build_job_builds_the_web_app_from_its_lockfile_before_the_wheel() -> None:
+    build = jobs()["build"]
+    assert "actions/setup-node@" in build
+    assert "package-manager-cache: false" in build
+    assert "npm --prefix web ci --ignore-scripts" in build
+    assert "npm install" not in build
+    assert build.index("npm --prefix web ci") < build.index("npm --prefix web run build")
+    assert build.index("npm --prefix web run build") < build.index("python -m build")
+
+
+def test_the_build_job_fails_when_the_committed_web_app_is_stale() -> None:
+    build = jobs()["build"]
+    assert "git diff --exit-code -- regwatch/web" in build
+    assert "git status --porcelain -- regwatch/web" in build
+    assert build.index("git diff --exit-code") < build.index("python -m build")

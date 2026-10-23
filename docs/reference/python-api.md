@@ -15,9 +15,10 @@ Reads `regwatch.toml`. See [configuration](configuration.md) for the keys.
 - `DEFAULT_CONFIG_NAME: str`: `"regwatch.toml"`.
 - `load_config(path: Path) -> Config`: parse and validate a configuration file. Raises `ConfigError`.
 - `ConfigError`: the configuration file is missing, unreadable or invalid.
-- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path`, `profile` and `catalogue`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files, and the focus catalogue and the extra source catalogue when they are configured, which a user-named output must never overwrite.
+- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path`, `profile`, `catalogue` and `premium`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files, and the focus catalogue and the extra source catalogue when they are configured, which a user-named output must never overwrite.
 - `CatalogueSettings`: frozen dataclass with `extra`, the `[catalogue]` table.
 - `ProfileSettings`: frozen dataclass with `focus_areas`, `custom_terms` and `catalogue`, the `[profile]` table.
+- `PremiumSettings`: frozen dataclass with `enabled`, the `[premium]` table; false unless the file turns it on.
 - `RegisterPaths`: frozen dataclass of the register file paths: `obligations`, `jurisdictions`, `categories`, `sources`, `portfolio`, and the optional `detail`, `changelog`, `enforcement` and `themes`. `all_paths()` returns every configured path, resolved, for write protection.
 - `FetchSettings`: frozen dataclass with `timeout_seconds`, `total_timeout_seconds`, `max_bytes`, `user_agent`, `allow_private_hosts` and `allowed_file_roots`.
 - `IngestSettings`: frozen dataclass with `api_url`, `agencies`, `types`, `cfr_title`, `cfr_parts`, `terms`, `jurisdiction` and `per_page`.
@@ -241,6 +242,34 @@ What `regwatch init` writes and the checks on its answers. Nothing here prints o
 - `clean_value(value, what) -> str`, `clean_terms(values) -> tuple[str, ...]`, `check_contact(value) -> str`, `check_directory(value, home) -> Path` and `check_file_root(value, base, home) -> str`: validate one answer, each raising `OnboardingError` with a message that says what is wrong.
 - `user_agent_for(contact: str) -> str`: the User-Agent header for a contact.
 - `OnboardingError`: an answer is not usable. It is a `ValueError`.
+
+## `settings`
+
+Changes one setting in `regwatch.toml` and keeps the rest of the file.
+
+- `edit_setting(text: str, table: str, key: str, value: bool | list[str]) -> str`: the text with `[table] key` set, replacing its line (or every line of a value that spans several) or adding it. Raises `SettingsError` unless the result parses to the old settings with exactly that value changed.
+- `set_setting(config_path: Path, table: str, key: str, value: bool | list[str]) -> None`: load and validate the configuration, edit it and write it atomically through `state.safe_write_text`, with the register files protected.
+- `set_premium(config_path: Path, enabled: bool) -> None`: set `[premium] enabled`.
+- `set_focus_areas(config_path: Path, focus_areas, known) -> None`: set `[profile] focus_areas` to ids that are in `known`, without repeats. Raises `SettingsError` for any other id.
+- `SettingsError`: the setting could not be changed and the file was left as it was. It is a `ValueError`.
+
+## `webapi`
+
+The JSON interface behind `regwatch ui`. It never prints and never fetches.
+
+- `Api(config_path: Path, today=datetime.date.today)`: the routes over one configuration file. `handle(method, path, query, body) -> tuple[int, dict | Download]` answers one request and raises `ApiError` for a refusal. The routes are listed in the [CLI reference](cli.md#ui).
+- `ApiError(status: int, message: str)`: a refused request; `message` is short and holds no file contents.
+- `Download`: frozen dataclass with `filename`, `content_type` and `data`, a file the browser saves.
+- `CATEGORIES: tuple[str, ...]`: the source catalogue categories, in display order.
+
+## `server`
+
+The local server behind `regwatch ui`. See the [security model](../explanation/security-model.md#the-local-server).
+
+- `LocalServer(api: Api, root: Path, port: int = 0, token: str | None = None)`: a `ThreadingHTTPServer` bound to `127.0.0.1` that serves the files under `root` and the routes of `api`. `url` is the address to open, with the token. Raises `ServerError` when it cannot listen.
+- `web_root() -> Path`: the built web app shipped in the package. Raises `ServerError` when it is missing.
+- `content_security_policy(script_hashes: list[str]) -> str`: the policy sent with every response.
+- `ServerError`: the server cannot start.
 
 ## `cli`
 

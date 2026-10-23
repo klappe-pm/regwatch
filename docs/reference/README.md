@@ -11,4 +11,4 @@ Reference pages describe the machinery: the commands, the configuration keys, th
 - [Focus Catalogue](focus-catalogue.md): the shipped focus areas, the catalogue file format, how a profile is built and exactly how candidates are matched and ranked.
 - [Python API](python-api.md): every public function, class and constant in the `regwatch` package.
 - [Source Layout](source-layout.md): the repository tree, and what every module in the `regwatch` package owns and imports.
-- [Package Data](package-data.md): how the field rules under `regwatch/data/` are packaged and resolved through `importlib.resources`.
+- [Package Data](package-data.md): how the field rules under `regwatch/data/` and the built web app under `regwatch/web/` are packaged and resolved through `importlib.resources`.

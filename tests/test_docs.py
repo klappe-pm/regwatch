@@ -38,7 +38,18 @@ QUOTES_ATTRIBUTION: set[str] = set()
 # Pages kept out of the public tree. They are ignored by git and may exist in a working copy.
 UNPUBLISHED = (DOCS / "documentation-guide",)
 
-SKIP_DIRS = {"__pycache__", "build", "dist", "env", "htmlcov", "site", "venv"}
+# node_modules and out are the web app's dependencies and Next.js output, both ignored by git.
+SKIP_DIRS = {
+    "__pycache__",
+    "build",
+    "dist",
+    "env",
+    "htmlcov",
+    "node_modules",
+    "out",
+    "site",
+    "venv",
+}
 TEXT_SUFFIXES = {
     ".cfg",
     ".csv",

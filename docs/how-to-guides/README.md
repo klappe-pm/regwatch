@@ -10,10 +10,12 @@ How-to guides are recipes. Each one solves a specific problem for a reader who a
 - [Keep API Keys](keep-api-keys.md): store the key a keyed source needs in the system keychain, or supply it from the environment.
 - [Schedule Runs](schedule-runs.md): capture and check on a schedule with launchd or cron, and read the run records.
 - [Review Flagged Changes](review-flagged-changes.md): what to do, in order, when Regwatch flags a source change, an ingest candidate or a candidate impact.
+- [Use the Web App](use-the-web-app.md): open the local web app, find your way around it, change settings and turn premium features on.
 - [Troubleshooting](troubleshooting.md): known failure modes matched to their fixes.
 
 ## Contribute
 
 - [Run the Tests](run-the-tests.md): the test suite, the coverage report, and the lint, format and type checks a change must pass.
 - [Add a Source Mechanism](add-a-source-mechanism.md): teach `check` to read a new kind of source, with the tests it needs.
+- [Change the Web App](change-the-web-app.md): change the pages behind `regwatch ui`, build them reproducibly and commit the build.
 - [Cut a Release](cut-a-release.md): bump the version, tag and publish to PyPI through trusted publishing.
