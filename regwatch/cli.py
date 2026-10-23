@@ -937,7 +937,14 @@ def _show_numbered(
 def _toggle_tokens(
     answer: str, shown: Sequence[CatalogueEntry], by_id: Mapping[str, CatalogueEntry]
 ) -> list[CatalogueEntry] | None:
-    """The entries an answer names by number or id, or None when it is a search instead."""
+    """The entries an answer names by number or id, or None when it is a search instead.
+
+    An answer that is exactly one catalogue entry's name, whatever its case, names
+    that entry, so a name typed in full selects it like its id.
+    """
+    named = [e for e in by_id.values() if e.name.casefold() == answer.strip().casefold()]
+    if len(named) == 1:
+        return named
     tokens = [token for token in re.split(r"[\s,]+", answer) if token]
     picked: list[CatalogueEntry] = []
     for token in tokens:
@@ -994,11 +1001,20 @@ def _ask_custom_source(
     return entry
 
 
+COMPLETER_DELIMS = " ,"
+
+
 class _Completer:
-    """Readline completion of catalogue ids and names, used only on a terminal."""
+    """Readline completion of catalogue ids, used only on a terminal.
+
+    Spaces and commas separate words (``COMPLETER_DELIMS``), so each id in an
+    answer such as ``nl-notices us-fda`` completes on its own. Names hold spaces,
+    which would end the word being completed, so only ids are offered; a name
+    typed in full is still accepted (see ``_toggle_tokens``).
+    """
 
     def __init__(self, entries: Sequence[CatalogueEntry]) -> None:
-        self.words = sorted({e.source_id for e in entries} | {e.name for e in entries})
+        self.words = sorted({e.source_id for e in entries})
         self.matches: list[str] = []
 
     def __call__(self, text: str, state: int) -> str | None:
@@ -1018,7 +1034,7 @@ def _with_completion(ctx: _Context, entries: Sequence[CatalogueEntry]) -> Callab
         return lambda: None
     previous, delims = readline.get_completer(), readline.get_completer_delims()
     readline.set_completer(_Completer(entries))
-    readline.set_completer_delims(",")
+    readline.set_completer_delims(COMPLETER_DELIMS)
     readline.parse_and_bind("tab: complete")
 
     def restore() -> None:

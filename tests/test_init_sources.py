@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -355,12 +356,48 @@ def test_a_key_already_present_or_refused_is_reported(
 # --- completion ------------------------------------------------------------------------------
 
 
-def test_the_completer_offers_ids_and_names() -> None:
+def test_the_completer_offers_ids_only() -> None:
+    """A name holds spaces, which end the word readline completes, so only ids are offered."""
     completer = _Completer(CATALOGUE)
     assert completer("us-fda-recalls", 0) == "us-fda-recalls-rss"
     assert completer("us-fda-recalls", 1) is None
-    names = [completer("fsa", state) for state in range(3)]
-    assert any(name and name.startswith("FSA") for name in names)
+    offered = [completer("US", state) for state in range(len(CATALOGUE))]
+    offered = [word for word in offered if word]
+    assert offered and all(" " not in word for word in offered)
+    assert all(word in {e.source_id for e in CATALOGUE} for word in offered)
+
+
+def test_each_word_of_an_answer_completes_on_its_own() -> None:
+    """Space is a delimiter, so the second id of "nl-notices us-fda-rec" completes."""
+    from regwatch.cli import COMPLETER_DELIMS
+
+    assert " " in COMPLETER_DELIMS and "," in COMPLETER_DELIMS
+    line = "ca-cfia-recalls-rss us-fda-rec"
+    word = re.split(f"[{re.escape(COMPLETER_DELIMS)}]", line)[-1]
+    assert _Completer(CATALOGUE)(word, 0) == "us-fda-recalls-rss"
+
+
+def test_a_name_typed_in_full_selects_its_source(
+    home: Path, run: Run, answers: Callable[..., list[str]]
+) -> None:
+    by_id = {entry.source_id: entry for entry in CATALOGUE}
+    name = by_id["us-fda-recalls-rss"].name
+    assert sum(1 for e in CATALOGUE if e.name.casefold() == name.casefold()) == 1
+    answers("", "", "", name.upper(), "", "", "", "y")
+    directory = home / "work"
+    code, out, _ = run("init", "--dir", str(directory), "--no-schedule", "--no-first-run")
+    assert code == 0, out
+    assert "selected us-fda-recalls-rss" in out
+    assert "us-fda-recalls-rss" in sources_in(directory)
+
+
+def test_the_picker_toggles_by_a_full_name_and_searches_otherwise() -> None:
+    from regwatch.cli import _toggle_tokens
+
+    by_id = {entry.source_id: entry for entry in CATALOGUE}
+    entry = by_id["gb-fsa-food-alerts-api"]
+    assert _toggle_tokens(f"  {entry.name.lower()} ", [], by_id) == [entry]
+    assert _toggle_tokens(entry.name.split()[0], [], by_id) is None
 
 
 def test_completion_is_turned_on_only_for_a_terminal_and_then_restored() -> None:
