@@ -9,3 +9,4 @@ Explanation pages give background and reasons. They are for reading away from th
 - [Dependencies](dependencies.md): why Regwatch has no runtime dependencies, what that choice costs, and the bar a future dependency must clear.
 - [Architecture](architecture.md): how the modules fit together, which way data flows, and where the trust boundaries sit.
 - [Design Decisions](design-decisions.md): the choices that shaped the code, with the alternative each one rejected, including what was deliberately not built.
+- [Workspace](workspace.md): the source catalogue, guided setup, keys, schedules, the local web app and the premium features, and the increments that deliver them.

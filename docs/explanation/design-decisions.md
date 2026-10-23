@@ -10,6 +10,8 @@ The engine contains no language model call, no prompt, and no API key handling. 
 
 If a pluggable stage is added later, it must be off by default, it must read a key only from an environment variable whose name is configured, it must never log the key, and it must pass through the same disclaimer and escaping as everything else.
 
+The [workspace](workspace.md) plan adds that stage as a premium feature under these conditions, with one change: the key is read from the operating system keychain, and the environment variable remains as an override.
+
 ## Domain-Neutral Vocabulary
 
 The source engine spoke in terms of one industry: ingredient functions, a company's product lines, two countries and their retail channels. The general engine uses neutral terms. An ingredient function became a category, a named ingredient became a term, a channel became a market, and the hard-coded jurisdiction logic became a tree built from the `parent` field. The alternative was to keep the food vocabulary. The neutral terms cost a little clarity in the food case and make the engine usable for any regulated attribute. The matching rules and the severity scoring are unchanged in substance.
