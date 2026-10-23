@@ -30,6 +30,7 @@ __all__ = [
     "KEY_ENV_RE",
     "KEY_ENV_RULE",
     "MAX_KEY_LENGTH",
+    "SECURITY_LINE_BYTES",
     "SERVICE",
     "KeyStatus",
     "KeyStore",
@@ -46,6 +47,17 @@ KEY_ENV_RE = re.compile(r"^REGWATCH_KEY_[A-Z0-9_]{1,51}$")
 KEY_ENV_RULE = "REGWATCH_KEY_ followed by 1 to 51 upper case letters, digits and underscores"
 # Quotes and the backslash would need escaping inside the `security -i` command line.
 _REFUSED = frozenset("\"'\\")
+# security(1) reads each interactive line with fgets into a 4096 byte buffer, so a
+# line of more than 4095 bytes, its line feed included, is split and its tail is
+# read as a second command. The whole line must fit.
+SECURITY_LINE_BYTES = 4095
+
+
+def _security_command(key_env: str, value: str) -> str:
+    """The one line written to ``security -i`` to store ``value``, line feed included."""
+    return (
+        f'add-generic-password -U -s {SERVICE} -a {key_env} -l "{SERVICE} {key_env}" -w "{value}"\n'
+    )
 
 
 class KeyStoreError(Exception):
@@ -171,10 +183,14 @@ class KeyStore:
         check_key(value)
         backend = self._require(key_env)
         if backend == "macos":
-            command = (
-                f'add-generic-password -U -s {SERVICE} -a {key_env} -l "{SERVICE} {key_env}" '
-                f'-w "{value}"\n'
-            )
+            command = _security_command(key_env, value)
+            if len(command.encode("utf-8")) > SECURITY_LINE_BYTES:
+                room = SECURITY_LINE_BYTES - len(_security_command(key_env, "").encode("utf-8"))
+                raise KeyStoreError(
+                    f"the key is too long for the macOS keychain command: with the name "
+                    f"{key_env} it may be at most {room} characters; set the environment "
+                    f"variable {key_env} to supply it instead"
+                )
             result = self._run([str(self._tool("security")), "-i"], command)
             tool = "security"
         else:

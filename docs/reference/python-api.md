@@ -94,7 +94,7 @@ Keys in the system keychain. See the [security model](../explanation/security-mo
 - `check_key(value: str) -> str`: return a usable key or raise `KeyStoreError` without repeating it.
 - `KeyStoreError`: a key could not be stored, read or removed; the message never holds a key. Every method raises it for a `key_env` that does not match `KEY_ENV_RE`.
 - `shared_key_errors(sources) -> list[str]`: messages for key variables that sources at different hosts share; `sources` holds `(source_id, key_env, url)` tuples.
-- Constants: `SERVICE` (`regwatch`), `MAX_KEY_LENGTH` (4096), `KEY_ENV_RE` (`^REGWATCH_KEY_[A-Z0-9_]{1,51}$`) and `KEY_ENV_RULE`, the same rule in words.
+- Constants: `SERVICE` (`regwatch`), `MAX_KEY_LENGTH` (4096), `SECURITY_LINE_BYTES` (4095, the longest line `set` writes to `security -i`, line feed included; a longer one raises `KeyStoreError`), `KEY_ENV_RE` (`^REGWATCH_KEY_[A-Z0-9_]{1,51}$`) and `KEY_ENV_RULE`, the same rule in words.
 
 ## `schedule`
 

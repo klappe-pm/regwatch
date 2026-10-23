@@ -132,6 +132,39 @@ def test_an_unusable_key_is_refused_without_repeating_it(value: str, message: st
     assert check_key(KEY) == KEY
 
 
+def _security_room(var: str) -> int:
+    fixed = f'add-generic-password -U -s regwatch -a {var} -l "regwatch {var}" -w ""\n'
+    return 4095 - len(fixed.encode())
+
+
+def test_the_security_line_fits_its_4096_byte_buffer() -> None:
+    """security -i reads a line with fgets into 4096 bytes; a longer one runs its tail."""
+    fake = FakeSystem("darwin")
+    value = "k" * _security_room(VAR)
+    store_for(fake).set(VAR, value)
+    assert len(fake.inputs[0].encode()) == 4095
+    assert fake.inputs[0].endswith(f'-w "{value}"\n')
+
+
+@pytest.mark.parametrize("extra", [1, 50])
+def test_a_key_too_long_for_the_security_line_is_refused(extra: int) -> None:
+    fake = FakeSystem("darwin")
+    value = "k" * (_security_room(VAR) + extra)
+    with pytest.raises(KeyStoreError, match="too long for the macOS keychain command") as caught:
+        store_for(fake).set(VAR, value)
+    assert f"at most {_security_room(VAR)} characters" in str(caught.value)
+    assert VAR in str(caught.value)
+    assert value not in str(caught.value)
+    assert fake.calls == [] and fake.inputs == []
+
+
+def test_secret_tool_has_no_line_limit() -> None:
+    fake = FakeSystem("linux")
+    value = "k" * 4096
+    store_for(fake).set(VAR, value)
+    assert store_for(fake).stored(VAR) == value
+
+
 def test_the_key_variable_name_is_checked(fake: FakeSystem) -> None:
     store = store_for(fake)
     for operation in (store.get, store.stored, store.status, store.delete):

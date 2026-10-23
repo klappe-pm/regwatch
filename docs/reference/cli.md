@@ -144,7 +144,7 @@ Keeps the keys that keyed sources need in the system keychain: the macOS login k
 | `list` | each keyed source with `stored`, `set in the environment`, `missing` or `missing (no keychain tool)`; with a configuration the keyed sources of your sources file, without one the keyed catalogue sources |
 | `remove SOURCE_ID` | delete the stored key; says so when the environment variable still supplies one |
 
-`SOURCE_ID` is a keyed source in your sources file or in the catalogue. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, or a machine with neither keychain tool exits 2; the last names the environment variable to use instead.
+`SOURCE_ID` is a keyed source in your sources file or in the catalogue. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, a key too long for the line `security` reads on macOS (3,906 to 4,006 characters depending on the key name), or a machine with neither keychain tool exits 2; the last two name the environment variable to use instead.
 
 ## `run`
 
