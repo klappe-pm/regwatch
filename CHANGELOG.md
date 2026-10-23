@@ -65,6 +65,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- A schedule installed before any run never ran: the crontab line and the launchd agent send the output to `schedule.log` in the state directory, which neither cron nor launchd creates, and nothing had created it yet. `regwatch schedule --install`, and so `regwatch init --schedule`, now creates the state directory first, and refuses a state path that is a file or a dangling link.
 - The security model now says plainly that only the last part of an output path is checked for being a symbolic link: a link planted in a folder above it is followed, Linux can limit that in sticky world-writable folders with `fs.protected_symlinks`, and macOS has no such setting.
 - Fetching a source whose host is written in other scripts, or whose path or query holds non-ASCII characters, now works: the host goes on the wire in its `xn--` form for the lookup, the TLS server name and the Host header, the path and query are percent-encoded, and a host that cannot be encoded is a clear `FetchError`. Links shown to readers still require a plain ASCII host.
 - A document model whose section `level` is a number with a fraction, such as `2.0`, is refused with a clean error from `render` instead of crashing the renderer. Only the integers 2, 3 and 4 are accepted.

@@ -383,6 +383,44 @@ def test_schedule_never_replaces_a_crontab_it_could_not_read(run: Run) -> None:
     assert code == 2 and "could not install" in err
 
 
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_a_schedule_installed_before_any_run_creates_the_state_folder(
+    run: Run, project: Path, tmp_path: Path, platform: str
+) -> None:
+    """The job's log file is in the state folder, which neither cron nor launchd creates."""
+    state = load_config(project).state_dir
+    assert not state.exists()
+    code, out, _ = run("schedule", "--install", fake=FakeSystem(platform), home=tmp_path / "home")
+    assert code == 0, out
+    assert state.is_dir()
+    assert str(state / "schedule.log") in out
+
+
+def test_a_dry_run_does_not_create_the_state_folder(run: Run, project: Path) -> None:
+    state = load_config(project).state_dir
+    run("schedule", "--install", "--dry-run", fake=FakeSystem("linux"))
+    assert not state.exists()
+
+
+def test_a_state_path_that_is_a_file_stops_the_install(run: Run, project: Path) -> None:
+    state = load_config(project).state_dir
+    state.write_text("not a folder", encoding="utf-8")
+    fake = FakeSystem("linux")
+    code, _, err = run("schedule", "--install", fake=fake)
+    assert code == 2 and "is not a folder" in err
+    assert fake.crontab is None
+
+
+def test_a_dangling_link_as_the_state_path_stops_the_install(
+    run: Run, project: Path, tmp_path: Path
+) -> None:
+    state = load_config(project).state_dir
+    state.symlink_to(tmp_path / "nowhere")
+    code, _, err = run("schedule", "--install", fake=FakeSystem("linux"))
+    assert code == 2 and "symbolic link" in err
+    assert not (tmp_path / "nowhere").exists()
+
+
 def test_schedule_needs_its_tool_and_one_action(run: Run) -> None:
     code, _, err = run("schedule", "--install", fake=FakeSystem("linux", tools=()))
     assert code == 2 and "crontab command was not found" in err

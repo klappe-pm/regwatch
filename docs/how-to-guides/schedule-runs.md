@@ -36,4 +36,4 @@ regwatch --config ~/my-register/regwatch.toml schedule --show
 regwatch --config ~/my-register/regwatch.toml schedule --remove
 ```
 
-Each run appends its output to `schedule.log` and writes a record to `runs/`, both in the state directory. The newest 500 records are kept.
+Each run appends its output to `schedule.log` and writes a record to `runs/`, both in the state directory. The newest 500 records are kept. `schedule --install` creates the state directory if no run has made it yet, so a schedule installed before the first run still runs.

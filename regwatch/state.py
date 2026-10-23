@@ -26,6 +26,7 @@ __all__ = [
     "StateError",
     "list_run_records",
     "load_seen",
+    "make_state_dir",
     "read_snapshot",
     "remove_file",
     "safe_write_bytes",
@@ -96,6 +97,23 @@ def safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None
             raise
     except OSError as exc:
         raise StateError(f"cannot write {path}: {exc.strerror or exc}") from exc
+
+
+def make_state_dir(path: Path) -> None:
+    """Create the state directory and its parents when they do not exist yet.
+
+    A scheduled run sends its output to a log file in this folder, which the
+    shell (cron) or launchd opens before regwatch starts; neither creates a
+    missing folder, so a schedule installed before the first run would never run.
+    """
+    if path.is_symlink() and not path.is_dir():
+        raise StateError(f"{path} is a symbolic link that does not lead to a folder")
+    if path.exists() and not path.is_dir():
+        raise StateError(f"{path} is not a folder")
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise StateError(f"cannot create {path}: {exc.strerror or exc}") from exc
 
 
 def update_register_file(path: Path, text: str, register_paths: Iterable[Path]) -> None:

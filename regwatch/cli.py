@@ -128,6 +128,7 @@ from regwatch.state import (
     AlreadyExistsError,
     StateError,
     load_seen,
+    make_state_dir,
     remove_file,
     safe_write_bytes,
     safe_write_text,
@@ -1551,6 +1552,7 @@ def _schedule_launchd(
                 _say("would run: " + " ".join(command))
             return EXIT_OK
         launchctl = _tool(ctx, "launchctl")
+        make_state_dir(ctx.config.state_dir)
         safe_write_bytes(path, data, ctx.config.protected_paths())
         system.runner([launchctl, "bootout", f"{domain}/{LABEL}"], None)
         result = system.runner([launchctl, "bootstrap", domain, str(path)], None)
@@ -1600,6 +1602,7 @@ def _schedule_cron(
         return EXIT_OK
     current = _read_crontab(ctx)
     if args.install:
+        make_state_dir(ctx.config.state_dir)
         _write_crontab(ctx, replace_block(current, block))
         _say(f"regwatch schedule: installed {LABEL} in your crontab to run {every}")
         _say(

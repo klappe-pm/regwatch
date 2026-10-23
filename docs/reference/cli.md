@@ -156,7 +156,7 @@ regwatch run
 
 ## `schedule`
 
-Installs, shows or removes a recurring `regwatch run`. On macOS it is a launchd agent with the label `io.github.klappe-pm.regwatch`, loaded with `launchctl bootout` then `launchctl bootstrap gui/<uid>`. Elsewhere it is a block in your crontab between marker comments, so it can be found and removed later; every other line of the crontab is kept. The job runs `<python> -m regwatch --config <this config> run` from the project folder, with the interpreter that runs regwatch now named by absolute path, and appends its output to `schedule.log` in the state directory. With no action it shows the schedule.
+Installs, shows or removes a recurring `regwatch run`. On macOS it is a launchd agent with the label `io.github.klappe-pm.regwatch`, loaded with `launchctl bootout` then `launchctl bootstrap gui/<uid>`. Elsewhere it is a block in your crontab between marker comments, so it can be found and removed later; every other line of the crontab is kept. The job runs `<python> -m regwatch --config <this config> run` from the project folder, with the interpreter that runs regwatch now named by absolute path, and appends its output to `schedule.log` in the state directory. `--install` creates the state directory when it does not exist yet, because cron and launchd open that log before regwatch starts and create no missing folder; a state path that is a file or a dangling link stops the install with exit status 2 before anything is changed. With no action it shows the schedule.
 
 | option | meaning |
 | --- | --- |
