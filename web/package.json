@@ -11,7 +11,8 @@
     "icons": "node scripts/make-icons.mjs",
     "typecheck": "node scripts/make-icons.mjs && tsc --noEmit",
     "build": "node scripts/make-icons.mjs && next build && node scripts/copy-export.mjs",
-    "dev": "node scripts/make-icons.mjs && next dev"
+    "dev": "node scripts/make-icons.mjs && next dev",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "next": "15.5.28",

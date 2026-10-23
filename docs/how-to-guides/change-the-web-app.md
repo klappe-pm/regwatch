@@ -33,6 +33,16 @@ Follow the design rules the existing pages follow:
 - Nothing loads from another origin: no remote font, script, image or style. The server's content security policy blocks any such load, and a test fails on a remote address in the build.
 - Every control is reachable from the keyboard and shows a visible focus ring.
 
+## Test Page Logic
+
+Logic that decides what a page shows, such as how the Sources page lays out the catalogue, lives in plain modules under `web/src/lib/` that import nothing from React or the `@/` alias, so Node can load them directly. Their tests are in `web/tests/`, one `*.test.mjs` file per module, and run with Node's built-in test runner, which strips the TypeScript types itself (Node 22.18 or newer):
+
+```bash
+npm --prefix ~/regwatch/web test
+```
+
+The Python suite runs the same tests through `tests/test_web_logic.py` when such a Node is on the path, and skips them otherwise.
+
 ## Build and Commit
 
 Run the build script. It installs from the lockfile and replaces `regwatch/web/` with a fresh export.

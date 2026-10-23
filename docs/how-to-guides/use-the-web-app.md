@@ -24,7 +24,7 @@ The search box at the top of the rail searches your sources, the changes and you
 | --- | --- |
 | Overview | counts of new, changed, suspicious and failing sources, the next scheduled run, the highest priority regulatory changes, your supply chain sources (Ingredients Supply, Packaging Materials and Commodities and Forecasts) with their last status, the sources to review and what takes effect in the next 90 days |
 | Changes | every candidate impact ranked by focus area, severity and date, with filters and a panel that says why a change was flagged, then the source changes and the unconfirmed candidates from `ingest` |
-| Sources | the sources you watch with the status of each stored snapshot, and the source catalogue grouped by category, with type-ahead search, filters by category, region, kind and access, and an Add button for each source |
+| Sources | the sources you watch with the status of each stored snapshot, and the source catalogue with type-ahead search, filters by category, region, kind and access, and an Add button for each source; with the search box empty the catalogue is grouped by category, and while you type it is one list with the best match first |
 | Obligations | your register, read only, with the products each obligation may affect |
 | Briefings | the tiered briefing, the daily brief and the weekly synthesis, rendered, with export to Markdown, HTML and Word, and to PDF through the browser's print dialog |
 | Newsletters, Documents | premium features; see [premium features](#premium-features) |
@@ -36,7 +36,7 @@ The pages read the files every time they load, so after you run `regwatch captur
 
 ## Add Sources, Set Keys and Run
 
-- Add a source: on the Sources page, search the catalogue (the ranking is the one `regwatch sources search` uses), narrow it by category, region, kind and access, and choose Add. This runs `regwatch sources add`: the source is written to your sources file, with its jurisdiction when your register lacks it, and a source you already watch shows Watching. If the source needs a key, the page says so.
+- Add a source: on the Sources page, search the catalogue (the ranking is the one `regwatch sources search` uses, shown as one list in that order, with each source's category beside its publisher), narrow it by category, region, kind and access, and choose Add. This runs `regwatch sources add`: the source is written to your sources file, with its jurisdiction when your register lacks it, and a source you already watch shows Watching. If the source needs a key, the page says so.
 - Set a key: on the Keys page, paste the key and choose Set. It is stored in the system keychain, as `regwatch keys set` stores it, and the page never shows it again; it shows only whether a key is available and whether it comes from the keychain or an environment variable. Without a keychain tool (security on macOS, secret-tool on Linux), set the environment variable shown instead.
 - Run now: on the Automations page, Run now does what `regwatch run` does: it captures every source, checks them and writes a run record. It runs in the background, one run at a time, and the page updates when it finishes. The schedule itself is installed with `regwatch schedule --install`; the page shows it and its next run.
 

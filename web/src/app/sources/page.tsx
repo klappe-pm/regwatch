@@ -20,6 +20,7 @@ import {
   Th,
 } from "@/components/ui";
 import { getJson, postJson, useApi, useQueryParam } from "@/lib/api";
+import { catalogueGroups } from "@/lib/catalogue-view";
 import { ACCESS, CATEGORIES, label, place, words } from "@/lib/labels";
 import type { AddResult, Catalogue, CatalogueEntry, MySource } from "@/lib/types";
 
@@ -166,11 +167,9 @@ function CatalogueSection({ onAdded }: { onAdded: () => void }) {
   }
 
   const entries = data?.entries ?? [];
-  const grouped = CATEGORIES.map(([id, name]) => ({
-    id,
-    name,
-    entries: entries.filter((e) => e.category === id),
-  })).filter((group) => group.entries.length > 0);
+  // While a search is typed the server's ranking is kept as one list, best first;
+  // with an empty box the catalogue is grouped by category.
+  const grouped = catalogueGroups(entries, query, CATEGORIES);
   const searching = query.trim() !== "";
 
   return (
@@ -244,7 +243,7 @@ function CatalogueSection({ onAdded }: { onAdded: () => void }) {
           <h3 className="mb-1 text-sm font-semibold">
             {group.name} <span className="numeric font-normal text-muted">({group.entries.length})</span>
           </h3>
-          <Table label={`${group.name} sources`}>
+          <Table label={group.ranked ? "Catalogue search results" : `${group.name} sources`}>
             <thead>
               <tr>
                 <Th>Source</Th>
@@ -261,6 +260,7 @@ function CatalogueSection({ onAdded }: { onAdded: () => void }) {
                     <span className="font-medium">{entry.name}</span>
                     <span className="block text-xs text-muted">
                       {entry.publisher}
+                      {group.ranked ? ` · ${label(CATEGORIES, entry.category)}` : null}
                       <span className="md:hidden">
                         {" "}
                         · {entry.jurisdiction} · {words(entry.kind)}
