@@ -78,11 +78,20 @@ def fake() -> FakeSystem:
 
 
 @pytest.fixture
-def server(project: Path, root: Path, fake: FakeSystem) -> Iterator[LocalServer]:
+def fresh(project: Path, root: Path, fake: FakeSystem) -> Iterator[LocalServer]:
+    """A server whose launch token has not been used yet."""
     api = Api(project, system=fake.system(), fetcher=FakeFetcher())
     instance = LocalServer(api, root, 0, token=TOKEN)
     yield instance
     instance.server_close()
+
+
+@pytest.fixture
+def server(fresh: LocalServer) -> LocalServer:
+    """A server whose launch token was traded for a session, as the browser does first."""
+    reply = request(fresh, "GET", f"/?token={TOKEN}", cookie=None)
+    assert reply.status == 303
+    return fresh
 
 
 def send(server: LocalServer, raw: bytes) -> Reply:
@@ -106,13 +115,16 @@ def request(
     path: str,
     *,
     host: str | None = None,
-    cookie: str | None = TOKEN,
+    cookie: str | None = "session",
     origin: str | None = "same",
     body: object = None,
     content_type: str = "application/json",
     extra: dict[str, str] | None = None,
 ) -> Reply:
+    """Send one request; ``cookie="session"`` sends the server's session value."""
     headers = {"Host": host or f"127.0.0.1:{server.port}"}
+    if cookie == "session":
+        cookie = server.session
     if cookie is not None:
         headers["Cookie"] = f"other=1; {server.cookie_name}={cookie}"
     if origin == "same":
@@ -181,7 +193,7 @@ def test_a_request_for_another_host_is_refused(server: LocalServer, host: str) -
 
 
 def test_a_request_without_a_host_is_refused(server: LocalServer) -> None:
-    raw = f"GET / HTTP/1.0\r\nCookie: {server.cookie_name}={TOKEN}\r\n\r\n".encode()
+    raw = f"GET / HTTP/1.0\r\nCookie: {server.cookie_name}={server.session}\r\n\r\n".encode()
     assert send(server, raw).status == 403
 
 
@@ -238,36 +250,107 @@ def test_a_request_without_the_token_is_refused(server: LocalServer, path: str) 
 
 
 def test_a_wrong_token_is_refused(server: LocalServer) -> None:
-    assert request(server, "GET", "/api/status", cookie=TOKEN + "x").status == 403
+    assert request(server, "GET", "/api/status", cookie=f"{server.session}x").status == 403
     assert request(server, "GET", "/?token=wrong", cookie=None).status == 403
     assert request(server, "GET", "/api/status", cookie="").status == 403
 
 
-def test_the_token_in_the_address_becomes_a_cookie_and_leaves_the_address(
-    server: LocalServer,
-) -> None:
-    reply = request(server, "GET", f"/changes/?token={TOKEN}&q=nl", cookie=None)
+def test_a_wrong_launch_token_does_not_spend_the_real_one(fresh: LocalServer) -> None:
+    assert request(fresh, "GET", "/?token=wrong", cookie=None).status == 403
+    assert fresh.session is None
+    assert request(fresh, "GET", f"/?token={TOKEN}", cookie=None).status == 303
+
+
+def test_the_launch_token_is_traded_for_a_separate_session_cookie(fresh: LocalServer) -> None:
+    reply = request(fresh, "GET", f"/changes/?token={TOKEN}&q=nl", cookie=None)
     assert reply.status == 303
     assert reply.headers["Location"] == "/changes/?q=nl"
-    cookie = reply.headers["Set-Cookie"]
-    assert cookie == f"{server.cookie_name}={TOKEN}; Path=/; HttpOnly; SameSite=Strict"
     assert reply.headers["Cache-Control"] == "no-store"
+    cookie = reply.headers["Set-Cookie"]
+    name, _, rest = cookie.partition("=")
+    session, _, flags = rest.partition(";")
+    assert name == fresh.cookie_name
+    assert flags == " Path=/; HttpOnly; SameSite=Strict"
+    assert session == fresh.session
+    assert session != TOKEN and TOKEN not in cookie
+    assert len(session) >= 40
+    assert request(fresh, "GET", "/api/status", cookie=session).status == 200
 
 
-def test_the_cleaned_address_cannot_point_at_another_host(server: LocalServer) -> None:
-    for path in ("//evil.example/x", "/%2F%5Cevil.example", "/\\evil.example"):
-        reply = request(server, "GET", f"{path}?token={TOKEN}", cookie=None)
-        assert reply.status == 303
-        location = reply.headers["Location"]
-        assert location.startswith("/") and location[1:2] not in ("/", "\\"), location
-        assert location.endswith("evil.example") or location.endswith("evil.example/x")
+def test_the_launch_token_works_only_once(fresh: LocalServer) -> None:
+    """A copy of the address (the terminal, the browser's command line) is worthless once used."""
+    first = request(fresh, "GET", f"/?token={TOKEN}", cookie=None)
+    assert first.status == 303
+    again = request(fresh, "GET", f"/?token={TOKEN}", cookie=None)
+    assert again.status == 403
+    assert "works only once" in again.json()["error"]
+    assert "Set-Cookie" not in again.headers
 
 
-def test_a_change_cannot_carry_the_token_in_its_address(server: LocalServer) -> None:
+def test_the_launch_token_is_not_a_session(fresh: LocalServer) -> None:
+    assert request(fresh, "GET", "/api/status", cookie=TOKEN).status == 403
+    request(fresh, "GET", f"/?token={TOKEN}", cookie=None)
+    assert request(fresh, "GET", "/api/status", cookie=TOKEN).status == 403
+
+
+def test_two_racing_exchanges_get_one_session(
+    fresh: LocalServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import secrets
+    import threading
+    import time
+
+    import regwatch.server as server_module
+
+    original = secrets.token_urlsafe
+
+    def slow_token(size: int) -> str:
+        # Widen the window between the check and the assignment, as a busy machine might.
+        time.sleep(0.05)
+        return original(size)
+
+    monkeypatch.setattr(server_module.secrets, "token_urlsafe", slow_token)
+    results: list[str | None] = []
+    barrier = threading.Barrier(8)
+
+    def trade() -> None:
+        barrier.wait()
+        results.append(fresh.exchange(TOKEN))
+
+    threads = [threading.Thread(target=trade) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert [r for r in results if r is not None] == [fresh.session]
+
+
+def test_a_signed_in_browser_that_reopens_the_address_keeps_its_session(
+    server: LocalServer,
+) -> None:
+    session = server.session
+    reply = request(server, "GET", f"/changes/?token={TOKEN}")
+    assert reply.status == 303
+    assert reply.headers["Location"] == "/changes/"
+    assert "Set-Cookie" not in reply.headers
+    assert server.session == session
+
+
+@pytest.mark.parametrize("path", ["//evil.example/x", "/%2F%5Cevil.example", "/\\evil.example"])
+def test_the_cleaned_address_cannot_point_at_another_host(fresh: LocalServer, path: str) -> None:
+    reply = request(fresh, "GET", f"{path}?token={TOKEN}", cookie=None)
+    assert reply.status == 303
+    location = reply.headers["Location"]
+    assert location.startswith("/") and location[1:2] not in ("/", "\\"), location
+    assert location.endswith("evil.example") or location.endswith("evil.example/x")
+
+
+def test_a_change_cannot_carry_the_token_in_its_address(fresh: LocalServer) -> None:
     reply = request(
-        server, "POST", f"/api/settings/premium?token={TOKEN}", cookie=None, body={"enabled": True}
+        fresh, "POST", f"/api/settings/premium?token={TOKEN}", cookie=None, body={"enabled": True}
     )
     assert reply.status == 403
+    assert fresh.session is None
 
 
 # --- files ----------------------------------------------------------------------
@@ -313,6 +396,7 @@ def test_a_missing_page_without_a_404_page_is_a_json_error(project: Path, tmp_pa
     (web / "index.html").write_text("x", encoding="utf-8")
     bare = LocalServer(Api(project), web, 0, token=TOKEN)
     try:
+        request(bare, "GET", f"/?token={TOKEN}", cookie=None)
         reply = request(bare, "GET", "/nothing")
         assert reply.status == 404
         assert reply.json() == {"error": "not found"}
@@ -348,9 +432,9 @@ def test_api_responses_are_not_cached(server: LocalServer) -> None:
     assert reply.headers["Content-Type"] == "application/json; charset=utf-8"
 
 
-def test_requests_are_not_logged(server: LocalServer, capsys: pytest.CaptureFixture[str]) -> None:
-    request(server, "GET", f"/?token={TOKEN}", cookie=None)
-    request(server, "GET", "/missing")
+def test_requests_are_not_logged(fresh: LocalServer, capsys: pytest.CaptureFixture[str]) -> None:
+    request(fresh, "GET", f"/?token={TOKEN}", cookie=None)
+    request(fresh, "GET", "/missing")
     captured = capsys.readouterr()
     assert TOKEN not in captured.err + captured.out
     assert captured.err == ""

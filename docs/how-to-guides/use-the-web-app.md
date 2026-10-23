@@ -10,7 +10,7 @@ Run `regwatch ui` with your configuration file. It starts a small server on `127
 regwatch --config ~/my-project/regwatch.toml ui
 ```
 
-The address it prints carries a private token, for example `http://127.0.0.1:53817/?token=...`. The browser keeps the token as a cookie and the address bar drops it, so the token is not left in your history. Keep the printed address to yourself: anyone on this machine who has it can read your register through the server while it runs.
+The address it prints carries a private token, for example `http://127.0.0.1:53817/?token=...`. The token works once. The first browser that opens the address trades it for a separate session cookie and the address bar drops it, so it is not left in your history; after that the printed address is refused, so a copy of it in your terminal, a shared log or the browser's command line is no use to anyone. Opening the address again in the same browser keeps you signed in. To use another browser, stop the server and start it again for a new address.
 
 To choose the port, add `--port 8765`. To print the address without opening a browser, for example on a machine you reach over SSH with a forwarded port, add `--no-open` and open the address yourself. Press Ctrl+C in the terminal to stop the server; the browser tab stops working then.
 
@@ -64,4 +64,5 @@ regwatch --config ~/my-project/regwatch.toml premium on
 - `error: the web app is not built into this installation`: the installed package lacks the built pages. This happens only when running from a checkout where `regwatch/web/` was deleted; run `scripts/build-web.sh` as described in [change the web app](change-the-web-app.md), or install a released version.
 - `error: cannot listen on 127.0.0.1:8765`: another program uses that port. Leave `--port` out to take a free one.
 - A page that says the request has no valid token: open the exact address `regwatch ui` printed. A token belongs to one run of the server, so an address from an earlier run no longer works.
+- A page that says the address has been used already: the token works once, and another browser or window opened it first. Stop `regwatch ui` with Ctrl+C and start it again for a new address. If you did not open it anywhere else, someone else may have, so stop the server first.
 - A page that says the register is invalid: run `regwatch validate` for the list of problems, fix them, and reload.

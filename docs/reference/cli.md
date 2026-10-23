@@ -330,13 +330,13 @@ Starts the local web app and opens it in the browser. The server is the standard
 | `--port N` | the port on `127.0.0.1`, 0 to 65535; default 0, a free port chosen by the system |
 | `--no-open` | print the address but do not open a browser |
 
-It prints `regwatch ui: serving <project folder> at http://127.0.0.1:<port>/?token=<token>`. The token is 43 random URL-safe characters from `secrets.token_urlsafe`, new for each run. The command exits 0 when stopped, and 2 when the configuration is invalid, the port is taken or out of range, or the installation lacks the built pages.
+It prints `regwatch ui: serving <project folder> at http://127.0.0.1:<port>/?token=<token>`. The token is 43 random URL-safe characters from `secrets.token_urlsafe`, new for each run, and works once: the first browser that opens the address gets a separate session cookie, and the address is refused after that. The command exits 0 when stopped, and 2 when the configuration is invalid, the port is taken or out of range, or the installation lacks the built pages.
 
 ```text
 regwatch ui --port 8765 --no-open
 ```
 
-The JSON interface the pages use is under `/api/`. Every route needs the token, and a route that changes something needs a JSON body and a same-origin `Origin` header.
+The JSON interface the pages use is under `/api/`. Every route needs the session cookie, and a route that changes something needs a JSON body and a same-origin `Origin` header.
 
 | route | method | answers |
 | --- | --- | --- |

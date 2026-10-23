@@ -284,7 +284,7 @@ The JSON interface behind `regwatch ui`. It never prints, and only a run started
 
 The local server behind `regwatch ui`. See the [security model](../explanation/security-model.md#the-local-server).
 
-- `LocalServer(api: Api, root: Path, port: int = 0, token: str | None = None)`: a `ThreadingHTTPServer` bound to `127.0.0.1` that serves the files under `root` and the routes of `api`. `url` is the address to open, with the token. Raises `ServerError` when it cannot listen.
+- `LocalServer(api: Api, root: Path, port: int = 0, token: str | None = None)`: a `ThreadingHTTPServer` bound to `127.0.0.1` that serves the files under `root` and the routes of `api`. `url` is the address to open, with the launch token. `exchange(value)` trades the unspent launch token for a new session value once and returns None for every other value and every later call; `session` holds that value (None before the exchange), `launch_spent` says whether it happened, and `session_matches(value)` checks a cookie. Raises `ServerError` when it cannot listen.
 - `web_root() -> Path`: the built web app shipped in the package. Raises `ServerError` when it is missing.
 - `content_security_policy(script_hashes: list[str]) -> str`: the policy sent with every response.
 - `ServerError`: the server cannot start.

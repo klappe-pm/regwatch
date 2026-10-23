@@ -1640,7 +1640,10 @@ def _cmd_ui(ctx: _Context, args: argparse.Namespace) -> int:
     )
     server = LocalServer(api, web_root(), args.port)
     _say(f"regwatch ui: serving {ctx.config.base_dir} at {server.url}")
-    _say("regwatch ui: the address holds a private token; press Ctrl+C to stop")
+    _say(
+        "regwatch ui: the address holds a private token that works once, in the first "
+        "browser that opens it; press Ctrl+C to stop"
+    )
     if not args.no_open:
         webbrowser.open(server.url)
     try:

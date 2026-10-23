@@ -4,10 +4,12 @@ The server is the standard library's ``ThreadingHTTPServer``, bound to
 ``127.0.0.1`` only. It serves the built web app from ``regwatch/web/`` and the
 JSON interface in ``regwatch.webapi``, and nothing else.
 
-Every request must carry the random token that ``regwatch ui`` puts in the
-address it opens. The first request presents it in the query; the server answers
-with an ``HttpOnly``, ``SameSite=Strict`` cookie and a redirect to the same
-address without the token, and later requests carry the cookie. A request is
+``regwatch ui`` puts a random launch token in the address it opens. The token
+works once: the first request that presents it in the query gets a separate,
+new session value in an ``HttpOnly``, ``SameSite=Strict`` cookie and a redirect
+to the same address without the token, and the launch token is spent. Later
+requests must carry the session cookie, so the printed address, and the copy in
+the browser's command line, is worthless once the browser has opened it. A request is
 refused when its ``Host`` is not this server's own address, when it changes
 state and its ``Origin`` is not this server's own origin, or when it has no
 valid token. Files are served only from inside the build folder, after symbolic
@@ -24,6 +26,7 @@ import http.server
 import json
 import re
 import secrets
+import threading
 from http import HTTPStatus
 from importlib import resources
 from pathlib import Path
@@ -118,15 +121,42 @@ class LocalServer(http.server.ThreadingHTTPServer):
         self.hosts = {f"{HOST}:{self.port}", f"localhost:{self.port}"}
         self.origins = {f"http://{host}" for host in self.hosts}
 
+        # The session value the launch token was traded for; None until then.
+        self.session: str | None = None
+        self._exchange_lock = threading.Lock()
+
     @property
     def url(self) -> str:
-        """The address to open, with the token. Printed once by ``regwatch ui``."""
+        """The address to open, with the launch token. Printed once by ``regwatch ui``."""
         return f"http://{HOST}:{self.port}/?token={self.token}"
 
-    def token_matches(self, value: str | None) -> bool:
-        return value is not None and secrets.compare_digest(
-            value.encode("utf-8", errors="replace"), self.token.encode("utf-8")
-        )
+    @property
+    def launch_spent(self) -> bool:
+        """True once the launch token has been traded for a session."""
+        return self.session is not None
+
+    def exchange(self, value: str | None) -> str | None:
+        """Trade the launch token for a new session value, once.
+
+        Returns the session value when ``value`` is the unspent launch token, and
+        None otherwise, including for every later presentation of the same token.
+        """
+        with self._exchange_lock:
+            if self.session is not None or not _same(value, self.token):
+                return None
+            self.session = secrets.token_urlsafe(32)
+            return self.session
+
+    def session_matches(self, value: str | None) -> bool:
+        """True when ``value`` is this server's session value."""
+        session = self.session
+        return session is not None and _same(value, session)
+
+
+def _same(value: str | None, expected: str) -> bool:
+    return value is not None and secrets.compare_digest(
+        value.encode("utf-8", errors="replace"), expected.encode("utf-8")
+    )
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
@@ -194,32 +224,44 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if self.command == "POST" and not self._origin_ok():
             self._error(HTTPStatus.FORBIDDEN, "a change must come from this server's own pages")
             return False
-        if self.server.token_matches(self._cookie_token()):
+        if self.server.session_matches(self._cookie_token()):
+            if self.command == "GET" and "token" in query:
+                # Already signed in: only take the token out of the address.
+                self._redirect_clean(None)
+                return False
             return True
-        if self.command == "GET" and self.server.token_matches(query.get("token")):
-            self._accept_token()
-            return False
+        if self.command == "GET" and "token" in query:
+            session = self.server.exchange(query.get("token"))
+            if session is not None:
+                self._redirect_clean(session)
+                return False
+            if self.server.launch_spent:
+                self._error(
+                    HTTPStatus.FORBIDDEN,
+                    "this address has been used already and works only once; "
+                    "stop 'regwatch ui' and start it again for a new one",
+                )
+                return False
         self._error(
             HTTPStatus.FORBIDDEN,
             "open the address that 'regwatch ui' printed; this request has no valid token",
         )
         return False
 
-    def _accept_token(self) -> None:
-        """Set the cookie and send the browser to the same address without the token."""
+    def _redirect_clean(self, session: str | None) -> None:
+        """Send the browser to the same address without the token, setting the session cookie."""
         parts = urlsplit(self.path)
         rest = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "token"]
         # One leading slash only, so the target cannot read as another host ("//host").
         clean = "/" + quote(unquote(parts.path).lstrip("/\\"), safe="/")
         if rest:
             clean += "?" + urlencode(rest)
-        cookie = f"{self.server.cookie_name}={self.server.token}; Path=/; HttpOnly; SameSite=Strict"
-        self._send(
-            HTTPStatus.SEE_OTHER,
-            b"",
-            "text/plain; charset=utf-8",
-            {"Location": clean, "Set-Cookie": cookie, "Cache-Control": "no-store"},
-        )
+        headers = {"Location": clean, "Cache-Control": "no-store"}
+        if session is not None:
+            headers["Set-Cookie"] = (
+                f"{self.server.cookie_name}={session}; Path=/; HttpOnly; SameSite=Strict"
+            )
+        self._send(HTTPStatus.SEE_OTHER, b"", "text/plain; charset=utf-8", headers)
 
     # --- methods ---------------------------------------------------------------
 

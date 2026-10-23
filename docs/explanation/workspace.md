@@ -65,7 +65,7 @@ Nothing is scheduled without the user saying yes, and `regwatch schedule --remov
 
 ## The Web App
 
-`regwatch ui` starts a local server and opens the browser at it. The server is the standard library's `http.server`, bound to `127.0.0.1` on a free port, and every request must carry a random token that the command puts in the URL it opens. It serves the built pages and a small JSON interface over the same files the command line reads and writes. Nothing is sent anywhere else, and the pages load no remote font, script or image.
+`regwatch ui` starts a local server and opens the browser at it. The server is the standard library's `http.server`, bound to `127.0.0.1` on a free port. The command puts a random token in the URL it opens; the token works once, and the first browser to present it gets a separate session cookie that every later request must carry. It serves the built pages and a small JSON interface over the same files the command line reads and writes. Nothing is sent anywhere else, and the pages load no remote font, script or image.
 
 The pages are built with Next.js and Tailwind CSS as a static export, and the build output ships inside the wheel, so a user needs no Node. Contributors need Node to change the pages; the release workflow builds them before it builds the wheel.
 
@@ -105,7 +105,7 @@ Some features sit behind a premium toggle so they can later be sold as a bundle:
 ## Security
 
 - The catalogue is data reviewed in pull requests; a chosen source still goes through every fetch check.
-- The local server listens on loopback only, requires the token on every request, refuses requests whose `Host` or `Origin` is not its own, and never serves a file outside its build folder and the configured data files.
+- The local server listens on loopback only, accepts its launch token once and then requires the session cookie on every request, refuses requests whose `Host` or `Origin` is not its own, and never serves a file outside its build folder and the configured data files.
 - Keys stay in the keychain; the JSON interface has no route that returns one.
 - Generated text is untrusted like fetched text and is escaped before it reaches any output.
 

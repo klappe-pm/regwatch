@@ -57,6 +57,7 @@ All notable changes to this project are documented in this file. The format foll
 - A candidates file that is deeply nested or larger than 20,000,000 bytes is a clean error from `brief` instead of a crash.
 - Configuration: a hand-written `allowed_file_roots` entry of `/`, the home directory or any parent of the home directory is refused, as it already was in `regwatch init`, which now refuses a parent of the home directory too.
 - Key variables: a source's `key_env` must match `REGWATCH_KEY_` followed by 1 to 51 upper case letters, digits and underscores, in the catalogue, an extra catalogue file, the sources file and at fetch time, so a source can no longer name an unrelated environment variable (a cloud credential or a deploy token) and have its value sent. Two sources that name the same key variable must send it to the same host and port; the catalogue and the sources file refuse a variable shared across hosts.
+- `regwatch ui`: the token in the address is single use. The first browser that opens it gets a separate random session cookie and the token is spent, so the printed address, the terminal scrollback and the copy in the browser's command line (readable by every local user on Linux) no longer grant access once the browser has opened it. A second use is refused with a message that says to restart the server.
 
 ### Fixed
 

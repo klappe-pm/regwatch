@@ -48,7 +48,7 @@ There are four places where data crosses from one trust level to another, and ea
 - Text to structure. `extract.py` and `ingest.py` are the only modules that parse fetched text. They return strings and plain dicts of bounded, type-checked values, and they never evaluate content. `sanitize.py` cleans every such value, and `render.py` escapes it again for the output format.
 - Process to programs. `system.py` is the only module that starts a program: the keychain tools, `launchctl` and `crontab`. It passes an argument list with no shell and a timeout, and a key travels only on standard input.
 - Process to disk. `state.py` is the only module that writes; `settings.py` hands it the edited configuration. It refuses the register files (apart from the one rewrite of the sources or jurisdictions file that `sources add` and `sources remove` ask for) and any output path that is a symbolic link, writes atomically, keeps an existing file's permissions and rejects a source id that is not a plain identifier.
-- Browser to process. `server.py` is the only module that listens. It answers only on `127.0.0.1`, only to its own host name and origin, and only with the token, and serves only files inside the built web app.
+- Browser to process. `server.py` is the only module that listens. It answers only on `127.0.0.1`, only to its own host name and origin, and only with the session that its single use launch token was traded for, and serves only files inside the built web app.
 
 A change that adds a way across one of these boundaries somewhere else is a change to the security model, and needs the justification described in [contributing](../../CONTRIBUTING.md).
 
