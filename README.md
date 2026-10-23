@@ -30,7 +30,7 @@
 
 If you sell regulated goods such as food, drinks or cosmetics, you already know the problem. The rules that touch your products change in official feeds, agency pages, gazettes and mailing list archives. Reading all of them every day is tedious work that people skip, and a change you miss is a change you hear about late.
 
-Regwatch does the tedious part. It reads the sources you list, notices when one has changed, compares what you know about your products with what you know about the rules, and puts the likely matches at the top of a short briefing. It stops there: it flags candidates for human review, it never edits your register, and nothing it produces is legal advice.
+Regwatch does the tedious part. It reads the sources you list, notices when one has changed, compares what you know about your products with what you know about the rules, and puts the likely matches at the top of a short briefing. It stops there: it flags candidates for human review, it never edits your obligations, and nothing it produces is legal advice.
 
 ## Why Regwatch?
 
@@ -39,7 +39,7 @@ Regwatch does the tedious part. It reads the sources you list, notices when one 
 | Open every feed, agency page and gazette by hand, every day | List the sources once; `check` hashes each one and says which changed |
 | An empty or truncated page reads as "no news" | A source that turns empty or much shorter is reported `SUSPICIOUS`, and a baseline is recorded only when you accept it |
 | Work out in your head which products a rule touches | Impact analysis joins obligations to products by jurisdiction, scope and shared categories, terms or claims, ranked by severity |
-| A tool that rewrites the register you curated | The register is yours; Regwatch never writes it, and candidates from a feed stay unconfirmed in a separate state directory |
+| A tool that rewrites the register you curated | The register is yours; Regwatch writes only the sources and jurisdictions you ask it to add, and candidates from a feed stay unconfirmed in a separate state directory |
 | Write each briefing from scratch | Build a daily, weekly or tiered briefing from your own data and render it as Markdown, a web post, a newsletter or a Word document |
 
 ## Who This Is For
@@ -53,7 +53,8 @@ Regwatch does the tedious part. It reads the sources you list, notices when one 
 
 - **Change detection that cannot be hidden.** Each source is reduced to a signal, hashed and compared with the last accepted hash. An empty or sharply shorter source is `SUSPICIOUS`, and `--accept` is always an explicit step.
 - **Candidate impacts, ranked by your focus areas.** Eight shipped focus areas, plus words of your own, move the matches that matter to you to the top. Nothing is dropped; the rest is listed after them.
-- **A register you own.** Obligations are a CSV file and the rest are JSON catalogs, checked against field rules by `validate`. Regwatch reads them and never writes them.
+- **A register you own.** Obligations are a CSV file and the rest are JSON catalogs, checked against field rules by `validate`. Regwatch reads them, and changes only your sources and jurisdictions, and only when you run `regwatch sources add` or `remove`.
+- **A catalogue of sources to choose from.** Hundreds of regulators, gazettes, recall feeds, lobbying registers, market data services and trade publications worldwide, each marked Free, Free Key or Paid, with one search that ranks the best match first.
 - **Four output formats.** One document model renders to Markdown, a web post, an HTML and plain text newsletter, and a Word document. Every output ends with the disclaimer.
 - **A careful network client.** Only `https` and `file` URLs, no non-public addresses, certificates always verified, and a total deadline, size limit and redirect cap on every fetch. See the [Security Model](https://github.com/klappe-pm/regwatch/blob/main/docs/explanation/security-model.md).
 - **Safe output.** Text from outside is cleaned before it is stored, printed or rendered, Markdown is escaped, and CSV cells a spreadsheet would run as formulas are neutralised.
@@ -81,7 +82,7 @@ regwatch --version
 
 ## Quick Start
 
-Set up your own project. `regwatch init` asks where it lives, which focus areas apply to your business (non-alcoholic beverages, alcoholic beverages, cannabis and hemp products, traditional foods, dietary supplements, infant food, pet food, cosmetics), which jurisdictions to watch, whether local files may be read as sources, and a contact for the User-Agent header:
+Set up your own project. `regwatch init` asks where it lives, which focus areas apply to your business (non-alcoholic beverages, alcoholic beverages, cannabis and hemp products, traditional foods, dietary supplements, infant food, pet food, cosmetics), which jurisdictions to watch, which catalogue sources to follow (search as you type, each marked Free, Free Key or Paid), whether local files may be read as sources, and a contact for the User-Agent header. Then it helps you store any API keys, offers to schedule runs and runs once:
 
 ```bash
 regwatch init --dir ~/my-regwatch
@@ -135,10 +136,14 @@ Regwatch flags candidates for human review. A qualified person must confirm each
 | --- | --- |
 | `regwatch init` | Creates a project: configuration, an empty register and your focus areas. |
 | `regwatch config show` | Prints the effective configuration, including focus areas and allowed file roots. |
+| `regwatch sources` | Lists, searches and shows catalogue sources, adds them to or removes them from your sources file, and verifies their addresses. |
 | `regwatch validate` | Checks the register files against the field rules. |
 | `regwatch coverage` | Reports how much of each jurisdiction the register covers. |
 | `regwatch list` | Lists obligations, optionally filtered by jurisdiction, category, status or upcoming effective date. |
 | `regwatch portfolio` | Lists the products obligations are matched against. |
+| `regwatch keys` | Stores, lists and removes the API keys some sources need, in the system keychain. |
+| `regwatch run` | Captures and checks every source and writes a run record. |
+| `regwatch schedule` | Installs, shows or removes a recurring run with launchd or cron. |
 | `regwatch capture` | Fetches sources into stored snapshots. |
 | `regwatch check` | Detects changes in sources since the last accepted run. |
 | `regwatch ingest` | Turns a Federal Register style response into unconfirmed candidates. |
@@ -149,6 +154,8 @@ Regwatch flags candidates for human review. A qualified person must confirm each
 | `regwatch digest` | Writes a Markdown digest of the register. |
 | `regwatch report` | Writes a change-and-due alert. |
 | `regwatch export` | Writes one flat record per obligation as CSV and JSON. |
+| `regwatch ui` | Opens the local web app in your browser, over the same files. |
+| `regwatch premium` | Turns the premium features on or off, or shows whether they are on. |
 
 Every command accepts `--help`. The [CLI reference](https://github.com/klappe-pm/regwatch/blob/main/docs/reference/cli.md) covers every option, what each command reads and writes, and the exit statuses.
 

@@ -1,6 +1,24 @@
 # Add a Source
 
-This guide shows how to watch a new source: a feed, a web page, an API, a mailing list archive or a page you will read by hand. You add one entry to your sources file, capture its content once, and let `check` compare later runs against it. It assumes a working register; see [getting started](../tutorials/getting-started.md) if you do not have one.
+This guide shows how to watch a new source: a feed, a web page, an API, a mailing list archive or a page you will read by hand. You choose it from the catalogue or add one entry to your sources file by hand, capture its content once, and let `check` compare later runs against it. It assumes a working register; see [getting started](../tutorials/getting-started.md) if you do not have one.
+
+## Start From the Catalogue
+
+Regwatch ships a catalogue of sources worldwide. Search it, read an entry, and copy the ones you want into your sources file. `add` also adds any jurisdiction the source needs.
+
+```bash
+regwatch --config ~/my-register/regwatch.toml sources search "food alerts"
+```
+
+```bash
+regwatch --config ~/my-register/regwatch.toml sources show gb-fsa-food-alerts-api
+```
+
+```bash
+regwatch --config ~/my-register/regwatch.toml sources add gb-fsa-food-alerts-api
+```
+
+Each entry is labelled Free, Free Key (it needs a free API key) or Paid. `regwatch sources list --chosen` shows what you have picked, and `regwatch sources remove ID` takes one out again. For a source the catalogue lacks, either add the entry by hand as the rest of this guide describes, or keep a catalogue file of your own and name it in `[catalogue] extra` in `regwatch.toml`; the [source catalogue reference](../reference/source-catalogue.md) gives its format.
 
 ## Choose a Mechanism
 

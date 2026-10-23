@@ -20,6 +20,14 @@ dist/
 site/
 *.whl
 
+# web app: dependencies and Next.js working folders; the export ships in regwatch/web/
+/web/node_modules/
+/web/.next/
+/web/out/
+/web/next-env.d.ts
+/web/src/lib/icons.generated.ts
+/web/tsconfig.tsbuildinfo
+
 # secrets
 .env
 .env.*

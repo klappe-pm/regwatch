@@ -2,13 +2,13 @@
 
 This page lists every key in `regwatch.toml`, the file that tells regwatch where your register is and how to behave. Every path is resolved relative to the directory that holds the file; an absolute path is used as written and a leading `~` is expanded. Unknown tables, unknown keys and values of the wrong type are rejected with an `error:` message, so a typo never silently changes behaviour. The file must be smaller than 256,000 bytes.
 
-The configuration holds no API keys, tokens or credentials, and regwatch reads no secret. No setting comes from the environment, and proxy environment variables are ignored on purpose; see the [security model](../explanation/security-model.md).
+The configuration holds no API keys, tokens or credentials. A source that needs a key gets it from the system keychain or from the environment variable its entry names, never from this file; see [keep API keys](../how-to-guides/keep-api-keys.md). No setting comes from the environment, and proxy environment variables are ignored on purpose; see the [security model](../explanation/security-model.md).
 
 A complete working file is [examples/regwatch.toml](../../examples/regwatch.toml).
 
 ## Register
 
-Required table. The first five keys are required; the last four are optional. regwatch only ever reads these files.
+Required table. The first five keys are required; the last four are optional. regwatch reads these files, and writes only two of them, the sources and jurisdictions files, and only when you run `regwatch sources add` or `regwatch sources remove`.
 
 | key | type | meaning |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ The format of each file is in [data files](data-files.md).
 
 ## State
 
-Optional table. regwatch writes its own state here and nowhere else apart from output paths you name.
+Optional table. regwatch writes its own state here and nowhere else apart from output paths you name and the two settings that `regwatch premium` and the web app's Settings page change in this file.
 
 | key | type | default | meaning |
 | --- | --- | --- | --- |
@@ -60,6 +60,14 @@ Optional table, written by `regwatch init`. It records what matters to your busi
 
 With no areas and no custom terms nothing is ranked and every candidate counts as in focus.
 
+## Catalogue
+
+Optional table. A source catalogue of your own, read after the one shipped with regwatch, for sources the shipped catalogue lacks; see [source catalogue](source-catalogue.md).
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `extra` | path, optional | none | a catalogue file in the shipped format. Every entry follows the shipped rules, and an id the shipped catalogue uses is refused. It is never overwritten by an output path you name. |
+
 ## Ingest
 
 Optional table. Filters for `ingest`, which reads a Federal Register style API.
@@ -76,3 +84,11 @@ Optional table. Filters for `ingest`, which reads a Federal Register style API.
 | `per_page` | integer | 100 | page size requested, 1 to 1000 |
 
 When both `cfr_parts` and `terms` are empty, every returned document is a candidate. Otherwise a document is a candidate if it matches either filter.
+
+## Premium
+
+Optional table, written by `regwatch premium` and the Settings page of `regwatch ui`.
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `enabled` | boolean | false | turns on the premium features: newsletters, document templates, generated copy and runs more often than once a day. While it is false, the web app shows them with a lock and a note. |

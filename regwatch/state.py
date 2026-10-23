@@ -24,18 +24,25 @@ __all__ = [
     "AlreadyExistsError",
     "SeenState",
     "StateError",
+    "list_run_records",
     "load_seen",
     "read_snapshot",
+    "remove_file",
     "safe_write_bytes",
     "safe_write_text",
     "save_seen",
     "snapshot_path",
+    "update_register_file",
+    "write_run_record",
     "write_snapshot",
     "write_tree",
 ]
 
 SOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
 MAX_STATE_BYTES = 20_000_000
+RUNS_DIR = "runs"
+KEEP_RUN_RECORDS = 500
+_RUN_NAME = re.compile(r"^run-\d{8}T\d{6}Z-[0-9a-f]{8}\.json$")
 
 SeenState = dict[str, dict[str, str]]
 
@@ -89,6 +96,17 @@ def safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None
             raise
     except OSError as exc:
         raise StateError(f"cannot write {path}: {exc.strerror or exc}") from exc
+
+
+def update_register_file(path: Path, text: str, register_paths: Iterable[Path]) -> None:
+    """Rewrite one register file atomically, while every other register file stays protected.
+
+    This is the only write to a register file, and only ``regwatch sources add``
+    and ``regwatch sources remove`` make it, to the sources and jurisdictions files.
+    """
+    target = path.resolve()
+    others = [p for p in register_paths if Path(p).resolve() != target]
+    safe_write_text(path, text, others)
 
 
 def write_tree(directory: Path, files: Mapping[str, str], *, replace: bool) -> None:
@@ -291,3 +309,51 @@ def load_seen(path: Path) -> SeenState:
 def save_seen(path: Path, state: SeenState, protected: Iterable[Path]) -> None:
     """Write the last-seen state."""
     safe_write_text(path, json.dumps(state, indent=2, sort_keys=True) + "\n", protected)
+
+
+def remove_file(path: Path, protected: Iterable[Path]) -> bool:
+    """Delete the file at ``path``; True when there was one. A protected file is refused.
+
+    A symbolic link at ``path`` is removed as a link; its target is left alone.
+    """
+    if any(_same_file(_literal_target(path), Path(p)) for p in protected):
+        raise StateError(f"refusing to remove protected file {path}")
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise StateError(f"cannot remove {path}: {exc.strerror or exc}") from exc
+    return True
+
+
+def write_run_record(
+    state_dir: Path,
+    record: Mapping[str, object],
+    started: str,
+    protected: Iterable[Path],
+    keep: int = KEEP_RUN_RECORDS,
+) -> Path:
+    """Write one run record to ``<state>/runs/`` and keep only the newest ``keep`` records.
+
+    ``started`` is the start time as ``YYYYMMDDTHHMMSSZ``, which makes the names sort
+    in time order. Only files named like a run record are ever removed.
+    """
+    directory = state_dir / RUNS_DIR
+    path = directory / f"run-{started}-{secrets.token_hex(4)}.json"
+    if not _RUN_NAME.fullmatch(path.name):
+        raise StateError(f"invalid run record start time '{started}'")
+    protected_paths = list(protected)
+    safe_write_text(path, json.dumps(record, indent=2, sort_keys=True) + "\n", protected_paths)
+    records = list_run_records(state_dir)
+    for old in records[: max(0, len(records) - keep)]:
+        remove_file(old, protected_paths)
+    return path
+
+
+def list_run_records(state_dir: Path) -> list[Path]:
+    """The run record files in ``<state>/runs/``, oldest first."""
+    directory = state_dir / RUNS_DIR
+    if not directory.is_dir():
+        return []
+    return sorted(p for p in directory.iterdir() if _RUN_NAME.fullmatch(p.name) and p.is_file())

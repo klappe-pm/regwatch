@@ -15,8 +15,10 @@ Reads `regwatch.toml`. See [configuration](configuration.md) for the keys.
 - `DEFAULT_CONFIG_NAME: str`: `"regwatch.toml"`.
 - `load_config(path: Path) -> Config`: parse and validate a configuration file. Raises `ConfigError`.
 - `ConfigError`: the configuration file is missing, unreadable or invalid.
-- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path` and `profile`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files and the focus catalogue when one is configured, which a user-named output must never overwrite.
+- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path`, `profile`, `catalogue` and `premium`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files, and the focus catalogue and the extra source catalogue when they are configured, which a user-named output must never overwrite.
+- `CatalogueSettings`: frozen dataclass with `extra`, the `[catalogue]` table.
 - `ProfileSettings`: frozen dataclass with `focus_areas`, `custom_terms` and `catalogue`, the `[profile]` table.
+- `PremiumSettings`: frozen dataclass with `enabled`, the `[premium]` table; false unless the file turns it on.
 - `RegisterPaths`: frozen dataclass of the register file paths: `obligations`, `jurisdictions`, `categories`, `sources`, `portfolio`, and the optional `detail`, `changelog`, `enforcement` and `themes`. `all_paths()` returns every configured path, resolved, for write protection.
 - `FetchSettings`: frozen dataclass with `timeout_seconds`, `total_timeout_seconds`, `max_bytes`, `user_agent`, `allow_private_hosts` and `allowed_file_roots`.
 - `IngestSettings`: frozen dataclass with `api_url`, `agencies`, `types`, `cfr_title`, `cfr_parts`, `terms`, `jurisdiction` and `per_page`.
@@ -30,8 +32,9 @@ The one network client. See the [security model](../explanation/security-model.m
 - `check_url(url: str) -> str`: return the lower-cased scheme, or raise `FetchError` for a scheme that is not allowed, a URL that contains a space or a control character, carries credentials or has an invalid port, an `https` URL with no host, or a `file` URL that names a remote host.
 - `is_public_address(address: str) -> bool`: true for a globally routable unicast IP address; false for loopback, link-local, private, unique local, shared, reserved, multicast and unspecified addresses, for the IPv4-mapped form of any of them, for an IPv6 address that embeds one (NAT64 `/96`, 6to4, Teredo and ISATAP addresses are judged by the IPv4 address inside, and every embedded address must be public when there is more than one), for the ranges `::/8`, `fec0::/10` and `64:ff9b::/32` apart from its `/96`, and for text that is not an address.
 - `FetchError`: a fetch was refused or failed. The message is cleaned when the error is created, with control characters and invisible format characters removed and a length of at most 1,000 characters, so it is safe to show.
-- `Fetcher`: a protocol with one method, `fetch(url: str) -> str`. Implement it to supply a fake client in tests.
-- `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url)` returns the body decoded as UTF-8 with undecodable bytes replaced. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network.
+- `Fetcher`: a protocol with one method, `fetch(url: str, *, credential: Credential | None = None) -> str`. Implement it to supply a fake client in tests. `credential` is given only for a source that needs a key.
+- `Credential(placement, name, value)`: frozen dataclass for a key and where it goes, `query` or `header`; the value is hidden from `repr`, and an unsafe value or a reserved header name raises `ValueError` without repeating the value. `Credential.from_auth(auth, value)` builds one from a sources file `auth` value such as `query:api_key`, and `redact(text)` replaces the key in `text` with `[key]`.
+- `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url, *, credential=None)` returns the body decoded as UTF-8 with undecodable bytes replaced. With a credential the URL must be `https`, the key goes only to the host and port of the URL it was given for, a redirect to another host or port drops it, and every `FetchError` is cleaned of it with its cause dropped. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network.
 
 ## `extract`
 
@@ -51,8 +54,58 @@ The data model, loading and validation. See [data files](data-files.md).
 - `parse_date(value: str) -> date | None`: parse an ISO date, or return `None`.
 - `split_list(value: str, delimiter: str) -> list[str]`: split a delimited cell into trimmed, non-empty items.
 - `ancestors(jurisdiction_id: str, parents: dict[str, str]) -> list[str]`: the parent chain, nearest first, stopping on a cycle.
+- `read_json_list(path: Path, key: str, label: str) -> tuple[dict[str, Any], list[dict[str, Any]]]`: read a register JSON file and the list of objects under `key`, with the whole object so a rewrite keeps the other keys. Raises `RegisterError`.
+- `obligations_citing_source(config: Config, source_id: str) -> list[str]`: the ids of obligation rows that cite a source.
 - `RegisterError`: the register is unreadable, malformed or invalid; `errors` holds the messages.
 - Frozen dataclasses: `Register`, `Jurisdiction`, `Category`, `Source`, `Obligation`, `Product`, `Portfolio`, `Citation`, `DetailRecord`, `ChangeEvent`, `EnforcementTheme`, `Enforcement` and `Theme`. Their fields match the columns and keys in [data files](data-files.md), with list fields as tuples.
+
+## `catalogue`
+
+The source catalogue. See [source catalogue](source-catalogue.md).
+
+- `load_source_catalogue(focus_ids: Iterable[str], extra: Path | None = None) -> tuple[CatalogueEntry, ...]`: the shipped entries followed by those of the extra file. Raises `CatalogueError`.
+- `parse_source_catalogue(data: object, focus_ids: Iterable[str], label: str = ...) -> tuple[CatalogueEntry, ...]`: validate a decoded catalogue file. Raises `CatalogueError` naming every invalid entry.
+- `entry_from_dict(data: object, focus_ids: Iterable[str], where: str = "entry") -> CatalogueEntry`: validate and build one entry.
+- `rank(entries: Sequence[CatalogueEntry], text: str) -> list[CatalogueEntry]`: the one search ranking, best match first.
+- `filter_entries(entries, *, region=None, jurisdiction=None, kind=None, category=None, access=None, focus=None, chosen=None) -> list[CatalogueEntry]`: the entries that pass every filter given.
+- `entry_to_source(entry: CatalogueEntry, jurisdiction_id: str | None = None) -> dict[str, str]`: the sources file entry for a chosen catalogue entry.
+- `merge_sources(sources, jurisdictions, entries) -> MergeResult`: add entries to a sources list with the jurisdictions they need. Raises `CatalogueError`, changing nothing, when an id is already used by a different entry.
+- `jurisdiction_name(code: str) -> str`: a readable name for a jurisdiction code.
+- `CatalogueEntry`: frozen dataclass with every catalogue field, `auth` as an `Auth` or `None`, plus `access_label`, `keyed` and `to_dict()`.
+- `Auth`: frozen dataclass with `type` and `name`; `to_text()` gives `type:name`.
+- `MergeResult`: frozen dataclass with `sources`, `jurisdictions`, `added`, `present` and `added_jurisdictions`.
+- `CatalogueError`: the catalogue is unreadable or invalid, or a choice cannot be applied.
+- Constants: `FIELDS`, `REGIONS`, `KINDS`, `CATEGORIES`, `MECHANISMS`, `ACCESS`, `CADENCES` and `ACCESS_LABELS`.
+
+## `system`
+
+The one place that starts a program.
+
+- `run_command(args, stdin=None) -> CommandResult`: run an argument list without a shell, with `stdin` on standard input and a 15 second timeout. It never raises for a failed program: one that cannot start returns status 127 and one that runs too long returns 124.
+- `CommandResult`: frozen dataclass with `returncode`, `stdout` (hidden from `repr`) and `stderr`.
+- `System`: frozen dataclass with `runner`, `platform`, `which`, `environ`, `home`, `uid`, `executable`, `read_secret` and `stdin_is_terminal`, plus `is_macos` and `is_linux`. `regwatch.cli.main(..., system=...)` takes one, so tests replace every program regwatch would start.
+
+## `keys`
+
+Keys in the system keychain. See the [security model](../explanation/security-model.md#api-keys).
+
+- `KeyStore(system=None)`: `set(key_env, value)` stores a key and reads it back to confirm it, `get(key_env)` returns the environment variable when set and otherwise the stored key, `stored(key_env)` reads the keychain only, `status(key_env)` returns a `KeyStatus`, and `delete(key_env)` returns true when a key was removed. `backend` is `macos`, `linux` or None, and `backend_label` names it in words.
+- `KeyStatus`: frozen dataclass with `key_env` and `source` (`environment`, `keychain`, `missing` or `unavailable`), and the property `present`.
+- `check_key(value: str) -> str`: return a usable key or raise `KeyStoreError` without repeating it.
+- `KeyStoreError`: a key could not be stored, read or removed; the message never holds a key.
+- Constants: `SERVICE` (`regwatch`) and `MAX_KEY_LENGTH` (4096).
+
+## `schedule`
+
+Builders for the launchd agent and the crontab block.
+
+- `program_arguments(executable, config_path) -> list[str]`: the command a schedule runs, `<executable> -m regwatch --config <config> run`. Raises `ScheduleError` for a relative interpreter path.
+- `plist_bytes(arguments, every, working_dir, log_path) -> bytes` and `plist_path(home) -> Path`: the launchd agent and where it lives.
+- `cron_block(arguments, every, working_dir, log_path) -> str`: the crontab lines between marker comments, every part quoted for the shell; a path with `%` or a line break raises `ScheduleError`.
+- `installed_block(crontab) -> str | None` and `replace_block(crontab, block) -> str`: find, replace or (with None) remove the block, keeping every other line.
+- `schedule_cadence(cadences) -> str`: the most frequent of `hourly`, `daily` and `weekly` among the given cadences, `daily` when none is recognised.
+- Constants: `LABEL` (`io.github.klappe-pm.regwatch`), `CADENCES`, `INTERVAL_SECONDS` and `CRON_TIMES`.
+- `ScheduleError`: a schedule cannot be built or installed.
 
 ## `state`
 
@@ -60,6 +113,10 @@ Snapshots, the last-seen state and the only write path.
 
 - `safe_write_text(path: Path, text: str, protected: Iterable[Path]) -> None`: write UTF-8 text atomically, replacing any unencodable character. Raises `StateError` if `path` is a protected file, compared by identity with `os.path.samefile` when both exist and by case folded name otherwise, or if it is a directory.
 - `safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None`: the same for bytes.
+- `write_run_record(state_dir, record, started, protected, keep=500) -> Path`: write one run record as `runs/run-<started>-<random>.json` under the state directory, where `started` is `YYYYMMDDTHHMMSSZ`, and remove the oldest records beyond `keep`.
+- `list_run_records(state_dir) -> list[Path]`: the run records, oldest first.
+- `remove_file(path, protected) -> bool`: delete a file, refusing a protected one; true when there was one.
+- `update_register_file(path: Path, text: str, register_paths: Iterable[Path]) -> None`: rewrite one register file atomically while every other register file stays protected. Only `sources add` and `sources remove` call it.
 - `snapshot_path(snapshots_dir: Path, source_id: str) -> Path`: the snapshot file for a source id. Raises `StateError` for an id that does not match `SOURCE_ID_RE`, so an id can never escape the directory.
 - `read_snapshot(snapshots_dir: Path, source_id: str) -> str | None`: the stored text, or `None`.
 - `write_snapshot(snapshots_dir: Path, source_id: str, content: str, protected: Iterable[Path]) -> Path`: store content and return the path.
@@ -74,9 +131,11 @@ Snapshots, the last-seen state and the only write path.
 Change detection.
 
 - `SHRINK_RATIO: float` (0.5) and `MIN_PRIOR_LENGTH: int` (20): a signal shorter than `SHRINK_RATIO` times an accepted signal of at least `MIN_PRIOR_LENGTH` characters is `SUSPICIOUS`.
-- `check_sources(sources, seen, snapshots_dir, fetcher=None) -> list[SourceResult]`: compare each source with its accepted hash. With a `fetcher` the content is fetched now; without one the snapshot is read. A fetch or parse failure becomes an `ERROR` result, not an exception. An empty or sharply shorter signal is `SUSPICIOUS`.
+- `fetch_source(source, fetcher, key_for=None) -> str`: fetch one source, adding its key when its entry has `auth`. `key_for` maps a `key_env` name to a key or None; a keyed source without a key raises `FetchError` naming the variable and `regwatch keys set`.
+- `KeyLookup`: the type of `key_for`, `Callable[[str], str | None]`.
+- `check_sources(sources, seen, snapshots_dir, fetcher=None, key_for=None) -> list[SourceResult]`: compare each source with its accepted hash. With a `fetcher` the content is fetched now, keyed sources with their key from `key_for`; without one the snapshot is read. A fetch or parse failure becomes an `ERROR` result, not an exception. An empty or sharply shorter signal is `SUSPICIOUS`.
 - `accept_results(seen, results, now, accept_suspicious=False) -> SeenState`: a copy of `seen` with the hash and signal length from `results` recorded. `SUSPICIOUS` results are skipped unless `accept_suspicious` is true. It does not write anything.
-- `capture_sources(sources, fetcher, snapshots_dir, protected) -> list[CaptureResult]`: fetch each non-manual source and store the raw content.
+- `capture_sources(sources, fetcher, snapshots_dir, protected, key_for=None) -> list[CaptureResult]`: fetch each non-manual source and store the raw content. A snapshot holds the body only, never the request URL, so a key in a query parameter is not stored.
 - `SourceResult`: frozen dataclass with `source_id`, `status`, `origin`, `sha256`, `detail` and `signal_length`; the property `flagged` is true for `NEW`, `CHANGED` and `SUSPICIOUS`, and `needs_attention` is true for `ERROR` and `MISSING`.
 - `CaptureResult`: frozen dataclass with `source_id`, `captured` and `detail`.
 
@@ -174,8 +233,9 @@ What `regwatch init` writes and the checks on its answers. Nothing here prints o
 
 - `SCAFFOLD_NAMES: tuple[str, ...]`: the files `init` writes, relative to the project folder.
 - `CATALOGUE_NAME: str`: `"focus-areas.json"`.
-- `InitPlan(directory, focus_areas=(), custom_terms=(), jurisdictions=(), file_roots=(), contact="")`: frozen dataclass of the answers.
-- `scaffold_files(plan: InitPlan) -> dict[str, str]`: the text of every file, keyed by relative path. Raises `OnboardingError` if an answer cannot be stored in TOML.
+- `InitPlan(directory, focus_areas=(), custom_terms=(), jurisdictions=(), file_roots=(), contact="", sources=())`: frozen dataclass of the answers; `sources` holds the chosen `CatalogueEntry` values.
+- `matching_entries(entries, focus_areas, jurisdictions) -> list[CatalogueEntry]`: the catalogue entries that fit the chosen focus areas and jurisdictions, as `init` lists them.
+- `scaffold_files(plan: InitPlan) -> dict[str, str]`: the text of every file, keyed by relative path, with the chosen sources and the jurisdictions they need. Raises `OnboardingError` if an answer cannot be stored in TOML.
 - `parse_focus_choice(tokens, catalogue) -> tuple[str, ...]`: identifiers or one-based numbers to identifiers.
 - `jurisdiction_records(names) -> tuple[dict[str, str], ...]`: tracked jurisdiction records with identifiers made from the names.
 - `example_jurisdictions() -> tuple[dict[str, str], ...]`: the invented jurisdictions that `init --example` offers.
@@ -183,6 +243,51 @@ What `regwatch init` writes and the checks on its answers. Nothing here prints o
 - `user_agent_for(contact: str) -> str`: the User-Agent header for a contact.
 - `OnboardingError`: an answer is not usable. It is a `ValueError`.
 
+## `settings`
+
+Changes one setting in `regwatch.toml` and keeps the rest of the file.
+
+- `edit_setting(text: str, table: str, key: str, value: bool | list[str]) -> str`: the text with `[table] key` set, replacing its line (or every line of a value that spans several) or adding it. Raises `SettingsError` unless the result parses to the old settings with exactly that value changed.
+- `set_setting(config_path: Path, table: str, key: str, value: bool | list[str]) -> None`: load and validate the configuration, edit it and write it atomically through `state.safe_write_text`, with the register files protected.
+- `set_premium(config_path: Path, enabled: bool) -> None`: set `[premium] enabled`.
+- `set_focus_areas(config_path: Path, focus_areas, known) -> None`: set `[profile] focus_areas` to ids that are in `known`, without repeats. Raises `SettingsError` for any other id.
+- `SettingsError`: the setting could not be changed and the file was left as it was. It is a `ValueError`.
+
+## `workspace`
+
+The operations `regwatch sources`, `keys` and `run` share with the web app. Nothing here prints or asks.
+
+- `source_catalogue(config: Config | None) -> tuple[CatalogueEntry, ...]`: the shipped catalogue, plus `[catalogue] extra` when a configuration names one.
+- `chosen_ids(config: Config) -> list[str]`: the ids in the sources file.
+- `find_entries(catalogue, ids) -> list[CatalogueEntry]`: the entries for `ids`, without repeats. Raises `WorkspaceError` for an unknown id.
+- `add_sources(config: Config, entries) -> MergeResult`: `regwatch sources add`: writes the sources file, and the jurisdictions file when a jurisdiction was added. Raises `CatalogueError` when a different source already has an id.
+- `KeyedSource`: frozen dataclass with `source_id`, `key_env` and `signup_url`.
+- `keyed_sources(config: Config | None, catalogue) -> list[KeyedSource]`: the keyed sources in the sources file, or with no configuration every keyed catalogue entry. `keyed_source(config, catalogue, source_id) -> KeyedSource` finds one, or raises `WorkspaceError`.
+- `key_lookup(store: KeyStore) -> Callable[[str], str | None]`: a lookup that answers None when no key can be read.
+- `fetcher_for(settings: FetchSettings) -> Fetcher`: the fetch client for the settings.
+- `run_once(config, fetcher, key_for, clock, register=None) -> RunOutcome`: `regwatch run`: captures, checks and writes a run record. `RunOutcome` holds the captures, the results, the failed captures, the counts, the code (0, 3 or 4), the record and its path. `RUN_OK`, `RUN_CHANGES` and `RUN_UNVERIFIED` name the codes.
+- `read_run_records(config: Config, limit: int = 50) -> list[dict]`: the newest run records first, with only their known fields; an unreadable record is skipped.
+- `schedule_state(config: Config, system: System, now: datetime) -> ScheduleState`: the installed schedule, read without changing anything. `ScheduleState` has `via` (`launchd` or `cron`), `installed`, `every`, `next_run` (exact for cron; for launchd the last run plus the interval) and `note`.
+- `WorkspaceError`: a request the user can fix. It is a `ValueError`.
+
+## `webapi`
+
+The JSON interface behind `regwatch ui`. It never prints, and only a run started with `/api/automations/run` fetches.
+
+- `Api(config_path: Path, today=datetime.date.today, *, system=None, fetcher=None, clock=None)`: the routes over one configuration file, with the same seams as `cli.main`. `handle(method, path, query, body) -> tuple[int, dict | Download]` answers one request and raises `ApiError` for a refusal. `running` is true while a run started by the interface is in progress, and `wait_for_run(timeout)` waits for it. The routes are listed in the [CLI reference](cli.md#ui).
+- `ApiError(status: int, message: str)`: a refused request; `message` is short and holds no file contents.
+- `Download`: frozen dataclass with `filename`, `content_type` and `data`, a file the browser saves.
+- `SUPPLY_CATEGORIES: tuple[str, ...]`: the catalogue categories the Overview's Supply Chain section lists: `ingredients-supply`, `packaging-materials` and `commodities-and-forecasts`.
+
+## `server`
+
+The local server behind `regwatch ui`. See the [security model](../explanation/security-model.md#the-local-server).
+
+- `LocalServer(api: Api, root: Path, port: int = 0, token: str | None = None)`: a `ThreadingHTTPServer` bound to `127.0.0.1` that serves the files under `root` and the routes of `api`. `url` is the address to open, with the token. Raises `ServerError` when it cannot listen.
+- `web_root() -> Path`: the built web app shipped in the package. Raises `ServerError` when it is missing.
+- `content_security_policy(script_hashes: list[str]) -> str`: the policy sent with every response.
+- `ServerError`: the server cannot start.
+
 ## `cli`
 
-- `main(argv=None, *, fetcher=None, today=None, now=None) -> int`: run the command line and return the exit status. `fetcher`, `today` and `now` let tests and embedders supply a fake network client and a fixed clock.
+- `main(argv=None, *, fetcher=None, today=None, now=None, system=None) -> int`: run the command line and return the exit status. `fetcher`, `today`, `now` and `system` let tests and embedders supply a fake network client, a fixed clock, and a `System` whose runner stands in for the keychain tools, `launchctl` and `crontab`.

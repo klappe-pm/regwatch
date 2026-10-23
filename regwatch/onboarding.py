@@ -19,6 +19,7 @@ from importlib import resources
 from pathlib import Path
 
 from regwatch import __version__
+from regwatch.catalogue import CatalogueEntry, jurisdiction_name, merge_sources
 from regwatch.config import DEFAULT_CONFIG_NAME, file_root_is_too_broad
 from regwatch.focus import FocusArea, shipped_catalogue_text
 from regwatch.register import load_schema
@@ -35,6 +36,7 @@ __all__ = [
     "clean_value",
     "example_jurisdictions",
     "jurisdiction_records",
+    "matching_entries",
     "parse_focus_choice",
     "scaffold_files",
     "user_agent_for",
@@ -71,6 +73,7 @@ class InitPlan:
     jurisdictions: tuple[dict[str, str], ...] = ()
     file_roots: tuple[str, ...] = ()
     contact: str = ""
+    sources: tuple[CatalogueEntry, ...] = ()
 
 
 def clean_value(value: str, what: str) -> str:
@@ -198,6 +201,40 @@ def jurisdiction_records(names: Iterable[str]) -> tuple[dict[str, str], ...]:
     return tuple(records)
 
 
+def _serves_jurisdiction(entry: CatalogueEntry, jurisdictions: Sequence[dict[str, str]]) -> bool:
+    if not jurisdictions or entry.jurisdiction == "intl":
+        return True
+    code = entry.jurisdiction
+    parent = code.split("-", 1)[0]
+    keys = {code, parent, jurisdiction_name(code).casefold(), jurisdiction_name(parent).casefold()}
+    return any(
+        record.get("jurisdiction_id", "") in keys or record.get("name", "").casefold() in keys
+        for record in jurisdictions
+    )
+
+
+def matching_entries(
+    entries: Iterable[CatalogueEntry],
+    focus_areas: Sequence[str],
+    jurisdictions: Sequence[dict[str, str]],
+) -> list[CatalogueEntry]:
+    """The catalogue entries that fit the chosen focus areas and jurisdictions.
+
+    An entry fits a focus when it lists one of the areas or lists none (which
+    means every area). It fits a jurisdiction when its code, the country above a
+    subdivision, or the name of either matches a chosen jurisdiction's id or name;
+    international entries always fit. With no focus or no jurisdiction chosen,
+    that filter keeps everything.
+    """
+    chosen = set(focus_areas)
+    return [
+        entry
+        for entry in entries
+        if (not chosen or not entry.focus_areas or chosen & set(entry.focus_areas))
+        and _serves_jurisdiction(entry, jurisdictions)
+    ]
+
+
 def example_jurisdictions() -> tuple[dict[str, str], ...]:
     """The invented jurisdictions that ``regwatch init --example`` offers.
 
@@ -264,12 +301,13 @@ def scaffold_files(plan: InitPlan) -> dict[str, str]:
         return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 
     header = ",".join(load_schema()["obligation_fields"])
+    merged = merge_sources([], plan.jurisdictions, plan.sources)
     return {
         DEFAULT_CONFIG_NAME: config,
         "register/obligations.csv": header + "\n",
-        "register/jurisdictions.json": document({"jurisdictions": list(plan.jurisdictions)}),
+        "register/jurisdictions.json": document({"jurisdictions": merged.jurisdictions}),
         "register/categories.json": document({"categories": []}),
-        "register/sources.json": document({"sources": []}),
+        "register/sources.json": document({"sources": merged.sources}),
         "register/portfolio.json": document(
             {"name": "My portfolio", "disclaimer": "", "products": []}
         ),

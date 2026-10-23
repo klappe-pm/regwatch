@@ -23,7 +23,9 @@ FORBIDDEN = {
     "owner name": "Kevin" + r"\s+Lap" + "pe",
     "work item code": r"\bW" + r"I-\d+",
     "work item term": "work" + r"[- ]item",
-    "absolute home path": "/(?:Users|home)/" + r"[A-Za-z0-9._-]+",
+    # A home folder starts a path; the same letters inside a web address path (such as
+    # https://example.org/home/en) follow a letter, a digit or punctuation and are not one.
+    "absolute home path": r"(?<![\w.%~-])/(?:Users|home)/" + r"[A-Za-z0-9._-]+",
 }
 
 # The published author appears where a licence and a package need one. PKG-INFO is the metadata
@@ -116,6 +118,16 @@ def test_the_package_owner_is_allowed_only_where_a_licence_needs_one(tmp_path: P
     (tmp_path / "README.md").write_text(f"author {owner}\n", encoding="utf-8")
     hits = scan(sorted(tmp_path.iterdir()), tmp_path)
     assert [hit.split(":")[0] for hit in hits] == ["README.md"]
+
+
+def test_a_home_folder_in_a_web_address_path_is_not_a_hit(tmp_path: Path) -> None:
+    path = tmp_path / "a.json"
+    path.write_text('"https://www.example.org/' + 'food/home/en/"\n', encoding="utf-8")
+    assert scan([path], tmp_path) == []
+    path.write_text('"file:///' + 'home/someone/feed.xml"\n', encoding="utf-8")
+    assert scan([path], tmp_path) != []
+    path.write_text("cd /" + "home/someone\n", encoding="utf-8")
+    assert scan([path], tmp_path) != []
 
 
 def test_the_repository_owner_account_is_not_a_hit(tmp_path: Path) -> None:

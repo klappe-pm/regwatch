@@ -2,7 +2,7 @@
 
 This page describes the `regwatch` command: its global options, every subcommand with its options, what each one reads and writes, and the exit statuses. It is a reference, so it states facts without instruction. For a guided path see [getting started](../tutorials/getting-started.md).
 
-regwatch flags candidates for human review. It never edits the register or the change log, and nothing it produces is legal advice. The help text of every command ends with that statement.
+regwatch flags candidates for human review. It never edits your obligations or the change log, and nothing it produces is legal advice. The help text of every command ends with that statement.
 
 ## Synopsis
 
@@ -25,28 +25,35 @@ regwatch [--version] [--config PATH] <command> [options]
 | 0 | success |
 | 1 | the register is invalid, or `capture` stored nothing |
 | 2 | a usage, configuration, network, state or file error; the message starts with `error:` |
-| 3 | `check --exit-code` found a source that is `NEW`, `CHANGED` or `SUSPICIOUS` |
-| 4 | `check --exit-code` found a source that is `ERROR` or `MISSING`; this wins over 3 |
+| 3 | `check --exit-code` or `run` found a source that is `NEW`, `CHANGED` or `SUSPICIOUS` |
+| 4 | `check --exit-code` or `run` found a source that is `ERROR` or `MISSING`, `run` could not capture a source, or `sources verify` could not fetch an address; this wins over 3 |
 
 Argument errors detected by the parser also exit with status 2.
 
 ## What Gets Written
 
-Commands read the register and never write it. Writes go to exactly these places. A path you name is refused if it is a register file, `regwatch.toml`, `seen.json`, `ingest-candidates.json`, or anything inside the state or snapshots directory, whatever its case or links. Paths are compared by identity, not by name.
+Commands read the register. Only `sources add` and `sources remove` write it, and only the sources and jurisdictions files. Writes go to exactly these places. `premium` and the Settings page of `ui` change one setting in `regwatch.toml` through the same atomic writer, keep every comment and every other line, and refuse a file they cannot change safely. A path you name is refused if it is a register file, `regwatch.toml`, `seen.json`, `ingest-candidates.json`, or anything inside the state or snapshots directory, whatever its case or links. Paths are compared by identity, not by name.
 
 | command | writes |
 | --- | --- |
 | `init` | the seven scaffold files, listed under [init](#init), in the project folder |
+| `sources add`, `sources remove` | the sources file, and for `add` the jurisdictions file when a jurisdiction is missing |
 | `capture` | one file per source in the snapshots directory |
 | `check --accept` | `seen.json` in the state directory |
 | `ingest` | `ingest-candidates.json` in the state directory |
 | `brief --out-dir` | `<name>.md` and `<name>.json` in the directory you name |
 | `render` | the rendered files in the directory you name |
 | `digest --out`, `report --out`, `report --json`, `export --csv`, `export --json` | the path you name |
+| `run` | snapshots, and one run record in `runs/` in the state directory |
+| `schedule --install`, `schedule --remove` | on macOS `~/Library/LaunchAgents/io.github.klappe-pm.regwatch.plist`; elsewhere your crontab, between regwatch's marker lines only |
+| `premium on`, `premium off` | one line in `regwatch.toml`: `[premium] enabled` |
+| `ui` | through its Settings page only, one line in `regwatch.toml`: `[profile] focus_areas` or `[premium] enabled` |
+
+`keys set` and `keys remove` change the system keychain, never a file.
 
 ## `init`
 
-Creates a project: `regwatch.toml`, an empty register that validates, and a copy of the focus catalogue. It asks its questions on the terminal with plain prompts and needs no other program. Every question has a flag, a question whose flag is given is not asked, and `--yes` takes the default for every question that has no flag, so the command can run without a terminal. It ignores the global `--config` option: the configuration file is always `regwatch.toml` in the project folder.
+Creates a project: `regwatch.toml`, a register that validates with the sources you choose, and a copy of the focus catalogue, then offers to store keys, schedule runs and run once. It asks its questions on the terminal with plain prompts and needs no other program. Every question has a flag, a question whose flag is given is not asked, and `--yes` takes the default for every question that has no flag, so the command can run without a terminal. It ignores the global `--config` option: the configuration file is always `regwatch.toml` in the project folder.
 
 | option | meaning |
 | --- | --- |
@@ -59,6 +66,15 @@ Creates a project: `regwatch.toml`, an empty register that validates, and a copy
 | `--example` | offer the invented example jurisdictions (Northland, Southvale and their regions) as the default answer. They are never offered otherwise. |
 | `--yes` | take the default for every question without a flag and do not ask to confirm |
 | `--force` | replace files that already exist |
+| `--sources ID,ID` | catalogue sources to watch, separated by commas; an empty value chooses none. Without it the sources are chosen interactively, and `--yes` chooses none. An id not in the catalogue exits 2 and writes nothing. |
+| `--schedule`, `--no-schedule` | after writing, install a recurring run as `schedule --install` does, or do not ask. Without either the question is asked, and `--yes` does not schedule. |
+| `--first-run`, `--no-first-run` | after writing, run `regwatch run` once, or do not ask. Without either the question is asked when sources were chosen, and `--yes` does not run. With a first run, the exit status is that of `run`. |
+
+The questions come in this order: the project folder, focus areas, custom terms, jurisdictions, sources, local file roots, the contact, and the confirmation. After the files are written come the keys of chosen keyed sources, the schedule and the first run. A closed input stream after the files are written counts as no.
+
+Choosing sources: `init` lists the catalogue sources that fit the chosen focus areas and jurisdictions, grouped by category and then region, each numbered with its name, `Free`, `Free Key` or `Paid`, id and description. An entry fits a focus area when it lists the area or lists none, and fits a jurisdiction when its code, the country above a subdivision, or the name of either matches the jurisdiction's id or name; international entries always fit. At the prompt, numbers or ids separated by commas or spaces select a source or unselect a selected one, any other words search the whole catalogue with the [one ranking](source-catalogue.md#search) and print the best 20 results numbered (the numbers then refer to that list), `+` asks for the fields of a source the catalogue lacks and checks them like a catalogue entry, and Enter finishes. When standard input is a terminal, Tab completes catalogue ids and names.
+
+Keys: for each chosen source that needs a key, `init` prints where to get one and, unless `--yes` is given or no keychain tool exists, asks whether to store it now and reads it without echo, as `keys set` does. Otherwise it prints the `keys set` command and the environment variable to use.
 
 Interactive answers are separated by commas. A flag value is one item, so a name that contains a comma is possible only as a flag. An unusable answer is explained and asked again. A closed input stream stops the command with `error:` and a hint to use flags or `--yes`.
 
@@ -68,8 +84,9 @@ Files written, all inside the project folder:
 | --- | --- |
 | `regwatch.toml` | the register paths, the state directory, the `[profile]` table and, only when answered, `[fetch]` |
 | `register/obligations.csv` | the header row only |
-| `register/jurisdictions.json` | one tracked jurisdiction per name |
-| `register/categories.json`, `register/sources.json` | empty lists |
+| `register/jurisdictions.json` | one tracked jurisdiction per name, and a tracked jurisdiction for each chosen source whose jurisdiction is not among them |
+| `register/sources.json` | the chosen sources, as `sources add` writes them |
+| `register/categories.json` | an empty list |
 | `register/portfolio.json` | the name `My portfolio` and no products |
 | `focus-areas.json` | a copy of the shipped catalogue, for you to edit |
 
@@ -77,11 +94,79 @@ Before asking anything but the folder, `init` lists the files that already exist
 
 ## `config`
 
-`regwatch config show` prints the effective configuration: every setting after defaults and path resolution, in the form of the configuration file. Paths are absolute. It prints the register files, the state and snapshots directories, the fetch limits with the User-Agent and `allowed_file_roots` (a comment says when the list is empty and every file source is refused), the ingest filters, and the profile with the catalogue in use, one comment line for each focus area with its label and number of terms. It does not read the register. It exits 2 if the configuration is invalid or names an unknown focus area.
+`regwatch config show` prints the effective configuration: every setting after defaults and path resolution, in the form of the configuration file. Paths are absolute. It prints the register files, the state and snapshots directories, the fetch limits with the User-Agent and `allowed_file_roots` (a comment says when the list is empty and every file source is refused), the ingest filters, and the profile with the catalogue in use, one comment line for each focus area with its label and number of terms, then `[premium] enabled`. It does not read the register. It exits 2 if the configuration is invalid or names an unknown focus area.
 
 ```text
 regwatch config show
 ```
+
+## `sources`
+
+Reads the [source catalogue](source-catalogue.md): the file shipped with regwatch, followed by the file named in `[catalogue] extra` when there is one. `list`, `search`, `show` and `verify` work without a configuration file and then read the shipped catalogue only. Each source is shown with its access as `Free`, `Free Key` or `Paid`.
+
+| action | meaning |
+| --- | --- |
+| `list` | one line per entry: id, access, jurisdiction, category and name, in catalogue order |
+| `search TEXT` | the entries that match `TEXT`, best match first, ranked as the source catalogue page describes |
+| `show ID` | every field of one entry |
+| `add ID [ID ...]` | copy entries into your sources file, adding any jurisdiction they need |
+| `remove ID` | remove a source from your sources file |
+| `verify [ID ...]` | fetch the address of each entry, every entry when no id is given, and print `ok` with the size or `failed` with the reason |
+
+| option | applies to | meaning |
+| --- | --- | --- |
+| `--region REGION` | `list` | only this region |
+| `--jurisdiction CODE` | `list` | only this jurisdiction and its subdivisions, so `us` also lists `us-ca` |
+| `--kind KIND` | `list` | only this kind |
+| `--category CATEGORY` | `list` | only this category |
+| `--access ACCESS` | `list` | only `free`, `free-key` or `paid` |
+| `--focus ID` | `list` | entries for this focus area, including entries that list no area, which serve every area |
+| `--chosen` | `list` | only entries whose id is in your sources file |
+| `--json` | `list`, `search`, `show` | print JSON instead of lines: an object with `count` and `sources`, or for `show` one entry. Each entry has every catalogue field and `access_label`. |
+
+`add` never overwrites a different entry: when the sources file already has the id with other content, it exits 2 and writes nothing. An entry already present unchanged is reported `present`. `add` and `remove` need a configuration file. `remove` refuses a source that an obligation row cites, and leaves its snapshot and accepted hash in the state directory. `verify` uses the fetch client with the `[fetch]` settings, or the defaults without a configuration, exits 4 when any address fails, and never changes the catalogue. An id that is not in the catalogue exits 2.
+
+```text
+regwatch sources search "food recalls"
+```
+
+```text
+regwatch sources add us-fda-recalls-rss gb-fsa-food-alerts-api
+```
+
+## `keys`
+
+Keeps the keys that keyed sources need in the system keychain: the macOS login keychain through `security`, or the Secret Service on Linux through `secret-tool`. An environment variable named by the source's `key_env` overrides the keychain. No action ever prints a key. The [security model](../explanation/security-model.md#api-keys) explains how a key is kept off command lines.
+
+| action | meaning |
+| --- | --- |
+| `set SOURCE_ID` | print where to get a key, prompt for it without echo, store it and read it back to confirm |
+| `list` | each keyed source with `stored`, `set in the environment`, `missing` or `missing (no keychain tool)`; with a configuration the keyed sources of your sources file, without one the keyed catalogue sources |
+| `remove SOURCE_ID` | delete the stored key; says so when the environment variable still supplies one |
+
+`SOURCE_ID` is a keyed source in your sources file or in the catalogue. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, or a machine with neither keychain tool exits 2; the last names the environment variable to use instead.
+
+## `run`
+
+Captures every source, then checks every source against its snapshot, as `capture` followed by `check --exit-code` would, and writes a run record to `runs/` in the state directory: the start and end times, the number of sources, how many were captured, how many failed to capture, the counts by status and the exit status. The newest 500 records are kept. It does not accept a baseline. Exit status 3 means a change to review, and 4 means a source could not be captured or verified. This is the command a schedule runs.
+
+```text
+regwatch run
+```
+
+## `schedule`
+
+Installs, shows or removes a recurring `regwatch run`. On macOS it is a launchd agent with the label `io.github.klappe-pm.regwatch`, loaded with `launchctl bootout` then `launchctl bootstrap gui/<uid>`. Elsewhere it is a block in your crontab between marker comments, so it can be found and removed later; every other line of the crontab is kept. The job runs `<python> -m regwatch --config <this config> run` from the project folder, with the interpreter that runs regwatch now named by absolute path, and appends its output to `schedule.log` in the state directory. With no action it shows the schedule.
+
+| option | meaning |
+| --- | --- |
+| `--install` | install the schedule, replacing an earlier one |
+| `--remove` | remove the schedule |
+| `--show` | show whether it is installed and what it runs; the default |
+| `--every CADENCE` | `hourly`, `daily` or `weekly`; default the most frequent cadence among your sources, or `daily` |
+| `--dry-run` | print the file or the crontab block and the commands, and change nothing |
+
+Cron times are a minute past the start of the period: `17 * * * *`, `17 6 * * *` and `17 6 * * 1`. A launchd agent repeats every 3,600, 86,400 or 604,800 seconds. A crontab that cannot be read for a reason other than there being none is left unchanged and the command exits 2.
 
 ## `validate`
 
@@ -235,3 +320,59 @@ Writes one flat record per obligation, joined with its detail record when there 
 | `--json PATH` | also write the records as JSON |
 
 Every CSV field is quoted. A cell, or any part of a cell after a `;`, a `,`, a tab or a line break, that begins with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed (also after leading whitespace, and in the fullwidth forms) gets a leading apostrophe in the CSV so a spreadsheet does not run it as a formula; the JSON is unchanged. The columns are `obligation_id`, `jurisdiction`, `status`, `effective_date`, `topics`, `summary`, `impacts`, `implications`, `action`, `source_url` and `citations`.
+
+## `ui`
+
+Starts the local web app and opens it in the browser. The server is the standard library's `ThreadingHTTPServer`, bound to `127.0.0.1` only, and runs until Ctrl+C. It reads the project named by `--config` the same way the other commands do, checks the configuration before it starts, and fetches nothing. See [use the web app](../how-to-guides/use-the-web-app.md) and the [security model](../explanation/security-model.md#the-local-server).
+
+| option | meaning |
+| --- | --- |
+| `--port N` | the port on `127.0.0.1`, 0 to 65535; default 0, a free port chosen by the system |
+| `--no-open` | print the address but do not open a browser |
+
+It prints `regwatch ui: serving <project folder> at http://127.0.0.1:<port>/?token=<token>`. The token is 43 random URL-safe characters from `secrets.token_urlsafe`, new for each run. The command exits 0 when stopped, and 2 when the configuration is invalid, the port is taken or out of range, or the installation lacks the built pages.
+
+```text
+regwatch ui --port 8765 --no-open
+```
+
+The JSON interface the pages use is under `/api/`. Every route needs the token, and a route that changes something needs a JSON body and a same-origin `Origin` header.
+
+| route | method | answers |
+| --- | --- | --- |
+| `/api/status` | GET | the version, the project folder name and whether premium is on |
+| `/api/overview` | GET | source counts by status, the sources to review, the highest priority impacts, obligations effective within 90 days, the schedule with its next run, and your sources in the Ingredients Supply, Packaging Materials and Commodities and Forecasts categories with their last status |
+| `/api/changes` | GET | every source result, every candidate impact and the unconfirmed ingest candidates, cleaned again |
+| `/api/sources` | GET | the sources in the register with the status of each stored snapshot |
+| `/api/catalogue` | GET | catalogue entries ranked for `q` by the ranking `sources search` uses, filtered by `category`, `region`, `kind` and `access` as `sources list` filters, each marked when it is already in your sources; never a request address or a key |
+| `/api/catalogue/add` | POST | adds `source_id` from the catalogue to the sources file through the code `sources add` runs, adding its jurisdiction when needed, and says whether it needs a key |
+| `/api/obligations` | GET | every obligation with its candidate impacts |
+| `/api/briefing` | GET | the document model for `kind` (`tiered`, `daily` or `weekly`) and `tier` (`v1`, `v2` or `v3`) |
+| `/api/briefing/export` | GET | the same briefing as a download in `format` `md`, `html` or `docx` |
+| `/api/automations` | GET | whether premium is on, the installed schedule (launchd or cron, its cadence and next run), the run records newest first, and whether a run is in progress |
+| `/api/automations/run` | POST | starts the code `regwatch run` runs in a background thread and answers at once; 409 while a run is in progress |
+| `/api/keys` | GET | for each keyed source you watch, its id, its environment variable, whether a key is available and where from (environment or keychain), and its sign-up page; never a key |
+| `/api/keys/set` | POST | stores `key` for `source_id` through the code `keys set` runs; answers only whether one is stored |
+| `/api/keys/remove` | POST | removes the stored key for `source_id` through the code `keys remove` runs, and says whether the environment still supplies one |
+| `/api/settings` | GET | the focus areas, the focus catalogue and whether premium is on |
+| `/api/settings/focus` | POST | sets `[profile] focus_areas` to `focus_areas`, ids from the catalogue |
+| `/api/settings/premium` | POST | sets `[premium] enabled` to `enabled`, true or false |
+| `/api/search` | GET | up to 8 sources, changes and obligations each that match `q` |
+
+Only a run started from the Automations page reaches the network, and only one runs at a time. An error is a JSON object with one short `error` message that never holds file contents: 400 for a bad request, 403 for a refused host, origin or token, 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, a source id already used by a different source, a key with no keychain tool, or a run already in progress, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register, and 500 otherwise.
+
+## `premium`
+
+Turns the premium features on or off, or shows whether they are on: newsletters, document templates, generated copy and runs more often than once a day. While premium is off the web app shows these features with a lock and a note instead of hiding them. Regwatch is MIT licensed, so this is a product boundary, not a lock.
+
+| argument | meaning |
+| --- | --- |
+| `on` | set `[premium] enabled = true` in `regwatch.toml` |
+| `off` | set `[premium] enabled = false` |
+| `status` | change nothing |
+
+Each prints `regwatch premium: on` or `regwatch premium: off`, and while off, the features that are locked. The change keeps every comment and every other line of the file. A file whose `[premium]` setting is written in a form the command cannot change safely, such as the dotted key `premium.enabled`, exits 2 and is left unchanged.
+
+```text
+regwatch premium on
+```

@@ -15,6 +15,7 @@ from regwatch.state import (
     safe_write_text,
     save_seen,
     snapshot_path,
+    update_register_file,
     write_snapshot,
     write_tree,
 )
@@ -320,3 +321,17 @@ def test_a_protected_file_that_cannot_be_compared_does_not_block_a_different_tar
     safe_write_text(target, "new", [protected])
     assert target.read_text(encoding="utf-8") == "new"
     assert protected.read_text(encoding="utf-8") == "keep"
+
+
+def test_update_register_file_rewrites_only_its_target(tmp_path: Path) -> None:
+    sources = tmp_path / "sources.json"
+    other = tmp_path / "obligations.csv"
+    sources.write_text("old", encoding="utf-8")
+    other.write_text("keep", encoding="utf-8")
+    update_register_file(sources, "new", [sources, other])
+    assert sources.read_text(encoding="utf-8") == "new"
+    hard = tmp_path / "hard-link.json"
+    os.link(other, hard)
+    with pytest.raises(StateError, match="protected"):
+        update_register_file(hard, "x", [sources, other])
+    assert other.read_text(encoding="utf-8") == "keep"

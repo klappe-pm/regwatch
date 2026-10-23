@@ -330,6 +330,7 @@ def test_init_asks_every_question_and_confirms(
         "1, pet-food",  # focus areas
         "boba, Boba, kombucha",  # extra terms
         "Westmark, Eastmark",  # jurisdictions
+        "",  # sources: none
         "yes",  # allow local files
         "feeds, /srv/rules",  # folders
         "me@example.com",  # contact
@@ -349,7 +350,8 @@ def test_init_asks_every_question_and_confirms(
     assert config["fetch"]["allowed_file_roots"] == ["feeds", "/srv/rules"]  # type: ignore[index]
     assert config["fetch"]["user_agent"].endswith("(+me@example.com)")  # type: ignore[index]
     assert_valid_register(here)
-    assert "Create these files? [y/N]: " in prompts[-1]
+    assert any("Create these files? [y/N]: " in prompt for prompt in prompts)
+    assert prompts[-1].startswith("Run capture and check on a schedule")
 
 
 def test_init_defaults_to_no_local_files_and_the_default_agent(
@@ -358,7 +360,7 @@ def test_init_defaults_to_no_local_files_and_the_default_agent(
     here = project_dir(home)
     here.mkdir()
     monkeypatch.chdir(here)
-    answers("", "", "", "", "", "", "y")
+    answers("", "", "", "", "", "", "", "y")
     code, out, _ = run("init")
     assert code == 0
     assert "Local file sources: not allowed" in out
@@ -378,6 +380,7 @@ def test_init_asks_again_after_an_unusable_answer(
         "",  # terms
         "???",  # no letters
         "Northland",  # good
+        "",  # sources: none
         "y",  # allow files
         "/",  # too broad
         ",",  # no folder named
@@ -407,7 +410,7 @@ def test_init_in_the_home_directory_rejects_an_answer_that_is_home(
     home: Path, run: Run, answers: Callable[..., list[str]]
 ) -> None:
     directory = project_dir(home)
-    answers(str(home), str(directory), "", "", "", "", "", "y")
+    answers(str(home), str(directory), "", "", "", "", "", "", "y")
     code, _, err = run("init")
     assert code == 0 and "not the home directory itself" in err
     assert (directory / "regwatch.toml").is_file()
@@ -419,7 +422,7 @@ def test_init_example_default_answer_is_the_example_set(
     here = project_dir(home)
     here.mkdir()
     monkeypatch.chdir(here)
-    prompts = answers("", "", "", "", "", "", "y")
+    prompts = answers("", "", "", "", "", "", "", "y")
     assert run("init", "--example")[0] == 0
     asked = next(p for p in prompts if p.startswith("Jurisdictions"))
     assert "Enter for the invented example set: Northland, Northland East Region" in asked
@@ -433,7 +436,7 @@ def test_init_without_example_says_enter_means_none(
     here = project_dir(home)
     here.mkdir()
     monkeypatch.chdir(here)
-    prompts = answers("", "", "", "", "", "", "y")
+    prompts = answers("", "", "", "", "", "", "", "y")
     run("init")
     asked = next(p for p in prompts if p.startswith("Jurisdictions"))
     assert "Enter for none" in asked and "Northland" not in asked
@@ -456,6 +459,9 @@ def test_a_question_with_a_flag_is_not_asked(
         "feeds",
         "--contact",
         "me@example.com",
+        "--sources",
+        "",
+        "--no-schedule",
     )
     assert code == 0
     assert len(prompts) == 2
@@ -466,7 +472,7 @@ def test_declining_the_confirmation_writes_nothing(
     home: Path, run: Run, answers: Callable[..., list[str]]
 ) -> None:
     directory = project_dir(home)
-    answers("", "", "", "", "", "n")
+    answers("", "", "", "", "", "", "n")
     code, out, err = run("init", "--dir", str(directory))
     assert code == 2 and "cancelled; nothing was written" in err
     assert "regwatch init will write 7 files" in out

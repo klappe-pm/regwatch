@@ -13,12 +13,12 @@ changes only when the caller explicitly accepts the results.
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
 from regwatch.extract import ExtractError, extract_signal, signal_hash
-from regwatch.fetch import Fetcher, FetchError
+from regwatch.fetch import Credential, Fetcher, FetchError
 from regwatch.register import Source
 from regwatch.state import SeenState, read_snapshot, write_snapshot
 
@@ -26,10 +26,12 @@ __all__ = [
     "MIN_PRIOR_LENGTH",
     "SHRINK_RATIO",
     "CaptureResult",
+    "KeyLookup",
     "SourceResult",
     "accept_results",
     "capture_sources",
     "check_sources",
+    "fetch_source",
 ]
 
 SHRINK_RATIO = 0.5
@@ -67,16 +69,43 @@ class CaptureResult:
     detail: str
 
 
+KeyLookup = Callable[[str], str | None]
+"""Returns the key for a ``key_env`` name, or None when there is none."""
+
+
+def fetch_source(source: Source, fetcher: Fetcher, key_for: KeyLookup | None = None) -> str:
+    """Fetch one source, adding its key when its entry says it needs one.
+
+    Raises FetchError when a keyed source has no key, naming the variable and the
+    command that would supply it, and never the key itself.
+    """
+    if not source.auth:
+        return fetcher.fetch(source.url)
+    value = key_for(source.key_env) if key_for is not None else None
+    if not value:
+        raise FetchError(
+            f"no key for {source.source_id}; run 'regwatch keys set {source.source_id}' "
+            f"or set the environment variable {source.key_env}"
+        )
+    try:
+        credential = Credential.from_auth(source.auth, value)
+    except ValueError as exc:
+        raise FetchError(f"the key for {source.source_id} cannot be used: {exc}") from None
+    return fetcher.fetch(source.url, credential=credential)
+
+
 def check_sources(
     sources: Iterable[Source],
     seen: SeenState,
     snapshots_dir: Path,
     fetcher: Fetcher | None = None,
+    key_for: KeyLookup | None = None,
 ) -> list[SourceResult]:
     """Compare every source with its last accepted hash.
 
-    With a ``fetcher`` the content is fetched now. Without one, the stored
-    snapshot is used, so a check is repeatable offline.
+    With a ``fetcher`` the content is fetched now, with each keyed source's key
+    from ``key_for``. Without one, the stored snapshot is used, so a check is
+    repeatable offline.
     """
     results: list[SourceResult] = []
     for source in sources:
@@ -87,7 +116,7 @@ def check_sources(
         origin = "live" if fetcher is not None else "snapshot"
         try:
             content = (
-                fetcher.fetch(source.url)
+                fetch_source(source, fetcher, key_for)
                 if fetcher is not None
                 else read_snapshot(snapshots_dir, sid)
             )
@@ -153,8 +182,13 @@ def capture_sources(
     fetcher: Fetcher,
     snapshots_dir: Path,
     protected: Iterable[Path],
+    key_for: KeyLookup | None = None,
 ) -> list[CaptureResult]:
-    """Fetch each non-manual source and store the raw content as its snapshot."""
+    """Fetch each non-manual source and store the raw content as its snapshot.
+
+    A keyed source gets its key from ``key_for``. The snapshot holds the body
+    only, never the request URL, so a key in a query parameter is not stored.
+    """
     protected_paths = list(protected)
     results: list[CaptureResult] = []
     for source in sources:
@@ -162,7 +196,7 @@ def capture_sources(
             results.append(CaptureResult(source.source_id, False, "manual source, not fetched"))
             continue
         try:
-            content = fetcher.fetch(source.url)
+            content = fetch_source(source, fetcher, key_for)
         except FetchError as exc:
             results.append(CaptureResult(source.source_id, False, f"fetch failed: {exc}"))
             continue

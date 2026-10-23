@@ -27,7 +27,11 @@ The shipped SafeFetcher is deliberately small and enforces these rules:
 - URLs that carry credentials, or contain control characters, are refused;
 - proxy environment variables are ignored, because a proxy would resolve the
   host itself and defeat the address check;
-- no shell, subprocess or external program is ever started.
+- no shell, subprocess or external program is ever started;
+- a key for a source that needs one (a ``Credential``) is sent only over
+  ``https``, only to the host and port of the URL it was given for, and only in
+  the query parameter or header its source names; a redirect to another host
+  drops it, and it is removed from every error message.
 
 Tests and embedders can supply any object with a matching ``fetch`` method, and
 ``SafeFetcher`` takes a resolver, a connector and a TLS wrapper so that it can be
@@ -40,6 +44,7 @@ import contextlib
 import http.client
 import ipaddress
 import os
+import re
 import socket
 import ssl
 import stat
@@ -48,6 +53,7 @@ import time
 import unicodedata
 import urllib.request
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import quote, urljoin, urlsplit
@@ -58,6 +64,7 @@ __all__ = [
     "ALLOWED_SCHEMES",
     "CHUNK_BYTES",
     "MAX_REDIRECTS",
+    "Credential",
     "FetchError",
     "Fetcher",
     "SafeFetcher",
@@ -95,11 +102,64 @@ class FetchError(Exception):
         super().__init__(clean_text(str(message), MAX_MESSAGE_CHARACTERS))
 
 
+_CREDENTIAL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_RESERVED_HEADERS = frozenset({"host", "user-agent", "accept", "connection", "content-length"})
+MAX_KEY_CHARACTERS = 4096
+REDACTED = "[key]"
+
+
+@dataclass(frozen=True)
+class Credential:
+    """A key and where it goes in the request: a query parameter or a header.
+
+    The key is hidden from ``repr``, and a value that could not be sent safely
+    (empty, too long, or holding a space, a control character, a quote or a
+    backslash) is refused without being repeated in the message.
+    """
+
+    placement: str
+    name: str
+    value: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if self.placement not in ("query", "header"):
+            raise ValueError("a key goes in a 'query' parameter or a 'header'")
+        if not _CREDENTIAL_NAME.fullmatch(self.name):
+            raise ValueError("a key parameter or header name is 1 to 64 letters, digits, - or _")
+        if self.placement == "header" and self.name.lower() in _RESERVED_HEADERS:
+            raise ValueError(f"the key cannot be sent in the {self.name} header")
+        value = self.value
+        if (
+            not value
+            or len(value) > MAX_KEY_CHARACTERS
+            or any(not 0x21 <= ord(ch) <= 0x7E or ch in "\"'\\" for ch in value)
+        ):
+            raise ValueError(
+                "the key must be 1 to 4096 printable ASCII characters without spaces, quotes "
+                "or backslashes"
+            )
+
+    @classmethod
+    def from_auth(cls, auth: str, value: str) -> Credential:
+        """Build a credential from a sources file ``auth`` value such as ``query:api_key``."""
+        placement, _, name = auth.partition(":")
+        return cls(placement, name, value)
+
+    def redact(self, text: str) -> str:
+        """``text`` with the key, raw or percent-encoded, replaced by ``[key]``."""
+        for form in (self.value, quote(self.value, safe="")):
+            text = text.replace(form, REDACTED)
+        return text
+
+
 class Fetcher(Protocol):
     """Anything that can turn a URL into text."""
 
-    def fetch(self, url: str) -> str:
-        """Return the decoded body for ``url`` or raise FetchError."""
+    def fetch(self, url: str, *, credential: Credential | None = None) -> str:
+        """Return the decoded body for ``url`` or raise FetchError.
+
+        ``credential`` is given only for a source that needs a key.
+        """
         ...
 
 
@@ -221,10 +281,23 @@ class SafeFetcher:
         self._connector = connector or _default_connector
         self._wrapper = wrapper or _default_wrapper
 
-    def fetch(self, url: str) -> str:
-        """Return the body of ``url`` decoded as UTF-8 with undecodable bytes replaced."""
-        scheme = check_url(url)
-        data = self._read_file(url) if scheme == "file" else self._read_https(url)
+    def fetch(self, url: str, *, credential: Credential | None = None) -> str:
+        """Return the body of ``url`` decoded as UTF-8 with undecodable bytes replaced.
+
+        With a ``credential`` the URL must be ``https``. The key is added to the
+        first request and to a redirect that stays on the same host and port, and
+        every error raised is cleaned of it, with its cause dropped.
+        """
+        if credential is None:
+            scheme = check_url(url)
+            data = self._read_file(url) if scheme == "file" else self._read_https(url)
+            return data.decode("utf-8", errors="replace")
+        try:
+            if check_url(url) != "https":
+                raise FetchError("a key is sent only over https; refused")
+            data = self._read_https(url, credential)
+        except FetchError as exc:
+            raise FetchError(credential.redact(str(exc))) from None
         return data.decode("utf-8", errors="replace")
 
     def _limit(self, data: bytes) -> bytes:
@@ -317,11 +390,14 @@ class SafeFetcher:
                 )
         return addresses
 
-    def _read_https(self, url: str) -> bytes:
+    def _read_https(self, url: str, credential: Credential | None = None) -> bytes:
         deadline = time.monotonic() + self.total_timeout_seconds
         current = url
+        origin = _origin(url)
         for _ in range(MAX_REDIRECTS + 1):
-            body, location = self._request(current, deadline)
+            # The key goes only to the host and port it was given for.
+            key = credential if _origin(current) == origin else None
+            body, location = self._request(current, deadline, key)
             if location is None:
                 return body
             target = urljoin(current, location)
@@ -330,12 +406,25 @@ class SafeFetcher:
             current = target
         raise FetchError(f"more than {MAX_REDIRECTS} redirects")
 
-    def _request(self, url: str, deadline: float) -> tuple[bytes, str | None]:
+    def _request(
+        self, url: str, deadline: float, credential: Credential | None = None
+    ) -> tuple[bytes, str | None]:
         parts = urlsplit(url)
         host = _wire_host(parts.hostname or "")
         port = parts.port or 443
         addresses = self._vet(host, port, deadline)
-        target = _wire_text((parts.path or "/") + (f"?{parts.query}" if parts.query else ""))
+        query = parts.query
+        headers = {
+            "Host": _host_header(host, port),
+            "User-Agent": self.user_agent,
+            "Accept": "text/html,application/json,application/xml,*/*",
+            "Connection": "close",
+        }
+        if credential is not None and credential.placement == "query":
+            query = _with_parameter(query, credential.name, credential.value)
+        elif credential is not None:
+            headers[credential.name] = credential.value
+        target = _wire_text((parts.path or "/") + (f"?{query}" if query else ""))
         sock: socket.socket | None = None
         watchdog: threading.Timer | None = None
         expired = threading.Event()
@@ -349,16 +438,7 @@ class SafeFetcher:
             watchdog.start()
             connection = http.client.HTTPConnection(host, port)
             connection.sock = sock
-            connection.request(
-                "GET",
-                target,
-                headers={
-                    "Host": _host_header(host, port),
-                    "User-Agent": self.user_agent,
-                    "Accept": "text/html,application/json,application/xml,*/*",
-                    "Connection": "close",
-                },
-            )
+            connection.request("GET", target, headers=headers)
             response = connection.getresponse()
             if response.status in REDIRECT_STATUSES:
                 location = response.getheader("Location")
@@ -422,6 +502,18 @@ class SafeFetcher:
 
     def _deadline_error(self) -> FetchError:
         return FetchError(f"total time limit of {self.total_timeout_seconds:g} seconds exceeded")
+
+
+def _origin(url: str) -> tuple[str, int]:
+    """The lower-cased host and the port of an https URL, which a key is bound to."""
+    parts = urlsplit(url)
+    return (parts.hostname or "").lower().rstrip("."), parts.port or 443
+
+
+def _with_parameter(query: str, name: str, value: str) -> str:
+    """``query`` with every ``name`` parameter replaced by one carrying ``value``."""
+    kept = [item for item in query.split("&") if item and item.partition("=")[0] != name]
+    return "&".join([*kept, f"{name}={quote(value, safe='')}"])
 
 
 def _wire_host(host: str) -> str:

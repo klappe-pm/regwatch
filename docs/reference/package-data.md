@@ -1,6 +1,6 @@
 # Package Data
 
-This page describes how non-Python files ship inside the package and how code finds them. Today there are three: the field rules in `regwatch/data/schema.json`, the focus catalogue in `regwatch/data/focus-areas.json`, and the invented example jurisdictions in `regwatch/data/example-jurisdictions.json`. It covers the rule for locating data, how the build includes it, and how to add another file. It is a reference page, so it states how things are and not how to change them.
+This page describes how non-Python files ship inside the package and how code finds them. Today there are five: the field rules in `regwatch/data/schema.json`, the focus catalogue in `regwatch/data/focus-areas.json`, the invented example jurisdictions in `regwatch/data/example-jurisdictions.json`, the source catalogue in `regwatch/data/source-catalogue.json`, and the jurisdiction names in `regwatch/data/jurisdiction-names.json`. It covers the rule for locating data, how the build includes it, and how to add another file. It is a reference page, so it states how things are and not how to change them.
 
 ## The Rule
 
@@ -21,11 +21,14 @@ A path built from `__file__` breaks when the package is installed from a zip, a 
 | `regwatch/data/schema.json` | `register.load_schema` | the field rules for every register file: required fields, allowed values, patterns, types and references |
 | `regwatch/data/focus-areas.json` | `focus.shipped_catalogue_text`, `focus.load_catalogue` | the shipped focus catalogue; `regwatch init` copies it into each project so the user can edit it. The format is in the [focus catalogue reference](focus-catalogue.md). |
 | `regwatch/data/example-jurisdictions.json` | `onboarding.example_jurisdictions` | the invented jurisdictions that `regwatch init --example` offers; a valid `jurisdictions` list with every coverage set to `tracked` or `aggregate` so a new project has no empty confirmed jurisdiction |
+| `regwatch/data/source-catalogue.json` | `catalogue.load_source_catalogue` | the source catalogue that `regwatch sources` reads; the format and the counts are in the [source catalogue reference](source-catalogue.md) |
+| `regwatch/data/jurisdiction-names.json` | `catalogue.jurisdiction_name` | a readable name for each catalogue jurisdiction code, used when `sources add` adds a jurisdiction to a register |
+| `regwatch/web/` | `server.web_root` | the web app behind `regwatch ui`, built from `web/` by `scripts/build-web.sh`: one folder per page with an `index.html`, the `_next/static/` scripts and stylesheet, and a 404 page. It is generated; change `web/` and rebuild, as [change the web app](../how-to-guides/change-the-web-app.md) describes. |
 | `regwatch/py.typed` | type checkers | marks the package as typed |
 
 ## How the Build Includes It
 
-The wheel target in `pyproject.toml` lists `packages = ["regwatch"]`. The hatchling backend includes every file under the package directory that is not excluded by `.gitignore`, so every file under `data/` and `py.typed` ship without further configuration. Check a new data file from an installed wheel, as described below. The source distribution includes `regwatch`, `tests`, `examples`, `README.md`, `LICENSE` and `pyproject.toml`.
+The wheel target in `pyproject.toml` lists `packages = ["regwatch"]`. The hatchling backend includes every file under the package directory that is not excluded by `.gitignore`, so every file under `data/` and `web/` and `py.typed` ship; `artifacts` names `regwatch/data/**` and `regwatch/web/**` as well, so a file there is never left out by an ignore rule. Check a new data file from an installed wheel, as described below. The source distribution includes `regwatch`, `tests`, `examples`, `README.md`, `LICENSE` and `pyproject.toml`.
 
 ## The Schema Format
 

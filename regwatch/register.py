@@ -43,7 +43,9 @@ __all__ = [
     "ancestors",
     "load_register",
     "load_schema",
+    "obligations_citing_source",
     "parse_date",
+    "read_json_list",
     "split_list",
     "validate_register",
 ]
@@ -96,6 +98,8 @@ class Source:
     mechanism: str
     cadence: str
     notes: str
+    auth: str = ""
+    key_env: str = ""
 
 
 @dataclass(frozen=True)
@@ -283,6 +287,17 @@ def _json_list(data: JsonObject, key: str, label: str) -> list[JsonObject]:
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         raise RegisterError(f"{label} must hold a '{key}' list of objects")
     return value
+
+
+def read_json_list(path: Path, key: str, label: str) -> tuple[JsonObject, list[JsonObject]]:
+    """Read a register JSON file and the list of objects it holds under ``key``.
+
+    The whole object is returned too, so a caller that rewrites the file keeps
+    every other top-level key. Raises RegisterError for an unreadable file or a
+    wrong shape.
+    """
+    data = _read_json_object(path, label)
+    return data, _json_list(data, key, label)
 
 
 def _read_obligation_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -523,6 +538,7 @@ def _validate_raw(raw: _Raw) -> list[str]:
         "categories", raw.categories, schema["category_fields"], refs, delimiter
     )
     errors += _check_catalog("sources", raw.sources, schema["source_fields"], refs, delimiter)
+    errors += _check_keyed_sources(raw.sources)
     errors += _check_catalog("products", raw.products, schema["product_fields"], refs, delimiter)
 
     fields: JsonObject = schema["obligation_fields"]
@@ -551,6 +567,24 @@ def _validate_raw(raw: _Raw) -> list[str]:
     ):
         if value is not None:
             errors += _control_errors(label, value)
+    return errors
+
+
+def _check_keyed_sources(sources: list[JsonObject]) -> list[str]:
+    """A keyed source names both where its key goes and the variable that can supply it.
+
+    Its key is sent only over https, so its address must be an https URL.
+    """
+    errors: list[str] = []
+    for index, source in enumerate(sources, start=1):
+        prefix = f"sources entry {index} ({source.get('source_id', '?') or '?'})"
+        auth = str(source.get("auth", "") or "").strip()
+        key_env = str(source.get("key_env", "") or "").strip()
+        if bool(auth) != bool(key_env):
+            errors.append(f"{prefix}: fields 'auth' and 'key_env' must be given together")
+        url = str(source.get("url", "") or "").strip().lower()
+        if auth and not url.startswith("https:"):
+            errors.append(f"{prefix}: a source with 'auth' must have an https URL")
     return errors
 
 
@@ -701,6 +735,8 @@ def _build(raw: _Raw, delimiter: str) -> Register:
             _s(s, "mechanism"),
             _s(s, "cadence"),
             _s(s, "notes"),
+            _s(s, "auth"),
+            _s(s, "key_env"),
         )
         for s in raw.sources
     )
@@ -804,6 +840,15 @@ def _build(raw: _Raw, delimiter: str) -> Register:
         enforcement,
         themes,
     )
+
+
+def obligations_citing_source(config: Config, source_id: str) -> list[str]:
+    """The ids of obligation rows whose ``source_id`` is ``source_id``.
+
+    Raises RegisterError when the obligations file cannot be read.
+    """
+    _header, rows = _read_obligation_rows(config.register.obligations)
+    return [row.get("obligation_id", "") for row in rows if row.get("source_id") == source_id]
 
 
 def load_register(config: Config) -> Register:
