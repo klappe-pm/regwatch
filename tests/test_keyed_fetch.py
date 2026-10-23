@@ -109,6 +109,79 @@ def test_an_encoded_key_is_redacted_too() -> None:
     assert credential.redact("x a%26b y a&b") == "x [key] y [key]"
 
 
+def test_the_html_and_json_forms_of_a_key_are_redacted() -> None:
+    credential = query(value="a&b/c")
+    assert credential.redact('x a&amp;b/c y "a&b\\/c" z a%26b%2Fc w a%26b/c') == (
+        'x [key] y "[key]" z [key] w [key]'
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        f'{{"error": "invalid api_key {KEY}"}}',
+        f"<p>Your key {KEY.replace('-', '&#45;')} is wrong, {KEY}</p>",
+        f'{{"echo": "{KEY}", "url": "/v1?api_key={KEY}"}}',
+    ],
+)
+def test_a_response_that_echoes_the_key_is_returned_without_it(body: str) -> None:
+    network = web(ok(body.encode()))
+    text = make(network).fetch("https://example.org/", credential=query())
+    assert KEY not in text
+    assert "[key]" in text
+
+
+def test_a_snapshot_never_holds_a_key_the_server_echoed(tmp_path: Path) -> None:
+    body = f'{{"error": "invalid api_key {KEY}"}}'.encode()
+    source = keyed_source(source_id="fred", mechanism="api", url="https://example.org/x")
+    results = capture_sources([source], make(web(ok(body))), tmp_path, [], lambda env: KEY)
+    assert results[0].captured
+    assert KEY not in (tmp_path / "fred.txt").read_text(encoding="utf-8")
+
+
+def test_any_fetcher_has_an_echoed_key_removed() -> None:
+    """fetch_source redacts too, so a fetcher other than SafeFetcher cannot store the key."""
+    fetcher = KeyedFetcher(body=f"<rss><title>{KEY}</title></rss>")
+    text = fetch_source(keyed_source(), fetcher, {"REGWATCH_KEY_ZZ": KEY}.get)
+    assert KEY not in text and "[key]" in text
+
+
+@pytest.mark.parametrize("padding", range(955, 975, 3))
+def test_a_key_cut_by_the_message_limit_is_still_removed(padding: int) -> None:
+    """The key is removed before the message is cut, so no half of it survives.
+
+    The padding moves the key across the 1,000 character limit of the message.
+    """
+
+    def long_status(server: socket.socket) -> None:
+        server.sendall(b"HTTP/1.1 XYZ " + b"x" * padding + KEY.encode() + b"\r\n\r\n")
+
+    with pytest.raises(FetchError) as caught:
+        make(web(long_status)).fetch("https://example.org/", credential=query())
+    message = str(caught.value)
+    assert KEY[:4] not in message
+    assert len(message) <= 1000
+
+
+def test_a_key_split_by_an_invisible_character_is_still_removed() -> None:
+    """Cleaning removes a zero-width space, so the key is removed again after cleaning."""
+    split = KEY[:4] + "​" + KEY[4:]
+    error = FetchError(f"the server said {split}", redact=query().redact)
+    assert KEY not in str(error)
+    assert str(error) == "the server said [key]"
+
+
+def test_fetch_source_redacts_an_error_from_any_fetcher() -> None:
+    class Failing:
+        def fetch(self, url: str, *, credential: Credential | None = None) -> str:
+            raise FetchError(f"the server said {KEY}")
+
+    with pytest.raises(FetchError) as caught:
+        fetch_source(keyed_source(), Failing(), {"REGWATCH_KEY_ZZ": KEY}.get)
+    assert str(caught.value) == "the server said [key]"
+    assert caught.value.__cause__ is None
+
+
 def test_a_credential_hides_its_value() -> None:
     credential = query()
     assert KEY not in repr(credential)

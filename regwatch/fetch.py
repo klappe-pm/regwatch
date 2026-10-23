@@ -41,6 +41,7 @@ tested without a network.
 from __future__ import annotations
 
 import contextlib
+import html
 import http.client
 import ipaddress
 import os
@@ -96,10 +97,20 @@ class FetchError(Exception):
     removed, and a very long message is cut. A server controls part of some
     messages, for example the status line it sent back, so the cleaning cannot be
     left to the code that prints the error.
+
+    ``redact``, when given, removes a secret from the message before it is cleaned
+    and cut, and again after cleaning, so neither a key cut in half at the length
+    limit nor a key a server split with an invisible character survives. The
+    uncleaned message is kept in ``raw`` so a caller that learns the secret later
+    can rebuild the error the same way; it is never shown.
     """
 
-    def __init__(self, message: object = "") -> None:
-        super().__init__(clean_text(str(message), MAX_MESSAGE_CHARACTERS))
+    def __init__(self, message: object = "", redact: Callable[[str], str] | None = None) -> None:
+        text = str(message)
+        if redact is not None:
+            text = redact(clean_text(redact(text)))
+        self.raw = text
+        super().__init__(clean_text(text, MAX_MESSAGE_CHARACTERS))
 
 
 _CREDENTIAL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -146,8 +157,20 @@ class Credential:
         return cls(placement, name, value)
 
     def redact(self, text: str) -> str:
-        """``text`` with the key, raw or percent-encoded, replaced by ``[key]``."""
-        for form in (self.value, quote(self.value, safe="")):
+        """``text`` with the key replaced by ``[key]``.
+
+        The key is replaced as written, percent-encoded (as it is sent in a query),
+        HTML-escaped and JSON-escaped, the forms in which a response or an error
+        message usually echoes it. Longer forms are replaced first.
+        """
+        forms = {
+            self.value,
+            quote(self.value, safe=""),
+            quote(self.value),
+            html.escape(self.value),
+            self.value.replace("/", "\\/"),
+        }
+        for form in sorted(forms, key=len, reverse=True):
             text = text.replace(form, REDACTED)
         return text
 
@@ -297,8 +320,10 @@ class SafeFetcher:
                 raise FetchError("a key is sent only over https; refused")
             data = self._read_https(url, credential)
         except FetchError as exc:
-            raise FetchError(credential.redact(str(exc))) from None
-        return data.decode("utf-8", errors="replace")
+            raise FetchError(exc.raw, redact=credential.redact) from None
+        # A server may echo the key back ("invalid api_key ..."); it must not reach
+        # a snapshot, a hash or a printed line.
+        return credential.redact(data.decode("utf-8", errors="replace"))
 
     def _limit(self, data: bytes) -> bytes:
         if len(data) > self.max_bytes:

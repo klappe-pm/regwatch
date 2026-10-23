@@ -97,7 +97,12 @@ def fetch_source(source: Source, fetcher: Fetcher, key_for: KeyLookup | None = N
         credential = Credential.from_auth(source.auth, value)
     except ValueError as exc:
         raise FetchError(f"the key for {source.source_id} cannot be used: {exc}") from None
-    return fetcher.fetch(source.url, credential=credential)
+    try:
+        body = fetcher.fetch(source.url, credential=credential)
+    except FetchError as exc:
+        raise FetchError(exc.raw, redact=credential.redact) from None
+    # Whatever fetcher was used, a body that echoes the key is stored without it.
+    return credential.redact(body)
 
 
 def check_sources(
