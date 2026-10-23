@@ -2,63 +2,69 @@
 
 ``Api.handle`` takes a method, a path, the query and a parsed JSON body and
 returns a status and a payload. It reads the project the same way the command
-line does, through ``load_config`` and ``load_register``, and every write goes
-through ``regwatch.settings``, which writes through ``regwatch.state``. It
-never prints and never touches the network; ``regwatch.server`` carries it over
-HTTP.
+line does, through ``load_config`` and ``load_register``, and it does the same
+work as the commands through the same functions: the source catalogue, its
+ranking and ``sources add`` through ``regwatch.workspace``, keys through
+``regwatch.keys``, the schedule and run records through ``regwatch.workspace``,
+and ``regwatch run`` through ``workspace.run_once``. Every write goes through
+``regwatch.state``. It never prints; ``regwatch.server`` carries it over HTTP.
 
-Some pages show features that other parts of Regwatch provide: the source
-catalogue and its search, API keys in the keychain, and the schedule with its run
-records. Those are reached only through the adapter functions in the section
-marked "adapters" below. Until a feature lands its adapter returns ``None`` and
-the interface answers ``{"available": false}``, so the pages show an empty state
-that names the command that will fill it. When a feature lands, its adapter is
-the one place that changes.
+Only a run started from the Automations page reaches the network, and it runs in
+a background thread, one at a time.
 
 No route returns the value of a key. The key routes accept a key once and answer
-only whether one is stored.
+only whether one is available and where it comes from.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import json
-from collections.abc import Callable, Mapping
+import threading
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from regwatch import __version__
 from regwatch.briefing import TIERS, build_briefing
+from regwatch.catalogue import CATEGORIES, CatalogueEntry, CatalogueError, filter_entries, rank
 from regwatch.check import SourceResult, check_sources
 from regwatch.config import Config, load_config
 from regwatch.document import Document
+from regwatch.fetch import Fetcher
 from regwatch.focus import FocusProfile, build_profile, load_catalogue
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
+from regwatch.keys import KeyStore, KeyStoreError
 from regwatch.register import Register, load_register
 from regwatch.render import docx_bytes, render_markdown, render_newsletter_html
 from regwatch.sanitize import clean_text, safe_https_url
 from regwatch.settings import set_focus_areas, set_premium
 from regwatch.state import MAX_STATE_BYTES, load_seen
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
+from regwatch.system import System
+from regwatch.workspace import (
+    WorkspaceError,
+    add_sources,
+    chosen_ids,
+    fetcher_for,
+    find_entries,
+    key_lookup,
+    keyed_source,
+    keyed_sources,
+    read_run_records,
+    run_once,
+    schedule_state,
+    source_catalogue,
+)
 
-__all__ = ["CATEGORIES", "Api", "ApiError", "Download"]
+__all__ = ["SUPPLY_CATEGORIES", "Api", "ApiError", "Download"]
 
 JsonObject = dict[str, Any]
 MAX_RESULTS = 8
 MAX_QUERY = 200
-CATEGORIES = (
-    "regulation",
-    "policy-and-lobbying",
-    "ingredients-supply",
-    "packaging-materials",
-    "commodities-and-forecasts",
-    "manufacturing-and-chemicals",
-    "logistics-and-trade",
-    "construction-and-facilities",
-    "industry-news",
-)
 CATALOGUE_FILTERS = ("category", "region", "kind", "access")
+SUPPLY_CATEGORIES = ("ingredients-supply", "packaging-materials", "commodities-and-forecasts")
 BRIEFING_KINDS = ("tiered", "daily", "weekly")
 EXPORT_FORMATS = {
     "md": ("text/markdown; charset=utf-8", "md"),
@@ -67,6 +73,12 @@ EXPORT_FORMATS = {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "docx",
     ),
+}
+KEY_SOURCE_LABELS = {
+    "environment": "Set in the environment",
+    "keychain": "Stored in the keychain",
+    "missing": "Not set",
+    "unavailable": "Not set (no keychain tool)",
 }
 
 
@@ -90,61 +102,8 @@ class Download:
 
 Payload = JsonObject | Download
 
-# --- adapters ----------------------------------------------------------------
-# Each returns None while the feature it reaches has not landed. Replace the body
-# with a call into the feature's module when it does; nothing else changes.
-
-
-def catalogue_entries(query: str) -> list[JsonObject] | None:
-    """Catalogue entries ranked for ``query`` (all of them when it is empty), or None."""
-    return None
-
-
-def add_catalogue_source(config: Config, source_id: str) -> JsonObject | None:
-    """Copy a catalogue entry into the user's sources file, or None."""
-    return None
-
-
-def key_status(config: Config) -> list[JsonObject] | None:
-    """For each keyed source: ``source_id``, ``key_env`` and ``present``. Never a value."""
-    return None
-
-
-def store_key(config: Config, source_id: str, key: str) -> bool | None:
-    """Store a key in the keychain; True when stored, or None."""
-    return None
-
-
-def delete_key(config: Config, source_id: str) -> bool | None:
-    """Remove a stored key; True when one was removed, or None."""
-    return None
-
-
-def schedule_status(config: Config) -> JsonObject | None:
-    """The installed schedule: ``every`` and ``next_run``, or None."""
-    return None
-
-
-def run_records(config: Config) -> list[JsonObject] | None:
-    """Run records from the state directory, newest first, or None."""
-    return None
-
-
-def run_now(config: Config) -> JsonObject | None:
-    """Run a capture and a check now and return its run record, or None."""
-    return None
-
-
-def supply_chain_signals(config: Config) -> list[JsonObject] | None:
-    """Input cost and packaging signals from supply chain sources, or None."""
-    return None
-
 
 # --- helpers -----------------------------------------------------------------
-
-
-def _unavailable(command: str, **extra: Any) -> JsonObject:
-    return {"available": False, "command": command, **extra}
 
 
 def _query_text(query: Mapping[str, str], name: str, limit: int = MAX_QUERY) -> str:
@@ -198,6 +157,26 @@ def _candidate(item: Mapping[str, Any]) -> JsonObject:
     }
 
 
+def _entry(entry: CatalogueEntry, chosen: set[str]) -> JsonObject:
+    """A catalogue entry for the Sources page. A key variable name is a name, not a key."""
+    return {
+        "source_id": entry.source_id,
+        "name": entry.name,
+        "publisher": entry.publisher,
+        "jurisdiction": entry.jurisdiction,
+        "region": entry.region,
+        "kind": entry.kind,
+        "category": entry.category,
+        "access": entry.access,
+        "access_label": entry.access_label,
+        "cadence": entry.cadence,
+        "description": entry.description,
+        "homepage": safe_https_url(entry.homepage),
+        "signup_url": safe_https_url(entry.signup_url),
+        "chosen": entry.source_id in chosen,
+    }
+
+
 def _matches(query: str, *fields: object) -> bool:
     return query in " ".join(str(f) for f in fields).casefold()
 
@@ -210,11 +189,30 @@ def _body_text(body: Mapping[str, Any], name: str, limit: int) -> str:
 
 
 class Api:
-    """The routes of the JSON interface, over one project's configuration file."""
+    """The routes of the JSON interface, over one project's configuration file.
 
-    def __init__(self, config_path: Path, today: Callable[[], dt.date] = dt.date.today) -> None:
+    ``system``, ``fetcher`` and ``clock`` are the same seams the command line has:
+    the programs that keep keys and read the schedule, the network client a run
+    uses, and the time.
+    """
+
+    def __init__(
+        self,
+        config_path: Path,
+        today: Callable[[], dt.date] = dt.date.today,
+        *,
+        system: System | None = None,
+        fetcher: Fetcher | None = None,
+        clock: Callable[[], dt.datetime] | None = None,
+    ) -> None:
         self.config_path = config_path
         self.today = today
+        self.system = system or System()
+        self.fetcher = fetcher
+        self.clock = clock or (lambda: dt.datetime.now(dt.UTC))
+        self._run_lock = threading.Lock()
+        self._run_thread: threading.Thread | None = None
+        self._run_error = ""
         self._routes: dict[tuple[str, str], Callable[[Mapping[str, str], JsonObject], Payload]] = {
             ("GET", "/api/status"): self.status,
             ("GET", "/api/overview"): self.overview,
@@ -256,6 +254,9 @@ class Api:
         config = self._config()
         return config, load_register(config), build_profile(config.profile)
 
+    def _store(self) -> KeyStore:
+        return KeyStore(self.system)
+
     def _check(self, config: Config, register: Register) -> list[SourceResult]:
         """Check every source against its stored snapshot. Never fetches."""
         return check_sources(register.sources, load_seen(config.seen_path), config.snapshots_dir)
@@ -276,6 +277,40 @@ class Api:
 
     def _candidates(self, config: Config) -> list[JsonObject]:
         return [_candidate(item) for item in self._raw_candidates(config)]
+
+    def _schedule(self, config: Config) -> JsonObject:
+        state = schedule_state(config, self.system, self.clock())
+        return {
+            "available": True,
+            "via": state.via,
+            "installed": state.installed,
+            "every": state.every,
+            "next_run": state.next_run,
+            "note": state.note,
+        }
+
+    def _supply_chain(
+        self, config: Config, register: Register, results: Sequence[SourceResult]
+    ) -> list[JsonObject]:
+        """Your sources in the supply chain categories, with their last status."""
+        category = {e.source_id: e.category for e in source_catalogue(config)}
+        status = {r.source_id: r for r in results}
+        rows = []
+        for source in register.sources:
+            if category.get(source.source_id) not in SUPPLY_CATEGORIES:
+                continue
+            result = status.get(source.source_id)
+            rows.append(
+                {
+                    "source_id": source.source_id,
+                    "name": source.name,
+                    "category": category[source.source_id],
+                    "jurisdiction": source.jurisdiction,
+                    "status": result.status if result else "",
+                    "detail": clean_text(result.detail, 300) if result else "",
+                }
+            )
+        return rows
 
     # --- routes --------------------------------------------------------------
 
@@ -300,8 +335,6 @@ class Api:
         names = {s.source_id: s.name for s in register.sources}
         impacts = assess_impacts(register, today, focus)
         upcoming = upcoming_obligations(register.obligations, 90, today)
-        schedule = schedule_status(config)
-        signals = supply_chain_signals(config)
         return {
             "generated": today.isoformat(),
             "counts": counts,
@@ -318,16 +351,12 @@ class Api:
                 }
                 for o in upcoming[:MAX_RESULTS]
             ],
-            "schedule": (
-                _unavailable("regwatch schedule")
-                if schedule is None
-                else {"available": True, **schedule}
-            ),
-            "supply_chain": (
-                _unavailable("regwatch sources add")
-                if signals is None
-                else {"available": True, "signals": signals}
-            ),
+            "schedule": self._schedule(config),
+            "supply_chain": {
+                "available": True,
+                "sources": self._supply_chain(config, register, results),
+                "categories": list(SUPPLY_CATEGORIES),
+            },
         }
 
     def changes(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
@@ -363,25 +392,58 @@ class Api:
         }
 
     def catalogue(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
-        entries = catalogue_entries(_query_text(query, "q"))
-        if entries is None:
-            return _unavailable("regwatch sources search", entries=[], facets={})
+        """The catalogue ranked for ``q`` by the ranking ``regwatch sources search`` uses."""
+        config = self._config()
+        everything = source_catalogue(config)
+        chosen = set(chosen_ids(config))
+        ranked = rank(everything, _query_text(query, "q"))
         facets = {
-            name: sorted({str(e.get(name, "")) for e in entries if e.get(name)})
-            for name in CATALOGUE_FILTERS
+            name: sorted({str(getattr(e, name)) for e in everything}) for name in CATALOGUE_FILTERS
         }
-        for name in CATALOGUE_FILTERS:
-            wanted = _query_text(query, name, 60)
-            if wanted:
-                entries = [e for e in entries if str(e.get(name, "")) == wanted]
-        return {"available": True, "entries": entries, "facets": facets}
+        picked = {name: _query_text(query, name, 60) or None for name in CATALOGUE_FILTERS}
+        entries = filter_entries(
+            ranked,
+            category=picked["category"],
+            region=picked["region"],
+            kind=picked["kind"],
+            access=picked["access"],
+        )
+        return {
+            "available": True,
+            "total": len(everything),
+            "entries": [_entry(entry, chosen) for entry in entries],
+            "facets": facets,
+            "categories": list(CATEGORIES),
+        }
 
     def catalogue_add(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """Add one catalogue source to your sources file, as ``regwatch sources add`` does."""
         source_id = _body_text(body, "source_id", 100)
-        added = add_catalogue_source(self._config(), source_id)
-        if added is None:
-            return _unavailable("regwatch sources add")
-        return {"available": True, **added}
+        config = self._config()
+        catalogue = source_catalogue(config)
+        try:
+            entries = find_entries(catalogue, [source_id])
+        except WorkspaceError as exc:
+            raise ApiError(400, "that id is not in the source catalogue") from exc
+        try:
+            merged = add_sources(config, entries)
+        except CatalogueError as exc:
+            raise ApiError(
+                409,
+                "your sources file already has a different source with this id; "
+                "change it in the file by hand",
+            ) from exc
+        entry = entries[0]
+        lookup = key_lookup(self._store())
+        needs_key = entry.key_env is not None and entry.keyed and not lookup(entry.key_env)
+        return {
+            "available": True,
+            "source_id": entry.source_id,
+            "added": list(merged.added),
+            "present": list(merged.present),
+            "added_jurisdictions": list(merged.added_jurisdictions),
+            "needs_key": needs_key,
+        }
 
     def obligations(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
         _config, register, focus = self._project()
@@ -452,59 +514,127 @@ class Api:
             data = docx_bytes(document)
         return Download(f"regwatch-{stem}-{self.today().isoformat()}.{suffix}", content_type, data)
 
+    # --- automations ---------------------------------------------------------
+
+    @property
+    def running(self) -> bool:
+        """True while a run started from the web app is in progress."""
+        thread = self._run_thread
+        return thread is not None and thread.is_alive()
+
+    def wait_for_run(self, timeout: float | None = None) -> None:
+        """Wait for a run started from the web app to finish. For tests and embedders."""
+        thread = self._run_thread
+        if thread is not None:
+            thread.join(timeout)
+
     def automations(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
         config = self._config()
-        schedule = schedule_status(config)
-        runs = run_records(config)
         return {
             "premium": config.premium.enabled,
-            "schedule": (
-                _unavailable("regwatch schedule")
-                if schedule is None
-                else {"available": True, **schedule}
-            ),
-            "runs": (
-                _unavailable("regwatch run", records=[])
-                if runs is None
-                else {"available": True, "records": runs}
-            ),
+            "schedule": self._schedule(config),
+            "runs": {"available": True, "records": read_run_records(config)},
+            "running": self.running,
+            "last_error": self._run_error,
         }
 
+    def _run_in_background(self, config: Config) -> None:
+        try:
+            fetcher = self.fetcher or fetcher_for(config.fetch)
+            run_once(config, fetcher, key_lookup(self._store()), self.clock)
+            self._run_error = ""
+        except Exception:
+            # Whatever failed, its message could quote a file, so only the kind is kept.
+            self._run_error = "the run failed; run 'regwatch run' in a terminal to see why"
+
     def automations_run(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
-        record = run_now(self._config())
-        if record is None:
-            return _unavailable("regwatch run")
-        return {"available": True, "record": record}
+        """Start ``regwatch run`` in a background thread. One run at a time."""
+        config = self._config()
+        with self._run_lock:
+            if self.running:
+                raise ApiError(409, "a run is already in progress")
+            self._run_error = ""
+            thread = threading.Thread(
+                target=self._run_in_background, args=(config,), name="regwatch-run", daemon=True
+            )
+            self._run_thread = thread
+            thread.start()
+        return {"available": True, "running": True}
+
+    # --- keys ----------------------------------------------------------------
 
     def keys(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
-        found = key_status(self._config())
-        if found is None:
-            return _unavailable("regwatch keys list", keys=[])
-        # Only these three fields leave the interface, whatever the adapter returns.
-        keys = [
-            {
-                "source_id": str(k.get("source_id", "")),
-                "key_env": str(k.get("key_env", "")),
-                "present": k.get("present") is True,
-            }
-            for k in found
-        ]
-        return {"available": True, "keys": keys}
+        """Which keyed sources have a key, and where it comes from. Never the key."""
+        config = self._config()
+        store = self._store()
+        rows = []
+        for item in keyed_sources(config, source_catalogue(config)):
+            try:
+                where = store.status(item.key_env).source
+            except KeyStoreError:
+                where = "unavailable"
+            rows.append(
+                {
+                    "source_id": item.source_id,
+                    "key_env": item.key_env,
+                    "present": where in ("environment", "keychain"),
+                    "where": KEY_SOURCE_LABELS.get(where, "Not set"),
+                    "signup_url": safe_https_url(item.signup_url),
+                }
+            )
+        return {
+            "available": True,
+            "keychain": store.backend_label,
+            "keychain_available": store.backend is not None,
+            "keys": rows,
+        }
+
+    def _keyed(self, source_id: str) -> tuple[Config, str]:
+        config = self._config()
+        try:
+            item = keyed_source(config, source_catalogue(config), source_id)
+        except WorkspaceError as exc:
+            raise ApiError(400, "that source does not need a key") from exc
+        return config, item.key_env
 
     def keys_set(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """Store a key, as ``regwatch keys set`` does. The answer never holds the key."""
         source_id = _body_text(body, "source_id", 100)
         key = _body_text(body, "key", 4096)
-        stored = store_key(self._config(), source_id, key)
-        if stored is None:
-            return _unavailable("regwatch keys set")
-        return {"available": True, "source_id": source_id, "present": bool(stored)}
+        _config, key_env = self._keyed(source_id)
+        store = self._store()
+        if store.backend is None:
+            raise ApiError(
+                409,
+                f"no keychain tool was found; set the environment variable {key_env} instead",
+            )
+        try:
+            store.set(key_env, key)
+        except KeyStoreError as exc:
+            raise ApiError(
+                400, "the key was not stored; check it has no quotes, backslashes or spaces"
+            ) from exc
+        return {"available": True, "source_id": source_id, "present": True}
 
     def keys_remove(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """Remove a stored key, as ``regwatch keys remove`` does."""
         source_id = _body_text(body, "source_id", 100)
-        removed = delete_key(self._config(), source_id)
-        if removed is None:
-            return _unavailable("regwatch keys remove")
-        return {"available": True, "source_id": source_id, "present": False}
+        _config, key_env = self._keyed(source_id)
+        store = self._store()
+        try:
+            removed = store.delete(key_env)
+        except KeyStoreError as exc:
+            raise ApiError(409, "the key could not be removed from the keychain") from exc
+        in_environment = bool(self.system.environ.get(key_env))
+        return {
+            "available": True,
+            "source_id": source_id,
+            "removed": removed,
+            "present": in_environment,
+            "still_in_environment": in_environment,
+        }
+
+    # --- settings ------------------------------------------------------------
 
     def settings(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
         config = self._config()
@@ -517,8 +647,8 @@ class Api:
                 for a in catalogue
             ],
             "premium": config.premium.enabled,
-            "design": _unavailable("regwatch documents design"),
-            "llm": _unavailable("regwatch generate"),
+            "design": {"available": False, "command": "regwatch documents design"},
+            "llm": {"available": False, "command": "regwatch generate"},
         }
 
     def settings_premium(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
@@ -537,6 +667,8 @@ class Api:
         set_focus_areas(self.config_path, areas, known)
         return {"focus_areas": list(self._config().profile.focus_areas)}
 
+    # --- search --------------------------------------------------------------
+
     def search(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
         text = _query_text(query, "q").casefold().strip()
         if not text:
@@ -547,14 +679,14 @@ class Api:
             for s in register.sources
             if _matches(text, s.source_id, s.name, s.jurisdiction, s.notes)
         ]
-        mine = {s["source_id"] for s in sources} | {s.source_id for s in register.sources}
-        for entry in catalogue_entries(text) or []:
-            if entry.get("source_id") not in mine:
+        mine = {s.source_id for s in register.sources}
+        for entry in rank(source_catalogue(config), text):
+            if entry.source_id not in mine:
                 sources.append(
                     {
-                        "source_id": str(entry.get("source_id", "")),
-                        "name": str(entry.get("name", "")),
-                        "jurisdiction": str(entry.get("jurisdiction", "")),
+                        "source_id": entry.source_id,
+                        "name": entry.name,
+                        "jurisdiction": entry.jurisdiction,
                         "mine": False,
                     }
                 )

@@ -1,6 +1,6 @@
 # Use the Web App
 
-This guide opens the Regwatch web app for a project, finds your way around it, and changes the settings it can change. The web app is a local page in your browser that reads the same files as the command line: nothing is sent anywhere else, and it works with no network connection. It assumes you already have a project with a `regwatch.toml`; if you do not, start with [getting started](../tutorials/getting-started.md).
+This guide opens the Regwatch web app for a project, finds your way around it, and changes the settings it can change. The web app is a local page in your browser that reads the same files as the command line and does what the commands do. Only Run now on the Automations page reaches the network; everything else works with no connection, and nothing is sent anywhere else. It assumes you already have a project with a `regwatch.toml`; if you do not, start with [getting started](../tutorials/getting-started.md).
 
 ## Open It
 
@@ -22,19 +22,23 @@ The search box at the top of the rail searches your sources, the changes and you
 
 | page | what it shows |
 | --- | --- |
-| Overview | counts of new, changed, suspicious and failing sources, the next scheduled run, the highest priority regulatory changes, supply chain signals, the sources to review and what takes effect in the next 90 days |
+| Overview | counts of new, changed, suspicious and failing sources, the next scheduled run, the highest priority regulatory changes, your supply chain sources (Ingredients Supply, Packaging Materials and Commodities and Forecasts) with their last status, the sources to review and what takes effect in the next 90 days |
 | Changes | every candidate impact ranked by focus area, severity and date, with filters and a panel that says why a change was flagged, then the source changes and the unconfirmed candidates from `ingest` |
-| Sources | the sources you watch with the status of each stored snapshot, and the source catalogue with search and filters by category, region, kind and access |
+| Sources | the sources you watch with the status of each stored snapshot, and the source catalogue grouped by category, with type-ahead search, filters by category, region, kind and access, and an Add button for each source |
 | Obligations | your register, read only, with the products each obligation may affect |
 | Briefings | the tiered briefing, the daily brief and the weekly synthesis, rendered, with export to Markdown, HTML and Word, and to PDF through the browser's print dialog |
 | Newsletters, Documents | premium features; see [premium features](#premium-features) |
-| Automations | the schedule, the run history and a button to run capture and check now |
-| Keys | which sources that need a key have one stored |
+| Automations | the installed schedule with its next run, the run history, and Run now |
+| Keys | for each source you watch that needs a key, whether one is available and where from, with set and remove |
 | Settings | your focus areas, the premium toggle, the document design and the language model provider |
 
-The pages read the files every time they load, so after you run `regwatch capture`, `check --accept` or `ingest` in a terminal, reload the page to see the result. Status on the Overview, Changes and Sources pages comes from the stored snapshots, as `regwatch check` without `--fetch` reports it; the web app never fetches a source.
+The pages read the files every time they load, so after you run `regwatch capture`, `check --accept` or `ingest` in a terminal, reload the page to see the result. Status on the Overview, Changes and Sources pages comes from the stored snapshots, as `regwatch check` without `--fetch` reports it.
 
-A page whose feature has not arrived yet says what it will show and which command fills it. The catalogue, keys, schedule and run history work this way until those parts of Regwatch ship.
+## Add Sources, Set Keys and Run
+
+- Add a source: on the Sources page, search the catalogue (the ranking is the one `regwatch sources search` uses), narrow it by category, region, kind and access, and choose Add. This runs `regwatch sources add`: the source is written to your sources file, with its jurisdiction when your register lacks it, and a source you already watch shows Watching. If the source needs a key, the page says so.
+- Set a key: on the Keys page, paste the key and choose Set. It is stored in the system keychain, as `regwatch keys set` stores it, and the page never shows it again; it shows only whether a key is available and whether it comes from the keychain or an environment variable. Without a keychain tool (security on macOS, secret-tool on Linux), set the environment variable shown instead.
+- Run now: on the Automations page, Run now does what `regwatch run` does: it captures every source, checks them and writes a run record. It runs in the background, one run at a time, and the page updates when it finishes. The schedule itself is installed with `regwatch schedule --install`; the page shows it and its next run.
 
 ## Change Settings
 

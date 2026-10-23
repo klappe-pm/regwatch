@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { Icon } from "@/components/icon";
@@ -19,14 +20,17 @@ import {
   Th,
 } from "@/components/ui";
 import { getJson, postJson, useApi, useQueryParam } from "@/lib/api";
-import { ACCESS, CATEGORIES, label, words } from "@/lib/labels";
-import type { Catalogue, CatalogueEntry, MySource } from "@/lib/types";
+import { ACCESS, CATEGORIES, label, place, words } from "@/lib/labels";
+import type { AddResult, Catalogue, CatalogueEntry, MySource } from "@/lib/types";
 
-function Mine() {
-  const { data, error, loading } = useApi<{ sources: MySource[] }>("/api/sources");
+function Mine({ round }: { round: number }) {
+  const { data, error, loading, reload } = useApi<{ sources: MySource[] }>("/api/sources");
   const initial = useQueryParam("q");
   const [text, setText] = useState("");
   useEffect(() => setText(initial), [initial]);
+  useEffect(() => {
+    if (round > 0) reload();
+  }, [round, reload]);
 
   const rows = useMemo(() => {
     const query = text.trim().toLowerCase();
@@ -54,7 +58,7 @@ function Mine() {
       {loading && !data ? <Loading /> : null}
       {data && rows.length === 0 ? (
         <EmptyState command="regwatch sources add">
-          {text ? "No source matches this filter." : "The sources you watch will appear here."}
+          {text ? "No source matches this filter." : "Add sources from the catalogue below."}
         </EmptyState>
       ) : null}
       {data && rows.length > 0 ? (
@@ -91,13 +95,21 @@ function Mine() {
   );
 }
 
-function CatalogueSection() {
+const ACCESS_STYLE: Record<string, string> = {
+  free: "text-muted",
+  "free-key": "text-structure",
+  paid: "text-ink font-medium",
+};
+
+function CatalogueSection({ onAdded }: { onAdded: () => void }) {
   const initial = useQueryParam("catalogue");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({ category: "", region: "", kind: "", access: "" });
+  const [round, setRound] = useState(0);
   const [data, setData] = useState<Catalogue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => setQuery(initial), [initial]);
 
@@ -120,38 +132,59 @@ function CatalogueSection() {
       live = false;
       window.clearTimeout(timer);
     };
-  }, [query, filters]);
+  }, [query, filters, round]);
 
-  const available = data?.available === true;
   const facets = data?.facets ?? {};
   const choices = (name: string, all: string, known?: [string, string][]): [string, string][] => [
     ["", all],
-    ...(known ?? (facets[name] ?? []).map((value): [string, string] => [value, words(value)])),
+    ...(known ??
+      (facets[name] ?? []).map((value): [string, string] => [
+        value,
+        name === "region" ? place(value) : words(value),
+      ])),
   ];
 
   async function add(entry: CatalogueEntry) {
+    setBusy(entry.source_id);
     try {
-      const result = await postJson<{ available: boolean }>("/api/catalogue/add", {
-        source_id: entry.source_id,
-      });
-      setNotice(result.available ? `Added ${entry.name} to your sources.` : "Adding sources is not available yet.");
+      const result = await postJson<AddResult>("/api/catalogue/add", { source_id: entry.source_id });
+      const parts = [
+        result.added.length ? `Added ${entry.name} to your sources.` : `${entry.name} is already in your sources.`,
+      ];
+      if (result.added_jurisdictions.length) {
+        parts.push(`Added the jurisdiction ${result.added_jurisdictions.join(", ")} to your register.`);
+      }
+      if (result.needs_key) parts.push("It needs a key; set one on the Keys page.");
+      setNotice(parts.join(" "));
+      setRound((value) => value + 1);
+      onAdded();
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : "The source could not be added.");
+    } finally {
+      setBusy(null);
     }
   }
 
+  const entries = data?.entries ?? [];
   const grouped = CATEGORIES.map(([id, name]) => ({
     id,
     name,
-    entries: (data?.entries ?? []).filter((e) => (e.category ?? "") === id),
+    entries: entries.filter((e) => e.category === id),
   })).filter((group) => group.entries.length > 0);
-  const other = (data?.entries ?? []).filter(
-    (e) => !CATEGORIES.some(([id]) => id === (e.category ?? "")),
-  );
-  if (other.length) grouped.push({ id: "other", name: "Other", entries: other });
+  const searching = query.trim() !== "";
 
   return (
-    <Section title="Catalogue" id="catalogue">
+    <Section
+      title="Catalogue"
+      id="catalogue"
+      actions={
+        data ? (
+          <p className="numeric text-sm text-muted" aria-live="polite">
+            {entries.length} of {data.total} sources
+          </p>
+        ) : null
+      }
+    >
       <div className="no-print mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Field label="Search the catalogue">
           <input
@@ -159,14 +192,12 @@ function CatalogueSection() {
             className={CONTROL}
             placeholder="Name, publisher or jurisdiction"
             value={query}
-            disabled={data !== null && !available}
             onChange={(event) => setQuery(event.target.value)}
           />
         </Field>
         <Field label="Category">
           <Select
             value={filters.category}
-            disabled={!available}
             onChange={(category) => setFilters({ ...filters, category })}
             options={choices("category", "All categories", CATEGORIES)}
           />
@@ -174,7 +205,6 @@ function CatalogueSection() {
         <Field label="Region">
           <Select
             value={filters.region}
-            disabled={!available}
             onChange={(region) => setFilters({ ...filters, region })}
             options={choices("region", "All regions")}
           />
@@ -182,7 +212,6 @@ function CatalogueSection() {
         <Field label="Kind">
           <Select
             value={filters.kind}
-            disabled={!available}
             onChange={(kind) => setFilters({ ...filters, kind })}
             options={choices("kind", "All kinds")}
           />
@@ -190,7 +219,6 @@ function CatalogueSection() {
         <Field label="Access">
           <Select
             value={filters.access}
-            disabled={!available}
             onChange={(access) => setFilters({ ...filters, access })}
             options={choices("access", "Any access", ACCESS)}
           />
@@ -198,18 +226,19 @@ function CatalogueSection() {
       </div>
       {notice ? (
         <p role="status" className="mb-2 text-sm">
-          {notice}
+          {notice}{" "}
+          {notice.includes("Keys page") ? (
+            <Link className="text-structure underline underline-offset-2" href="/keys/">
+              Open Keys
+            </Link>
+          ) : null}
         </p>
       ) : null}
       {error ? <ErrorNote message={error} /> : null}
-      {data && !available ? (
-        <EmptyState command={data.available ? undefined : data.command}>
-          The source catalogue will appear here: regulators, legislatures, gazettes, supply and
-          commodity sources and trade press, grouped by category, with filters by region, kind and
-          access and a button to add each one to your sources.
-        </EmptyState>
+      {!data && !error ? <Loading /> : null}
+      {data && grouped.length === 0 ? (
+        <EmptyState>No catalogue source matches this search and these filters.</EmptyState>
       ) : null}
-      {available && grouped.length === 0 ? <EmptyState>No catalogue source matches.</EmptyState> : null}
       {grouped.map((group) => (
         <div key={group.id} className="mb-4">
           <h3 className="mb-1 text-sm font-semibold">
@@ -219,8 +248,8 @@ function CatalogueSection() {
             <thead>
               <tr>
                 <Th>Source</Th>
-                <Th>Region</Th>
-                <Th>Kind</Th>
+                <Th className="hidden md:table-cell">Jurisdiction</Th>
+                <Th className="hidden md:table-cell">Kind</Th>
                 <Th>Access</Th>
                 <Th />
               </tr>
@@ -229,19 +258,42 @@ function CatalogueSection() {
               {group.entries.map((entry) => (
                 <tr key={entry.source_id}>
                   <Td>
-                    {entry.name}
+                    <span className="font-medium">{entry.name}</span>
                     <span className="block text-xs text-muted">
-                      {[entry.publisher, entry.description].filter(Boolean).join(". ")}
+                      {entry.publisher}
+                      <span className="md:hidden">
+                        {" "}
+                        · {entry.jurisdiction} · {words(entry.kind)}
+                      </span>
                     </span>
+                    {searching || group.entries.length <= 12 ? (
+                      <span className="mt-0.5 block text-xs text-muted">{entry.description}</span>
+                    ) : null}
                   </Td>
-                  <Td>{entry.region ? words(entry.region) : entry.jurisdiction}</Td>
-                  <Td>{entry.kind ? words(entry.kind) : ""}</Td>
-                  <Td>{entry.access ? label(ACCESS, entry.access) : ""}</Td>
+                  <Td className="hidden md:table-cell">
+                    {entry.jurisdiction}
+                    <span className="block text-xs text-muted">{place(entry.region)}</span>
+                  </Td>
+                  <Td className="hidden md:table-cell">{words(entry.kind)}</Td>
+                  <Td className={ACCESS_STYLE[entry.access] ?? ""}>
+                    {entry.access_label || label(ACCESS, entry.access)}
+                  </Td>
                   <Td numeric>
-                    <Button onClick={() => add(entry)} label={`Add ${entry.name}`}>
-                      <Icon name="add" size={18} />
-                      Add
-                    </Button>
+                    {entry.chosen ? (
+                      <span className="inline-flex items-center gap-1 text-sm text-ok">
+                        <Icon name="check_circle" size={16} />
+                        Watching
+                      </span>
+                    ) : (
+                      <Button
+                        onClick={() => add(entry)}
+                        disabled={busy !== null}
+                        label={`Add ${entry.name}`}
+                      >
+                        <Icon name="add" size={18} />
+                        Add
+                      </Button>
+                    )}
                   </Td>
                 </tr>
               ))}
@@ -254,14 +306,15 @@ function CatalogueSection() {
 }
 
 export default function SourcesPage() {
+  const [round, setRound] = useState(0);
   return (
     <>
       <PageHeader
         title="Sources"
-        description="The sources you watch, with their status from the last stored snapshot, and the catalogue to choose more from."
+        description="The sources you watch, with their status from the last stored snapshot, and the catalogue to choose more from. Adding a source writes it to your sources file, as regwatch sources add does."
       />
-      <Mine />
-      <CatalogueSection />
+      <Mine round={round} />
+      <CatalogueSection onAdded={() => setRound((value) => value + 1)} />
     </>
   );
 }

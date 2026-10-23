@@ -16,6 +16,7 @@ import {
   Th,
 } from "@/components/ui";
 import { useApi } from "@/lib/api";
+import { CATEGORIES, cadence, label, when } from "@/lib/labels";
 import type { Overview } from "@/lib/types";
 
 export default function OverviewPage() {
@@ -41,7 +42,11 @@ export default function OverviewPage() {
                 label: "Next Run",
                 value: (
                   <span className="text-base font-medium">
-                    {data.schedule.available ? (data.schedule.next_run ?? "Not set") : "Not scheduled"}
+                    {data.schedule.installed
+                      ? data.schedule.next_run
+                        ? when(data.schedule.next_run)
+                        : cadence(data.schedule.every)
+                      : "Not scheduled"}
                   </span>
                 ),
               },
@@ -92,36 +97,45 @@ export default function OverviewPage() {
             </Section>
 
             <Section title="Supply Chain" id="supply">
-              {data.supply_chain.available ? (
-                data.supply_chain.signals.length === 0 ? (
-                  <EmptyState>No input cost or packaging signals in this period.</EmptyState>
-                ) : (
-                  <Table label="Supply chain signals">
-                    <thead>
-                      <tr>
-                        <Th>Signal</Th>
-                        <Th numeric>Date</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.supply_chain.signals.map((signal) => (
-                        <tr key={`${signal.date}-${signal.title}`}>
-                          <Td>
-                            {signal.title}
-                            <span className="block text-xs text-muted">{signal.detail}</span>
-                          </Td>
-                          <Td numeric>{signal.date}</Td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                )
-              ) : (
-                <EmptyState command={data.supply_chain.command}>
-                  Input cost and packaging signals will appear here once you watch sources in the
-                  Ingredients Supply, Packaging Materials or Commodities and Forecasts categories.
+              {data.supply_chain.sources.length === 0 ? (
+                <EmptyState command="regwatch sources add">
+                  Input cost and packaging sources you watch will appear here with their last status.
+                  Choose them on the{" "}
+                  <Link className="text-structure underline underline-offset-2" href="/sources/">
+                    Sources
+                  </Link>{" "}
+                  page from the Ingredients Supply, Packaging Materials and Commodities and Forecasts
+                  categories.
                 </EmptyState>
+              ) : (
+                <Table label="Supply chain sources">
+                  <thead>
+                    <tr>
+                      <Th>Source</Th>
+                      <Th className="hidden sm:table-cell">Category</Th>
+                      <Th>Last Status</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.supply_chain.sources.map((source) => (
+                      <tr key={source.source_id}>
+                        <Td>
+                          {source.name}
+                          <span className="block text-xs text-muted">
+                            {source.jurisdiction}
+                            <span className="sm:hidden"> · {label(CATEGORIES, source.category)}</span>
+                          </span>
+                        </Td>
+                        <Td className="hidden sm:table-cell">{label(CATEGORIES, source.category)}</Td>
+                        <Td>
+                          <StatusLabel status={source.status} />
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
               )}
+              <p className="mt-2 text-xs text-muted">Prices and forecasts are not read yet; each source shows whether it changed.</p>
             </Section>
           </div>
 

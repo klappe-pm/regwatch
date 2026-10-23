@@ -58,7 +58,6 @@ from regwatch.catalogue import (
     entry_from_dict,
     filter_entries,
     load_source_catalogue,
-    merge_sources,
     rank,
 )
 from regwatch.check import SourceResult, accept_results, capture_sources, check_sources
@@ -71,7 +70,7 @@ from regwatch.config import (
 )
 from regwatch.document import DISCLAIMER, Document, DocumentError, Section, make_disclaimer
 from regwatch.export import build_records, records_csv
-from regwatch.fetch import Credential, Fetcher, FetchError, SafeFetcher
+from regwatch.fetch import Credential, Fetcher, FetchError
 from regwatch.focus import FocusError, FocusProfile, build_profile, load_catalogue
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.ingest import IngestError, build_query_url, candidates_document, parse_candidates
@@ -134,12 +133,23 @@ from regwatch.state import (
     safe_write_text,
     save_seen,
     update_register_file,
-    write_run_record,
     write_tree,
 )
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
 from regwatch.system import System
 from regwatch.webapi import Api
+from regwatch.workspace import (
+    KeyedSource,
+    add_sources,
+    chosen_ids,
+    fetcher_for,
+    find_entries,
+    key_lookup,
+    keyed_source,
+    keyed_sources,
+    run_once,
+    source_catalogue,
+)
 
 __all__ = ["main"]
 
@@ -183,10 +193,7 @@ class _Context:
 
     def key_for(self, key_env: str) -> str | None:
         """The key for ``key_env``, or None when there is none or no keychain can be read."""
-        try:
-            return self.keystore().get(key_env)
-        except KeyStoreError:
-            return None
+        return key_lookup(self.keystore())(key_env)
 
     @property
     def config(self) -> Config:
@@ -199,14 +206,7 @@ class _Context:
         if self.fetcher is not None:
             return self.fetcher
         settings = self.config.fetch if self.config_path.exists() else FetchSettings()
-        return SafeFetcher(
-            settings.timeout_seconds,
-            settings.max_bytes,
-            settings.user_agent,
-            total_timeout_seconds=settings.total_timeout_seconds,
-            allow_private_hosts=settings.allow_private_hosts,
-            allowed_file_roots=settings.allowed_file_roots,
-        )
+        return fetcher_for(settings)
 
     def register(self) -> Register:
         return load_register(self.config)
@@ -1253,19 +1253,12 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
 
 def _source_catalogue(ctx: _Context) -> tuple[CatalogueEntry, ...]:
     """The shipped catalogue plus the user's extra file when a configuration names one."""
-    focus_ids = [area.focus_id for area in load_catalogue(None)]
-    if not ctx.config_path.exists():
-        return load_source_catalogue(focus_ids)
-    config = ctx.config
-    if config.profile.catalogue is not None:
-        focus_ids += [area.focus_id for area in load_catalogue(config.profile.catalogue)]
-    return load_source_catalogue(dict.fromkeys(focus_ids), config.catalogue.extra)
+    return source_catalogue(ctx.config if ctx.config_path.exists() else None)
 
 
 def _chosen_ids(ctx: _Context) -> list[str]:
     """The ids in the user's sources file."""
-    _data, sources = read_json_list(ctx.config.register.sources, "sources", "sources file")
-    return [str(source.get("source_id", "")) for source in sources]
+    return chosen_ids(ctx.config)
 
 
 def _entry_line(entry: CatalogueEntry) -> str:
@@ -1306,14 +1299,7 @@ def _cmd_sources_search(ctx: _Context, args: argparse.Namespace) -> int:
 
 
 def _find_entries(ctx: _Context, ids: Sequence[str]) -> list[CatalogueEntry]:
-    by_id = {entry.source_id: entry for entry in _source_catalogue(ctx)}
-    unknown = [source_id for source_id in ids if source_id not in by_id]
-    if unknown:
-        raise CommandError(
-            f"not in the source catalogue: {', '.join(unknown)}; "
-            "try 'regwatch sources search' to find an id"
-        )
-    return [by_id[source_id] for source_id in dict.fromkeys(ids)]
+    return find_entries(_source_catalogue(ctx), ids)
 
 
 def _cmd_sources_show(ctx: _Context, args: argparse.Namespace) -> int:
@@ -1356,17 +1342,7 @@ def _write_register_list(ctx: _Context, path: Path, data: dict[str, Any]) -> Non
 def _cmd_sources_add(ctx: _Context, args: argparse.Namespace) -> int:
     entries = _find_entries(ctx, args.ids)
     paths = ctx.config.register
-    sources_data, sources = read_json_list(paths.sources, "sources", "sources file")
-    jur_data, jurisdictions = read_json_list(
-        paths.jurisdictions, "jurisdictions", "jurisdictions file"
-    )
-    merged = merge_sources(sources, jurisdictions, entries)
-    if merged.added_jurisdictions:
-        _write_register_list(
-            ctx, paths.jurisdictions, {**jur_data, "jurisdictions": merged.jurisdictions}
-        )
-    if merged.added:
-        _write_register_list(ctx, paths.sources, {**sources_data, "sources": merged.sources})
+    merged = add_sources(ctx.config, entries)
     for code in merged.added_jurisdictions:
         _say(f"added      jurisdiction {code} to {paths.jurisdictions}")
     for entry in entries:
@@ -1422,41 +1398,14 @@ def _cmd_sources_verify(ctx: _Context, args: argparse.Namespace) -> int:
 # --- keys --------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class _KeyedSource:
-    source_id: str
-    key_env: str
-    signup_url: str | None
+def _keyed_sources(ctx: _Context) -> list[KeyedSource]:
+    return keyed_sources(ctx.config if ctx.config_path.exists() else None, _source_catalogue(ctx))
 
 
-def _keyed_sources(ctx: _Context) -> list[_KeyedSource]:
-    """Keyed sources: those in your sources file, then keyed catalogue entries not in it."""
-    found: dict[str, _KeyedSource] = {}
-    if ctx.config_path.exists():
-        _data, sources = read_json_list(ctx.config.register.sources, "sources", "sources file")
-        for source in sources:
-            key_env = str(source.get("key_env", "") or "")
-            if key_env:
-                sid = str(source.get("source_id", ""))
-                found[sid] = _KeyedSource(sid, key_env, None)
-    for entry in _source_catalogue(ctx):
-        if entry.key_env is None:
-            continue
-        if entry.source_id in found:
-            found[entry.source_id] = _KeyedSource(
-                entry.source_id, found[entry.source_id].key_env, entry.signup_url
-            )
-    return list(found.values())
-
-
-def _keyed_source(ctx: _Context, source_id: str) -> _KeyedSource:
-    for item in _keyed_sources(ctx):
-        if item.source_id == source_id:
-            return item
-    for entry in _source_catalogue(ctx):
-        if entry.source_id == source_id and entry.key_env is not None:
-            return _KeyedSource(entry.source_id, entry.key_env, entry.signup_url)
-    raise CommandError(f"'{source_id}' is not a source that needs a key")
+def _keyed_source(ctx: _Context, source_id: str) -> KeyedSource:
+    return keyed_source(
+        ctx.config if ctx.config_path.exists() else None, _source_catalogue(ctx), source_id
+    )
 
 
 def _cmd_keys_set(ctx: _Context, args: argparse.Namespace) -> int:
@@ -1480,15 +1429,7 @@ def _cmd_keys_set(ctx: _Context, args: argparse.Namespace) -> int:
 
 def _cmd_keys_list(ctx: _Context, args: argparse.Namespace) -> int:
     store = ctx.keystore()
-    items = (
-        _keyed_sources(ctx)
-        if ctx.config_path.exists()
-        else [
-            _KeyedSource(e.source_id, e.key_env, e.signup_url)
-            for e in _source_catalogue(ctx)
-            if e.key_env is not None
-        ]
-    )
+    items = _keyed_sources(ctx)
     labels = {
         "environment": "set in the environment",
         "keychain": "stored",
@@ -1520,55 +1461,22 @@ def _cmd_keys_remove(ctx: _Context, args: argparse.Namespace) -> int:
 # --- run and schedule --------------------------------------------------------
 
 
-def _stamp(moment: dt.datetime) -> str:
-    return moment.astimezone(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
-
-
 def _cmd_run(ctx: _Context, args: argparse.Namespace) -> int:
-    started = ctx.clock()
-    register = ctx.register()
-    sources = list(register.sources)
-    captures = capture_sources(
-        sources,
-        ctx.live_fetcher(),
-        ctx.config.snapshots_dir,
-        ctx.config.register.all_paths(),
-        ctx.key_for,
-    )
-    manual = {s.source_id for s in sources if s.mechanism == "manual"}
-    failed = [c for c in captures if not c.captured and c.source_id not in manual]
-    for c in captures:
+    outcome = run_once(ctx.config, ctx.live_fetcher(), ctx.key_for, ctx.clock, ctx.register())
+    for c in outcome.captures:
         label = "captured" if c.captured else "skipped"
         _say(f"{label:<10} {c.source_id:<28} {clean_text(c.detail)}")
-    results = _run_check(ctx, register, fetch=False)
-    counts: dict[str, int] = {}
-    for r in results:
-        counts[r.status] = counts.get(r.status, 0) + 1
+    for r in outcome.results:
         detail = f"  {clean_text(r.detail)}" if r.detail else ""
         _say(f"{r.status:<10} {r.source_id:<28} {r.origin}{detail}")
-    code = EXIT_OK
-    if any(r.flagged for r in results):
-        code = EXIT_CHANGES
-    if failed or any(r.needs_attention for r in results):
-        code = EXIT_UNVERIFIED
-    ended = ctx.clock()
-    record = {
-        "started": started.astimezone(dt.UTC).isoformat(timespec="seconds"),
-        "ended": ended.astimezone(dt.UTC).isoformat(timespec="seconds"),
-        "sources": len(sources),
-        "captured": sum(1 for c in captures if c.captured),
-        "capture_failed": len(failed),
-        "counts": dict(sorted(counts.items())),
-        "exit_code": code,
-    }
-    path = write_run_record(
-        ctx.config.state_dir, record, _stamp(started), ctx.config.register.all_paths()
+    summary = ", ".join(f"{k.lower()}={v}" for k, v in sorted(outcome.counts.items()))
+    _say(
+        f"regwatch run: {len(outcome.results)} sources; {summary}; "
+        f"capture failures={len(outcome.failed)}"
     )
-    summary = ", ".join(f"{k.lower()}={v}" for k, v in sorted(counts.items()))
-    _say(f"regwatch run: {len(results)} sources; {summary}; capture failures={len(failed)}")
-    _say(f"regwatch run: wrote {path}")
+    _say(f"regwatch run: wrote {outcome.path}")
     _say(NOTICE)
-    return code
+    return outcome.code
 
 
 def _schedule_parts(ctx: _Context) -> tuple[list[str], Path, Path]:
@@ -1724,7 +1632,13 @@ def _cmd_ui(ctx: _Context, args: argparse.Namespace) -> int:
     if not 0 <= args.port <= 65535:
         raise CommandError("--port must be from 0 to 65535")
     ctx.config  # noqa: B018 (load and validate the configuration before starting)
-    server = LocalServer(Api(ctx.config_path.resolve()), web_root(), args.port)
+    api = Api(
+        ctx.config_path.resolve(),
+        system=ctx.system,
+        fetcher=ctx.fetcher,
+        clock=ctx.clock,
+    )
+    server = LocalServer(api, web_root(), args.port)
     _say(f"regwatch ui: serving {ctx.config.base_dir} at {server.url}")
     _say("regwatch ui: the address holds a private token; press Ctrl+C to stop")
     if not args.no_open:

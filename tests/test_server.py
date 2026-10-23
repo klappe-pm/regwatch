@@ -17,8 +17,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from conftest import FakeFetcher, FakeSystem
 
-from regwatch import webapi
 from regwatch.config import load_config
 from regwatch.server import LocalServer, ServerError, content_security_policy, web_root
 from regwatch.webapi import Api
@@ -72,8 +72,15 @@ def root(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def server(project: Path, root: Path) -> Iterator[LocalServer]:
-    instance = LocalServer(Api(project), root, 0, token=TOKEN)
+def fake() -> FakeSystem:
+    """Stand-ins for the keychain tools and crontab, so no real program runs."""
+    return FakeSystem("linux")
+
+
+@pytest.fixture
+def server(project: Path, root: Path, fake: FakeSystem) -> Iterator[LocalServer]:
+    api = Api(project, system=fake.system(), fetcher=FakeFetcher())
+    instance = LocalServer(api, root, 0, token=TOKEN)
     yield instance
     instance.server_close()
 
@@ -451,55 +458,58 @@ def test_an_export_is_a_download(server: LocalServer) -> None:
 # --- keys never leave --------------------------------------------------------------
 
 
-def test_no_route_ever_returns_a_key(server: LocalServer, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Store a key through the interface, then read every route: the value never comes back."""
+def test_no_route_ever_returns_a_key(server: LocalServer, fake: FakeSystem) -> None:
+    """Store a key through the interface, then read every route: the value never comes back.
+
+    The key goes into the faked keychain through the real keys module, the same way
+    `regwatch keys set` stores one. Then every GET route is read, a run is started and
+    awaited, and the key is removed; no response holds the value.
+    """
     value = "".join(["kv", "-", "fake", "-", "value", "-", "9f3a"])
-    stored: dict[str, str] = {}
-
-    def store(config: object, source_id: str, key: str) -> bool:
-        stored[source_id] = key
-        return True
-
-    def status(config: object) -> list[dict[str, object]]:
-        # A careless backend that hands back the value: the interface must drop it.
-        return [
-            {"source_id": sid, "key_env": "X_KEY", "present": True, "value": key, "key": key}
-            for sid, key in stored.items()
-        ]
-
-    monkeypatch.setattr(webapi, "store_key", store)
-    monkeypatch.setattr(webapi, "key_status", status)
-    monkeypatch.setattr(webapi, "delete_key", lambda config, sid: stored.pop(sid, None) is not None)
-    reply = request(server, "POST", "/api/keys/set", body={"source_id": "nl-notices", "key": value})
+    added = request(server, "POST", "/api/catalogue/add", body={"source_id": "us-eia-api"})
+    assert added.status == 200
+    reply = request(server, "POST", "/api/keys/set", body={"source_id": "us-eia-api", "key": value})
     assert reply.status == 200
-    assert reply.json() == {"available": True, "source_id": "nl-notices", "present": True}
-    assert stored == {"nl-notices": value}
+    assert reply.json() == {"available": True, "source_id": "us-eia-api", "present": True}
+    assert fake.keychain == {"REGWATCH_KEY_EIA": value}
+    bodies = [added.body, reply.body]
     routes = [path for method, path in server.api._routes if method == "GET"]
-    queries = {"/api/search": "?q=nl", "/api/briefing/export": "?format=md"}
+    queries = {
+        "/api/search": "?q=eia",
+        "/api/catalogue": "?q=eia",
+        "/api/briefing/export": "?format=md",
+    }
     for path in routes:
-        body = request(server, "GET", path + queries.get(path, "")).body
-        assert value.encode() not in body, path
+        bodies.append(request(server, "GET", path + queries.get(path, "")).body)
+    bodies.append(request(server, "POST", "/api/automations/run", body={}).body)
+    server.api.wait_for_run(10)
+    bodies.append(request(server, "GET", "/api/automations").body)
     keys = request(server, "GET", "/api/keys").json()
-    assert keys == {
-        "available": True,
-        "keys": [{"source_id": "nl-notices", "key_env": "X_KEY", "present": True}],
-    }
-    removed = request(server, "POST", "/api/keys/remove", body={"source_id": "nl-notices"})
-    assert value.encode() not in removed.body
-    assert stored == {}
+    assert keys["keys"] == [
+        {
+            "source_id": "us-eia-api",
+            "key_env": "REGWATCH_KEY_EIA",
+            "present": True,
+            "where": "Stored in the keychain",
+            "signup_url": keys["keys"][0]["signup_url"],
+        }
+    ]
+    fake.environ["REGWATCH_KEY_EIA"] = value
+    bodies.append(request(server, "GET", "/api/keys").body)
+    bodies.append(
+        request(server, "POST", "/api/keys/remove", body={"source_id": "us-eia-api"}).body
+    )
+    for body in bodies:
+        assert value.encode() not in body
+    assert fake.keychain == {}
 
 
-def test_the_key_routes_say_when_keys_are_not_available(server: LocalServer) -> None:
-    assert request(server, "GET", "/api/keys").json() == {
-        "available": False,
-        "command": "regwatch keys list",
-        "keys": [],
-    }
-    reply = request(server, "POST", "/api/keys/set", body={"source_id": "a", "key": "b"})
-    assert reply.json() == {"available": False, "command": "regwatch keys set"}
-    reply = request(server, "POST", "/api/keys/remove", body={"source_id": "a"})
-    assert reply.json() == {"available": False, "command": "regwatch keys remove"}
+def test_the_key_routes_refuse_what_they_cannot_do(server: LocalServer) -> None:
+    assert request(server, "GET", "/api/keys").json()["keys"] == []
+    reply = request(server, "POST", "/api/keys/set", body={"source_id": "nl-notices", "key": "b"})
+    assert reply.status == 400
     assert request(server, "POST", "/api/keys/set", body={"source_id": "a"}).status == 400
+    assert request(server, "POST", "/api/keys/remove", body={"source_id": "a"}).status == 400
 
 
 # --- the shipped build ------------------------------------------------------------

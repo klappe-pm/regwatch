@@ -341,25 +341,25 @@ The JSON interface the pages use is under `/api/`. Every route needs the token, 
 | route | method | answers |
 | --- | --- | --- |
 | `/api/status` | GET | the version, the project folder name and whether premium is on |
-| `/api/overview` | GET | source counts by status, the sources to review, the highest priority impacts, obligations effective within 90 days, the schedule and supply chain signals |
+| `/api/overview` | GET | source counts by status, the sources to review, the highest priority impacts, obligations effective within 90 days, the schedule with its next run, and your sources in the Ingredients Supply, Packaging Materials and Commodities and Forecasts categories with their last status |
 | `/api/changes` | GET | every source result, every candidate impact and the unconfirmed ingest candidates, cleaned again |
 | `/api/sources` | GET | the sources in the register with the status of each stored snapshot |
-| `/api/catalogue` | GET | catalogue entries for `q`, filtered by `category`, `region`, `kind` and `access`, with the values present for each filter |
-| `/api/catalogue/add` | POST | adds `source_id` from the catalogue to the sources file |
+| `/api/catalogue` | GET | catalogue entries ranked for `q` by the ranking `sources search` uses, filtered by `category`, `region`, `kind` and `access` as `sources list` filters, each marked when it is already in your sources; never a request address or a key |
+| `/api/catalogue/add` | POST | adds `source_id` from the catalogue to the sources file through the code `sources add` runs, adding its jurisdiction when needed, and says whether it needs a key |
 | `/api/obligations` | GET | every obligation with its candidate impacts |
 | `/api/briefing` | GET | the document model for `kind` (`tiered`, `daily` or `weekly`) and `tier` (`v1`, `v2` or `v3`) |
 | `/api/briefing/export` | GET | the same briefing as a download in `format` `md`, `html` or `docx` |
-| `/api/automations` | GET | whether premium is on, the schedule and the run records |
-| `/api/automations/run` | POST | runs a capture and a check now |
-| `/api/keys` | GET | for each keyed source, its id, its environment variable and whether a key is stored; never a key |
-| `/api/keys/set` | POST | stores `key` for `source_id`; answers only whether one is stored |
-| `/api/keys/remove` | POST | removes the key for `source_id` |
+| `/api/automations` | GET | whether premium is on, the installed schedule (launchd or cron, its cadence and next run), the run records newest first, and whether a run is in progress |
+| `/api/automations/run` | POST | starts the code `regwatch run` runs in a background thread and answers at once; 409 while a run is in progress |
+| `/api/keys` | GET | for each keyed source you watch, its id, its environment variable, whether a key is available and where from (environment or keychain), and its sign-up page; never a key |
+| `/api/keys/set` | POST | stores `key` for `source_id` through the code `keys set` runs; answers only whether one is stored |
+| `/api/keys/remove` | POST | removes the stored key for `source_id` through the code `keys remove` runs, and says whether the environment still supplies one |
 | `/api/settings` | GET | the focus areas, the focus catalogue and whether premium is on |
 | `/api/settings/focus` | POST | sets `[profile] focus_areas` to `focus_areas`, ids from the catalogue |
 | `/api/settings/premium` | POST | sets `[premium] enabled` to `enabled`, true or false |
 | `/api/search` | GET | up to 8 sources, changes and obligations each that match `q` |
 
-A route whose feature has not shipped (the catalogue, keys, the schedule, run records and supply chain signals) answers `{"available": false, "command": ...}`, naming the command that will fill it. An error is a JSON object with one short `error` message that never holds file contents: 400 for a bad request, 403 for a refused host, origin or token, 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register, and 500 otherwise.
+Only a run started from the Automations page reaches the network, and only one runs at a time. An error is a JSON object with one short `error` message that never holds file contents: 400 for a bad request, 403 for a refused host, origin or token, 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, a source id already used by a different source, a key with no keychain tool, or a run already in progress, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register, and 500 otherwise.
 
 ## `premium`
 

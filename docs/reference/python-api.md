@@ -253,14 +253,31 @@ Changes one setting in `regwatch.toml` and keeps the rest of the file.
 - `set_focus_areas(config_path: Path, focus_areas, known) -> None`: set `[profile] focus_areas` to ids that are in `known`, without repeats. Raises `SettingsError` for any other id.
 - `SettingsError`: the setting could not be changed and the file was left as it was. It is a `ValueError`.
 
+## `workspace`
+
+The operations `regwatch sources`, `keys` and `run` share with the web app. Nothing here prints or asks.
+
+- `source_catalogue(config: Config | None) -> tuple[CatalogueEntry, ...]`: the shipped catalogue, plus `[catalogue] extra` when a configuration names one.
+- `chosen_ids(config: Config) -> list[str]`: the ids in the sources file.
+- `find_entries(catalogue, ids) -> list[CatalogueEntry]`: the entries for `ids`, without repeats. Raises `WorkspaceError` for an unknown id.
+- `add_sources(config: Config, entries) -> MergeResult`: `regwatch sources add`: writes the sources file, and the jurisdictions file when a jurisdiction was added. Raises `CatalogueError` when a different source already has an id.
+- `KeyedSource`: frozen dataclass with `source_id`, `key_env` and `signup_url`.
+- `keyed_sources(config: Config | None, catalogue) -> list[KeyedSource]`: the keyed sources in the sources file, or with no configuration every keyed catalogue entry. `keyed_source(config, catalogue, source_id) -> KeyedSource` finds one, or raises `WorkspaceError`.
+- `key_lookup(store: KeyStore) -> Callable[[str], str | None]`: a lookup that answers None when no key can be read.
+- `fetcher_for(settings: FetchSettings) -> Fetcher`: the fetch client for the settings.
+- `run_once(config, fetcher, key_for, clock, register=None) -> RunOutcome`: `regwatch run`: captures, checks and writes a run record. `RunOutcome` holds the captures, the results, the failed captures, the counts, the code (0, 3 or 4), the record and its path. `RUN_OK`, `RUN_CHANGES` and `RUN_UNVERIFIED` name the codes.
+- `read_run_records(config: Config, limit: int = 50) -> list[dict]`: the newest run records first, with only their known fields; an unreadable record is skipped.
+- `schedule_state(config: Config, system: System, now: datetime) -> ScheduleState`: the installed schedule, read without changing anything. `ScheduleState` has `via` (`launchd` or `cron`), `installed`, `every`, `next_run` (exact for cron; for launchd the last run plus the interval) and `note`.
+- `WorkspaceError`: a request the user can fix. It is a `ValueError`.
+
 ## `webapi`
 
-The JSON interface behind `regwatch ui`. It never prints and never fetches.
+The JSON interface behind `regwatch ui`. It never prints, and only a run started with `/api/automations/run` fetches.
 
-- `Api(config_path: Path, today=datetime.date.today)`: the routes over one configuration file. `handle(method, path, query, body) -> tuple[int, dict | Download]` answers one request and raises `ApiError` for a refusal. The routes are listed in the [CLI reference](cli.md#ui).
+- `Api(config_path: Path, today=datetime.date.today, *, system=None, fetcher=None, clock=None)`: the routes over one configuration file, with the same seams as `cli.main`. `handle(method, path, query, body) -> tuple[int, dict | Download]` answers one request and raises `ApiError` for a refusal. `running` is true while a run started by the interface is in progress, and `wait_for_run(timeout)` waits for it. The routes are listed in the [CLI reference](cli.md#ui).
 - `ApiError(status: int, message: str)`: a refused request; `message` is short and holds no file contents.
 - `Download`: frozen dataclass with `filename`, `content_type` and `data`, a file the browser saves.
-- `CATEGORIES: tuple[str, ...]`: the source catalogue categories, in display order.
+- `SUPPLY_CATEGORIES: tuple[str, ...]`: the catalogue categories the Overview's Supply Chain section lists: `ingredients-supply`, `packaging-materials` and `commodities-and-forecasts`.
 
 ## `server`
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/icon";
 import {
   Button,
+  Command,
   EmptyState,
   ErrorNote,
   Loading,
@@ -16,35 +17,50 @@ import {
   Th,
 } from "@/components/ui";
 import { postJson, useApi } from "@/lib/api";
+import { cadence, outcome, when } from "@/lib/labels";
 import type { Automations } from "@/lib/types";
 
 export default function AutomationsPage() {
   const { data, error, loading, reload } = useApi<Automations>("/api/automations");
   const [notice, setNotice] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const running = starting || data?.running === true;
+
+  // While a run is in progress, look again every two seconds.
+  useEffect(() => {
+    if (data && !data.running && notice?.startsWith("Capture and check are running")) {
+      setNotice("The run finished; its result is at the top of the run history.");
+    }
+    if (!data?.running) return;
+    const timer = window.setTimeout(reload, 2000);
+    return () => window.clearTimeout(timer);
+  }, [data, notice, reload]);
 
   async function runNow() {
-    setRunning(true);
+    setStarting(true);
     try {
-      const result = await postJson<{ available: boolean }>("/api/automations/run", {});
-      setNotice(result.available ? "The run finished." : "Running from here is not available yet.");
-      reload();
+      await postJson("/api/automations/run", {});
+      setNotice("Capture and check are running. This page updates when the run finishes.");
     } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : "The run failed.");
+      setNotice(reason instanceof Error ? reason.message : "The run could not start.");
     } finally {
-      setRunning(false);
+      setStarting(false);
+      reload();
     }
   }
+
+  const schedule = data?.schedule;
+  const records = data?.runs.records ?? [];
 
   return (
     <>
       <PageHeader
         title="Automations"
-        description="The schedule that runs capture and then check, and the record of each run."
+        description="The schedule that runs capture and then check, and the record of each run. Run now does what regwatch run does."
         actions={
-          <Button variant="primary" onClick={runNow} disabled={running || !data?.runs.available}>
+          <Button variant="primary" onClick={runNow} disabled={running || !data}>
             <Icon name="play_arrow" size={18} />
-            Run now
+            {running ? "Running" : "Run now"}
           </Button>
         }
       />
@@ -53,53 +69,84 @@ export default function AutomationsPage() {
           {notice}
         </p>
       ) : null}
+      {data?.last_error ? <ErrorNote message={data.last_error} /> : null}
       {error ? <ErrorNote message={error} /> : null}
       {loading && !data ? <Loading /> : null}
-      {data ? (
+      {data && schedule ? (
         <>
           <Section title="Schedule" id="schedule">
-            {data.schedule.available ? (
+            {schedule.installed ? (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border border-line bg-raised p-4 text-sm">
                 <dt className="text-muted">Runs</dt>
-                <dd>{data.schedule.every ?? "Not set"}</dd>
+                <dd>{cadence(schedule.every)}</dd>
                 <dt className="text-muted">Next run</dt>
-                <dd className="numeric">{data.schedule.next_run ?? "Not set"}</dd>
+                <dd className="numeric">
+                  {when(
+                    schedule.next_run,
+                    schedule.via === "launchd" ? "After the first scheduled run" : "Not known",
+                  )}
+                </dd>
+                <dt className="text-muted">Installed with</dt>
+                <dd>{schedule.via === "launchd" ? "launchd" : "cron"}</dd>
+                {schedule.note ? (
+                  <>
+                    <dt className="text-muted">Note</dt>
+                    <dd>{schedule.note}</dd>
+                  </>
+                ) : null}
               </dl>
             ) : (
-              <EmptyState command={data.schedule.command}>
-                Your schedule will appear here: how often capture and check run, and when the next run
-                is. Nothing is scheduled until you set it up.
+              <EmptyState command="regwatch schedule --install">
+                Nothing is scheduled. Install a schedule to run capture and check every hour, day or
+                week with {schedule.via === "launchd" ? "launchd" : "cron"}.
+                {schedule.note ? ` (${schedule.note[0].toUpperCase()}${schedule.note.slice(1)}.)` : ""}
               </EmptyState>
             )}
           </Section>
           <Section title="More Than Once a Day" id="frequent">
             {data.premium ? (
               <p className="text-sm text-muted">
-                Runs more often than daily are available. Set the frequency with{" "}
-                <code className="font-mono">regwatch schedule --every</code>.
+                Runs every hour are available. Set them with <Command>regwatch schedule --install --every hourly</Command>.
               </p>
             ) : (
               <Locked feature="Running more often than once a day" />
             )}
           </Section>
           <Section title="Run History" id="history">
-            {data.runs.available && data.runs.records.length > 0 ? (
+            {records.length > 0 ? (
               <Table label="Run history">
                 <thead>
                   <tr>
                     <Th>Started</Th>
-                    <Th>Ended</Th>
-                    <Th numeric>Exit Code</Th>
-                    <Th>Results</Th>
+                    <Th>Result</Th>
+                    <Th numeric>Captured</Th>
+                    <Th className="hidden sm:table-cell">Statuses</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.runs.records.map((record, index) => (
-                    <tr key={`${record.started ?? index}`}>
-                      <Td className="numeric">{record.started ?? ""}</Td>
-                      <Td className="numeric">{record.ended ?? ""}</Td>
-                      <Td numeric>{record.exit_code ?? ""}</Td>
+                  {records.map((record, index) => (
+                    <tr key={`${record.started ?? ""}-${index}`}>
+                      <Td className="numeric whitespace-nowrap">{when(record.started, "")}</Td>
                       <Td>
+                        <span
+                          className={
+                            record.exit_code === 4
+                              ? "text-accent"
+                              : record.exit_code === 3
+                                ? "text-structure"
+                                : "text-muted"
+                          }
+                        >
+                          {outcome(record.exit_code)}
+                        </span>
+                      </Td>
+                      <Td numeric>
+                        {record.captured ?? 0}/{record.sources ?? 0}
+                        {record.capture_failed ? (
+                          <span className="block text-xs text-accent">{record.capture_failed} failed</span>
+                        ) : null}
+                      </Td>
+                      <Td className="hidden text-muted sm:table-cell">
                         {Object.entries(record.counts ?? {})
                           .map(([name, count]) => `${name.toLowerCase()} ${count}`)
                           .join(", ")}
@@ -108,12 +155,10 @@ export default function AutomationsPage() {
                   ))}
                 </tbody>
               </Table>
-            ) : data.runs.available ? (
-              <EmptyState>No run has been recorded yet.</EmptyState>
             ) : (
-              <EmptyState command={data.runs.command}>
-                Each scheduled or manual run will be listed here with its start and end, its results by
-                status and its exit code.
+              <EmptyState command="regwatch run">
+                No run has been recorded yet. Each scheduled run, each regwatch run and each Run now
+                is listed here with its result.
               </EmptyState>
             )}
           </Section>

@@ -34,8 +34,9 @@ The modules form layers, and each imports only from the ones below it.
 3. `check`, `ingest`, `impact`: the engine's analysis. They take loaded data and return values. `impact` ranks by the focus profile it is given and never drops a candidate.
 4. `document`, `synthesis`, `briefing`, `render`, `export`: turning analysis into output. `synthesis` and `briefing` build a `Document`; `render` turns a `Document` into text or bytes.
 5. `onboarding`, `settings`: the files `regwatch init` writes and the checks on its answers, and the change of one setting in `regwatch.toml`. The questions and the printing stay in `cli`.
-6. `webapi`, `server`: the JSON interface over the same loaded data, and the local server that carries it and the built pages to the browser.
-7. `cli`: the only module that prints, asks questions, parses arguments or sets an exit status.
+6. `workspace`: the operations that `cli` and `webapi` share: the source catalogue, adding sources, keyed sources, a run with its record, and the schedule's state. Nothing in it prints.
+7. `webapi`, `server`: the JSON interface over the same loaded data and the same operations, and the local server that carries it and the built pages to the browser.
+8. `cli`: the only module that prints, asks questions, parses arguments or sets an exit status.
 
 Analysis and output functions are pure. They take loaded data and an explicit date and return a value, with no clock reads, no file access and no printing. That is what makes them testable with plain dataclasses and what lets a script call them.
 

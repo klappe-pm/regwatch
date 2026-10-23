@@ -54,6 +54,24 @@ export interface Status {
   premium: boolean;
 }
 
+export interface ScheduleState {
+  available: true;
+  via: "launchd" | "cron";
+  installed: boolean;
+  every: string | null;
+  next_run: string | null;
+  note: string;
+}
+
+export interface SupplySource {
+  source_id: string;
+  name: string;
+  category: string;
+  jurisdiction: string;
+  status: string;
+  detail: string;
+}
+
 export interface Overview {
   generated: string;
   counts: { new: number; changed: number; suspicious: number; failing: number };
@@ -61,10 +79,8 @@ export interface Overview {
   flagged: SourceResult[];
   priority: Impact[];
   upcoming: Upcoming[];
-  schedule: Unavailable | { available: true; every?: string; next_run?: string };
-  supply_chain:
-    | Unavailable
-    | { available: true; signals: { title: string; detail: string; date: string }[] };
+  schedule: ScheduleState;
+  supply_chain: { available: true; sources: SupplySource[]; categories: string[] };
 }
 
 export interface Changes {
@@ -88,18 +104,36 @@ export interface MySource {
 export interface CatalogueEntry {
   source_id: string;
   name: string;
-  publisher?: string;
-  jurisdiction?: string;
-  region?: string;
-  category?: string;
-  kind?: string;
-  access?: string;
-  description?: string;
+  publisher: string;
+  jurisdiction: string;
+  region: string;
+  category: string;
+  kind: string;
+  access: string;
+  access_label: string;
+  cadence: string;
+  description: string;
+  homepage: string;
+  signup_url: string;
+  chosen: boolean;
 }
 
-export type Catalogue =
-  | (Unavailable & { entries: CatalogueEntry[]; facets: Record<string, string[]> })
-  | { available: true; entries: CatalogueEntry[]; facets: Record<string, string[]> };
+export interface Catalogue {
+  available: true;
+  total: number;
+  entries: CatalogueEntry[];
+  facets: Record<string, string[]>;
+  categories: string[];
+}
+
+export interface AddResult {
+  available: true;
+  source_id: string;
+  added: string[];
+  present: string[];
+  added_jurisdictions: string[];
+  needs_key: boolean;
+}
 
 export interface Obligation {
   obligation_id: string;
@@ -132,15 +166,18 @@ export interface BriefingDocument {
 
 export interface Automations {
   premium: boolean;
-  schedule: Unavailable | { available: true; every?: string; next_run?: string };
-  runs:
-    | (Unavailable & { records: RunRecord[] })
-    | { available: true; records: RunRecord[] };
+  schedule: ScheduleState;
+  runs: { available: true; records: RunRecord[] };
+  running: boolean;
+  last_error: string;
 }
 
 export interface RunRecord {
   started?: string;
   ended?: string;
+  sources?: number;
+  captured?: number;
+  capture_failed?: number;
   exit_code?: number;
   counts?: Record<string, number>;
 }
@@ -149,9 +186,16 @@ export interface KeyRow {
   source_id: string;
   key_env: string;
   present: boolean;
+  where: string;
+  signup_url: string;
 }
 
-export type Keys = (Unavailable & { keys: KeyRow[] }) | { available: true; keys: KeyRow[] };
+export interface Keys {
+  available: true;
+  keychain: string;
+  keychain_available: boolean;
+  keys: KeyRow[];
+}
 
 export interface Settings {
   focus_areas: string[];

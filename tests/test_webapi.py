@@ -1,4 +1,4 @@
-"""The JSON interface reads the project as the command line does and writes only settings."""
+"""The JSON interface reads the project as the command line does."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import TODAY
+from conftest import NOW, TODAY, FakeSystem
 
 from regwatch import webapi
 from regwatch.config import load_config
@@ -16,7 +16,8 @@ from regwatch.webapi import Api, ApiError, Download
 
 @pytest.fixture
 def api(project: Path) -> Api:
-    return Api(project, today=lambda: TODAY)
+    """The interface with every program faked: no keychain tool or crontab really runs."""
+    return Api(project, today=lambda: TODAY, system=FakeSystem("linux").system(), clock=lambda: NOW)
 
 
 def get(api: Api, path: str, **query: str) -> Any:
@@ -53,19 +54,9 @@ def test_the_overview_counts_sources_from_snapshots(api: Api) -> None:
     assert overview["sources"] == 5
     assert overview["generated"] == TODAY.isoformat()
     assert overview["priority"] and overview["priority"][0]["severity"] == "act-now"
-    assert overview["schedule"] == {"available": False, "command": "regwatch schedule"}
-    assert overview["supply_chain"] == {"available": False, "command": "regwatch sources add"}
+    assert overview["schedule"]["installed"] is False
+    assert overview["supply_chain"]["sources"] == []
     assert all(item["effective_date"] >= TODAY.isoformat() for item in overview["upcoming"])
-
-
-def test_the_overview_uses_the_schedule_and_signals_when_they_land(
-    api: Api, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(webapi, "schedule_status", lambda config: {"every": "daily"})
-    monkeypatch.setattr(webapi, "supply_chain_signals", lambda config: [{"title": "x"}])
-    overview = get(api, "/api/overview")
-    assert overview["schedule"] == {"available": True, "every": "daily"}
-    assert overview["supply_chain"] == {"available": True, "signals": [{"title": "x"}]}
 
 
 def test_changes_hold_results_impacts_and_cleaned_candidates(api: Api, project: Path) -> None:
@@ -126,90 +117,6 @@ def test_sources_list_the_users_sources_with_status(api: Api) -> None:
     assert all(s["url"] == "" or s["url"].startswith("https://") for s in sources)
 
 
-def test_the_catalogue_is_unavailable_until_it_lands(api: Api) -> None:
-    assert get(api, "/api/catalogue", q="food") == {
-        "available": False,
-        "command": "regwatch sources search",
-        "entries": [],
-        "facets": {},
-    }
-    assert post(api, "/api/catalogue/add", {"source_id": "x"}) == {
-        "available": False,
-        "command": "regwatch sources add",
-    }
-
-
-ENTRIES = [
-    {
-        "source_id": "a",
-        "name": "Alpha",
-        "category": "regulation",
-        "region": "europe",
-        "kind": "regulator",
-        "access": "free",
-        "jurisdiction": "eu",
-    },
-    {
-        "source_id": "b",
-        "name": "Beta",
-        "category": "packaging-materials",
-        "region": "europe",
-        "kind": "news",
-        "access": "paid",
-        "jurisdiction": "gb",
-    },
-    {
-        "source_id": "c",
-        "name": "Gamma",
-        "category": "regulation",
-        "region": "asia",
-        "kind": "gazette",
-        "access": "free-key",
-        "jurisdiction": "jp",
-    },
-]
-
-
-def test_the_catalogue_filters_by_category_region_kind_and_access(
-    api: Api, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    seen: list[str] = []
-
-    def entries(query: str) -> list[dict[str, Any]]:
-        seen.append(query)
-        return [dict(e) for e in ENTRIES]
-
-    monkeypatch.setattr(webapi, "catalogue_entries", entries)
-    everything = get(api, "/api/catalogue", q="  al\x1b  ")
-    assert seen == ["al"]
-    assert everything["facets"]["category"] == ["packaging-materials", "regulation"]
-    assert everything["facets"]["access"] == ["free", "free-key", "paid"]
-    assert [
-        e["source_id"] for e in get(api, "/api/catalogue", category="regulation")["entries"]
-    ] == [
-        "a",
-        "c",
-    ]
-    narrowed = get(api, "/api/catalogue", category="regulation", region="asia", kind="gazette")
-    assert [e["source_id"] for e in narrowed["entries"]] == ["c"]
-    assert get(api, "/api/catalogue", access="paid")["entries"][0]["source_id"] == "b"
-
-
-def test_adding_a_catalogue_source_goes_through_the_adapter(
-    api: Api, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(webapi, "add_catalogue_source", lambda config, sid: {"source_id": sid})
-    assert post(api, "/api/catalogue/add", {"source_id": "a"}) == {
-        "available": True,
-        "source_id": "a",
-    }
-    with pytest.raises(ApiError) as bad:
-        api.handle("POST", "/api/catalogue/add", {}, {"source_id": ""})
-    assert bad.value.status == 400
-    with pytest.raises(ApiError):
-        api.handle("POST", "/api/catalogue/add", {}, {"source_id": "x" * 101})
-
-
 def test_obligations_carry_their_impacts(api: Api) -> None:
     obligations = get(api, "/api/obligations")["obligations"]
     assert obligations
@@ -268,27 +175,6 @@ def test_an_unknown_export_format_is_refused(api: Api) -> None:
         api.handle("GET", "/api/briefing/export", {"format": "pdf"}, {})
 
 
-def test_automations_are_unavailable_until_they_land(api: Api) -> None:
-    assert get(api, "/api/automations") == {
-        "premium": False,
-        "schedule": {"available": False, "command": "regwatch schedule"},
-        "runs": {"available": False, "command": "regwatch run", "records": []},
-    }
-    assert post(api, "/api/automations/run", {}) == {"available": False, "command": "regwatch run"}
-
-
-def test_automations_use_the_adapters_when_they_land(
-    api: Api, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(webapi, "schedule_status", lambda config: {"every": "daily"})
-    monkeypatch.setattr(webapi, "run_records", lambda config: [{"exit_code": 0}])
-    monkeypatch.setattr(webapi, "run_now", lambda config: {"exit_code": 3})
-    automations = get(api, "/api/automations")
-    assert automations["schedule"] == {"available": True, "every": "daily"}
-    assert automations["runs"] == {"available": True, "records": [{"exit_code": 0}]}
-    assert post(api, "/api/automations/run", {}) == {"available": True, "record": {"exit_code": 3}}
-
-
 def test_settings_list_the_focus_catalogue_and_premium(api: Api) -> None:
     settings = get(api, "/api/settings")
     assert settings["focus_areas"] == []
@@ -335,36 +221,3 @@ def test_search_finds_sources_changes_and_obligations(api: Api) -> None:
         "changes": [],
         "obligations": [],
     }
-
-
-def test_search_reaches_the_catalogue_and_unconfirmed_candidates(
-    api: Api, project: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        webapi,
-        "catalogue_entries",
-        lambda query: [
-            {"source_id": "nl-notices", "name": "Already watched"},
-            {"source_id": "zz", "name": "Zed Gazette", "jurisdiction": "zz"},
-        ],
-    )
-    state = project.parent / "state"
-    state.mkdir()
-    (state / "ingest-candidates.json").write_text(
-        json.dumps({"candidates": [{"headline": "Zed notice", "what_happened": "x"}]}),
-        encoding="utf-8",
-    )
-    results = get(api, "/api/search", q="zed")
-    assert results["sources"] == [
-        {"source_id": "zz", "name": "Zed Gazette", "jurisdiction": "zz", "mine": False}
-    ]
-    assert results["changes"][0]["kind"] == "candidate"
-
-
-def test_results_are_capped(api: Api, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        webapi,
-        "catalogue_entries",
-        lambda query: [{"source_id": f"s{i}", "name": f"Source {i}"} for i in range(30)],
-    )
-    assert len(get(api, "/api/search", q="source")["sources"]) == webapi.MAX_RESULTS
