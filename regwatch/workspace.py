@@ -216,7 +216,7 @@ class RunOutcome:
 
 
 def _stamp(moment: dt.datetime) -> str:
-    return moment.astimezone(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+    return moment.astimezone(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def run_once(

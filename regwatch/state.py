@@ -43,7 +43,13 @@ SOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
 MAX_STATE_BYTES = 20_000_000
 RUNS_DIR = "runs"
 KEEP_RUN_RECORDS = 500
-_RUN_NAME = re.compile(r"^run-\d{8}T\d{6}Z-[0-9a-f]{8}\.json$")
+# run-<date>T<time><microseconds>Z-<sequence>-<random>.json. The microseconds and
+# the sequence, which counts the records already written with the same start time,
+# keep records in the order they were written even when two start in the same
+# instant. Records from before both were added (run-<date>T<time>Z-<random>.json)
+# are still read, and sort as if written at the start of their second.
+_RUN_NAME = re.compile(r"^run-(\d{8}T\d{6})(\d{6})?Z-(?:(\d{4})-)?([0-9a-f]{8})\.json$")
+_RUN_START = re.compile(r"^\d{8}T\d{6}(?:\d{6})?Z$")
 
 SeenState = dict[str, dict[str, str]]
 
@@ -354,13 +360,20 @@ def write_run_record(
 ) -> Path:
     """Write one run record to ``<state>/runs/`` and keep only the newest ``keep`` records.
 
-    ``started`` is the start time as ``YYYYMMDDTHHMMSSZ``, which makes the names sort
-    in time order. Only files named like a run record are ever removed.
+    ``started`` is the start time as ``YYYYMMDDTHHMMSSffffffZ`` (with microseconds)
+    or ``YYYYMMDDTHHMMSSZ``. A sequence number counts the records already written
+    with the same start time, so the newest record always sorts last and is never
+    the one removed. Only files named like a run record are ever removed.
     """
-    directory = state_dir / RUNS_DIR
-    path = directory / f"run-{started}-{secrets.token_hex(4)}.json"
-    if not _RUN_NAME.fullmatch(path.name):
+    if not _RUN_START.fullmatch(started):
         raise StateError(f"invalid run record start time '{started}'")
+    stamp = started if len(started) == 22 else f"{started[:-1]}000000Z"
+    directory = state_dir / RUNS_DIR
+    same = [p for p in list_run_records(state_dir) if p.name.startswith(f"run-{stamp}-")]
+    sequence = max((_run_key(p)[2] for p in same), default=-1) + 1
+    if sequence > 9999:
+        raise StateError(f"too many run records start at {started}")
+    path = directory / f"run-{stamp}-{sequence:04d}-{secrets.token_hex(4)}.json"
     protected_paths = list(protected)
     safe_write_text(path, json.dumps(record, indent=2, sort_keys=True) + "\n", protected_paths)
     records = list_run_records(state_dir)
@@ -374,4 +387,14 @@ def list_run_records(state_dir: Path) -> list[Path]:
     directory = state_dir / RUNS_DIR
     if not directory.is_dir():
         return []
-    return sorted(p for p in directory.iterdir() if _RUN_NAME.fullmatch(p.name) and p.is_file())
+    found = [p for p in directory.iterdir() if _RUN_NAME.fullmatch(p.name) and p.is_file()]
+    return sorted(found, key=_run_key)
+
+
+def _run_key(path: Path) -> tuple[str, str, int, str]:
+    """The order of a run record: start second, microseconds, sequence, then the random part."""
+    match = _RUN_NAME.fullmatch(path.name)
+    if match is None:  # pragma: no cover (only matching names are listed)
+        return ("", "", 0, path.name)
+    second, micro, sequence, random = match.groups()
+    return (second, micro or "000000", int(sequence or 0), random)

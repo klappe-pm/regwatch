@@ -114,8 +114,8 @@ Snapshots, the last-seen state and the only write path.
 
 - `safe_write_text(path: Path, text: str, protected: Iterable[Path]) -> None`: write UTF-8 text atomically, replacing any unencodable character. Raises `StateError` if `path` is a protected file, compared by identity with `os.path.samefile` when both exist and by case folded name otherwise, or if it is a directory.
 - `safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None`: the same for bytes.
-- `write_run_record(state_dir, record, started, protected, keep=500) -> Path`: write one run record as `runs/run-<started>-<random>.json` under the state directory, where `started` is `YYYYMMDDTHHMMSSZ`, and remove the oldest records beyond `keep`.
-- `list_run_records(state_dir) -> list[Path]`: the run records, oldest first.
+- `write_run_record(state_dir, record, started, protected, keep=500) -> Path`: write one run record as `runs/run-<started>-<sequence>-<random>.json` under the state directory, where `started` is `YYYYMMDDTHHMMSSffffffZ` (with microseconds) or `YYYYMMDDTHHMMSSZ` and `sequence` is four digits counting the records already written with the same start, and remove the oldest records beyond `keep`. The record just written always sorts last, so it is never the one removed.
+- `list_run_records(state_dir) -> list[Path]`: the run records, oldest first, ordered by start time, then sequence. Records named in the earlier `run-<YYYYMMDDTHHMMSSZ>-<random>.json` form are still listed.
 - `remove_file(path, protected) -> bool`: delete a file, refusing a protected one; true when there was one.
 - `update_register_file(path: Path, text: str, register_paths: Iterable[Path]) -> None`: rewrite one register file atomically while every other register file stays protected. Only `sources add` and `sources remove` call it.
 - `snapshot_path(snapshots_dir: Path, source_id: str) -> Path`: the snapshot file for a source id. Raises `StateError` for an id that does not match `SOURCE_ID_RE`, so an id can never escape the directory.

@@ -275,6 +275,45 @@ def test_run_records_keep_the_newest(tmp_path: Path) -> None:
         write_run_record(tmp_path, {}, "../x", [])
 
 
+def test_run_records_in_the_same_instant_keep_write_order(tmp_path: Path) -> None:
+    for n in range(12):
+        write_run_record(tmp_path, {"n": n}, "20261019T120000Z", [], keep=50)
+    records = list_run_records(tmp_path)
+    assert [json.loads(p.read_text("utf-8"))["n"] for p in records] == list(range(12))
+    for n in range(12, 20):
+        newest = write_run_record(tmp_path, {"n": n}, "20261019T120000Z", [], keep=1)
+        assert list_run_records(tmp_path) == [newest]
+        assert json.loads(newest.read_text("utf-8"))["n"] == n
+
+
+def test_run_records_order_by_microseconds_and_read_old_names(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    (runs / "run-20261019T120000Z-0123abcd.json").write_text('{"n": 0}', encoding="utf-8")
+    write_run_record(tmp_path, {"n": 2}, "20261019T120000900000Z", [], keep=50)
+    write_run_record(tmp_path, {"n": 1}, "20261019T120000000001Z", [], keep=50)
+    names = [p.name for p in list_run_records(tmp_path)]
+    assert names[0] == "run-20261019T120000Z-0123abcd.json"
+    assert names[1].startswith("run-20261019T120000000001Z-0000-")
+    assert names[2].startswith("run-20261019T120000900000Z-0000-")
+    from regwatch.state import StateError
+
+    with pytest.raises(StateError, match="start time"):
+        write_run_record(tmp_path, {}, "20261019T1200001Z", [])
+    (runs / "run-20261019T130000000000Z-9999-0123abcd.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(StateError, match="too many"):
+        write_run_record(tmp_path, {}, "20261019T130000Z", [])
+
+
+def test_run_record_names_carry_microseconds() -> None:
+    import datetime as dt
+
+    from regwatch.workspace import _stamp
+
+    moment = dt.datetime(2026, 10, 19, 12, 0, 0, 123456, tzinfo=dt.UTC)
+    assert _stamp(moment) == "20261019T120000123456Z"
+
+
 def test_python_m_regwatch_runs_the_command_line() -> None:
     import runpy
     import sys
