@@ -299,12 +299,42 @@ def test_verify_reports_each_status_and_never_changes_the_catalogue(run: Run) ->
     assert fetcher.requested == [URL["au-foodstandards-rss"], URL["ca-cfia-recalls-rss"]]
 
 
-def test_verify_without_ids_checks_every_entry(run: Run) -> None:
+def test_verify_all_checks_every_entry_and_names_the_missing_keys(run: Run) -> None:
+    fetcher = FakeFetcher()
+    code, out, _ = run("verify", "--all", fetcher=fetcher)
+    assert code == 4
+    keyed = [entry for entry in CATALOGUE if entry.auth is not None]
+    assert keyed
+    assert len(fetcher.requested) == len(CATALOGUE) - len(keyed)
+    assert f"0 ok, {len(CATALOGUE) - len(keyed)} failed, {len(keyed)} no key" in out
+    assert f"no key   {keyed[0].source_id}" in out
+    assert f"regwatch keys set {keyed[0].source_id}" in out
+
+
+def test_verify_without_ids_checks_your_sources(run: Run, project: Path) -> None:
+    run("add", "au-foodstandards-rss", "ca-cfia-recalls-rss")
+    mine = {str(s["source_id"]) for s in sources_of(project)}
+    in_catalogue = sorted(source_id for source_id in mine if source_id in URL)
+    assert {"au-foodstandards-rss", "ca-cfia-recalls-rss"} <= set(in_catalogue)
+    assert len(in_catalogue) < len(CATALOGUE)
+    fetcher = FakeFetcher({URL[source_id]: "<rss/>" for source_id in in_catalogue})
+    code, out, _ = run("verify", fetcher=fetcher)
+    assert sorted(fetcher.requested) == sorted(URL[source_id] for source_id in in_catalogue)
+    assert f"{len(in_catalogue)} ok, 0 failed, 0 no key" in out
+    assert code == 0
+
+
+def test_verify_without_ids_counts_sources_outside_the_catalogue(run: Run, project: Path) -> None:
+    path = project.parent / "register" / "sources.json"
+    data = json.loads(path.read_text("utf-8"))
+    data["sources"] = [{**data["sources"][0], "source_id": "my-own-feed"}]
+    path.write_text(json.dumps(data), encoding="utf-8")
     fetcher = FakeFetcher()
     code, out, _ = run("verify", fetcher=fetcher)
-    assert code == 4
-    assert len(fetcher.requested) == len(CATALOGUE)
-    assert f"0 ok, {len(CATALOGUE)} failed" in out
+    assert "1 of your sources are not in the catalogue and are not verified" in out
+    assert fetcher.requested == []
+    assert "0 ok, 0 failed, 0 no key" in out
+    assert code == 0
 
 
 def test_verify_builds_a_real_fetcher_without_a_configuration(
@@ -349,6 +379,21 @@ def test_the_register_checks_keyed_sources(
     edit_json(project.parent / "register" / "sources.json", edit)
     errors = validate_register(load_config(project))
     assert any(message in error for error in errors), errors
+
+
+def test_list_matches_a_jurisdiction_in_any_case(run: Run) -> None:
+    _code, lower, _ = run("list", "--jurisdiction", "us")
+    code, upper, _ = run("list", "--jurisdiction", "US")
+    assert code == 0
+    assert upper == lower
+    assert "us-ca" in upper
+
+
+def test_list_refuses_an_unknown_focus_area_and_names_the_valid_ids(run: Run) -> None:
+    code, _out, err = run("list", "--focus", "widgets")
+    assert code == 2
+    assert "unknown focus area 'widgets'" in err
+    assert "alcoholic-beverages" in err
 
 
 def test_an_extra_entry_may_name_a_focus_area_of_the_users_own_catalogue(

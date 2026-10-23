@@ -6,6 +6,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState 
 
 import { getJson } from "@/lib/api";
 import type { IconName } from "@/lib/icons.generated";
+import { type SearchOption, searchNote, searchOptions } from "@/lib/search-options";
 import type { SearchResults } from "@/lib/types";
 
 import { Icon } from "./icon";
@@ -54,59 +55,6 @@ function useNarrow(): boolean {
   return narrow;
 }
 
-interface Option {
-  id: string;
-  group: string;
-  text: string;
-  detail: string;
-  href: string;
-}
-
-function options(results: SearchResults | null): Option[] {
-  if (!results) return [];
-  const found: Option[] = [];
-  results.sources.forEach((s, i) =>
-    found.push({
-      id: `s${i}`,
-      group: "Sources",
-      text: s.name,
-      detail: s.mine ? `${s.jurisdiction} · watched` : `${s.jurisdiction} · catalogue`,
-      href: s.mine
-        ? `/sources/?q=${encodeURIComponent(s.source_id)}`
-        : `/sources/?catalogue=${encodeURIComponent(s.name)}`,
-    }),
-  );
-  results.changes.forEach((c, i) =>
-    found.push(
-      c.kind === "impact"
-        ? {
-            id: `c${i}`,
-            group: "Changes",
-            text: c.obligation_title,
-            detail: `${c.product_name} · ${c.jurisdiction}`,
-            href: `/changes/?q=${encodeURIComponent(c.obligation_id)}`,
-          }
-        : {
-            id: `c${i}`,
-            group: "Changes",
-            text: c.headline,
-            detail: `Unconfirmed · ${c.date}`,
-            href: `/changes/?q=${encodeURIComponent(c.headline)}`,
-          },
-    ),
-  );
-  results.obligations.forEach((o, i) =>
-    found.push({
-      id: `o${i}`,
-      group: "Obligations",
-      text: o.title,
-      detail: `${o.jurisdiction} · ${o.status}`,
-      href: `/obligations/?q=${encodeURIComponent(o.obligation_id)}`,
-    }),
-  );
-  return found;
-}
-
 /** One search over sources, changes and obligations, as a keyboard-driven combobox. */
 function Search({ compact }: { compact: boolean }) {
   const router = useRouter();
@@ -114,6 +62,7 @@ function Search({ compact }: { compact: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
 
@@ -121,6 +70,7 @@ function Search({ compact }: { compact: boolean }) {
     const text = query.trim();
     if (!text) {
       setResults(null);
+      setFailure(null);
       return;
     }
     let live = true;
@@ -129,11 +79,15 @@ function Search({ compact }: { compact: boolean }) {
         .then((value) => {
           if (live) {
             setResults(value);
+            setFailure(null);
             setActive(-1);
           }
         })
-        .catch(() => {
-          if (live) setResults(null);
+        .catch((reason: unknown) => {
+          if (live) {
+            setResults(null);
+            setFailure(reason instanceof Error ? reason.message : "The request failed.");
+          }
         });
     }, 150);
     return () => {
@@ -142,7 +96,8 @@ function Search({ compact }: { compact: boolean }) {
     };
   }, [query]);
 
-  const list = options(results);
+  const list = searchOptions(results);
+  const note = searchNote(query, list.length, failure);
   const showPanel = compact ? open : open && query.trim() !== "";
 
   function close() {
@@ -150,7 +105,7 @@ function Search({ compact }: { compact: boolean }) {
     setActive(-1);
   }
 
-  function go(option: Option) {
+  function go(option: SearchOption) {
     close();
     setQuery("");
     router.push(option.href);
@@ -202,10 +157,10 @@ function Search({ compact }: { compact: boolean }) {
     <div className="absolute left-full top-0 z-30 ml-2 w-[min(28rem,calc(100vw-5rem))] border border-line bg-raised shadow-sm">
       {compact ? <div className="border-b border-line p-2">{input}</div> : null}
       <div id={listId} role="listbox" aria-label="Search results" className="max-h-[70vh] overflow-y-auto py-1">
-        {query.trim() === "" ? (
-          <p className="px-4 py-2 text-sm text-muted">Type a name, a jurisdiction or a term.</p>
-        ) : list.length === 0 ? (
-          <p className="px-4 py-2 text-sm text-muted">No matches.</p>
+        {note !== null ? (
+          <p role={failure ? "alert" : undefined} className="px-4 py-2 text-sm text-muted">
+            {note}
+          </p>
         ) : (
           groups.map((group) => {
             const items = list.filter((o) => o.group === group);

@@ -65,6 +65,9 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- `regwatch sources list --jurisdiction` matches in any case, so `US` lists the same sources as `us`, and an unknown `--focus` exits 2 naming the valid focus area ids instead of listing only the entries that serve every area.
+- `regwatch sources verify` sends the stored key for a keyed source and reports `no key`, with the `regwatch keys set` command, when there is none, instead of fetching without it. With no ids it verifies the catalogue entries of your sources file; `--all` verifies the whole catalogue. A missing key also makes the exit status 4.
+- The global search in the web app showed No matches when the request failed; it now shows the error. A catalogue hit opens the catalogue search by its id, not its name, so it finds that one source.
 - The Documents and Newsletters pages showed Loading forever when the status request failed, because the error was dropped. The shared status now carries the error, and both pages show it in an error note.
 - Run records written in the same second sorted by their random suffix, so the activity view could show them out of order and pruning could remove the record just written. A run record name now carries the start time to the microsecond and a four digit sequence for records with the same start, the records sort by start time and then sequence, and the newest is never pruned. Records named in the earlier form are still read.
 - A schedule installed before any run never ran: the crontab line and the launchd agent send the output to `schedule.log` in the state directory, which neither cron nor launchd creates, and nothing had created it yet. `regwatch schedule --install`, and so `regwatch init --schedule`, now creates the state directory first, and refuses a state path that is a file or a dangling link.

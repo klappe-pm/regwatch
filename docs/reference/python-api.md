@@ -67,7 +67,7 @@ The source catalogue. See [source catalogue](source-catalogue.md).
 - `parse_source_catalogue(data: object, focus_ids: Iterable[str], label: str = ...) -> tuple[CatalogueEntry, ...]`: validate a decoded catalogue file. Raises `CatalogueError` naming every invalid entry.
 - `entry_from_dict(data: object, focus_ids: Iterable[str], where: str = "entry") -> CatalogueEntry`: validate and build one entry.
 - `rank(entries: Sequence[CatalogueEntry], text: str) -> list[CatalogueEntry]`: the one search ranking, best match first, as the [source catalogue](source-catalogue.md#search) describes. `SEARCH_WEIGHTS` holds the field weights and `SPELLINGS` the British word starts and their American forms.
-- `filter_entries(entries, *, region=None, jurisdiction=None, kind=None, category=None, access=None, focus=None, chosen=None) -> list[CatalogueEntry]`: the entries that pass every filter given.
+- `filter_entries(entries, *, region=None, jurisdiction=None, kind=None, category=None, access=None, focus=None, chosen=None) -> list[CatalogueEntry]`: the entries that pass every filter given. `jurisdiction` matches in any case and also matches its subdivisions.
 - `entry_to_source(entry: CatalogueEntry, jurisdiction_id: str | None = None) -> dict[str, str]`: the sources file entry for a chosen catalogue entry.
 - `merge_sources(sources, jurisdictions, entries) -> MergeResult`: add entries to a sources list with the jurisdictions they need. Raises `CatalogueError`, changing nothing, when an id is already used by a different entry.
 - `jurisdiction_name(code: str) -> str`: a readable name for a jurisdiction code.
@@ -259,6 +259,7 @@ Changes one setting in `regwatch.toml` and keeps the rest of the file.
 The operations `regwatch sources`, `keys` and `run` share with the web app. Nothing here prints or asks.
 
 - `source_catalogue(config: Config | None) -> tuple[CatalogueEntry, ...]`: the shipped catalogue, plus `[catalogue] extra` when a configuration names one.
+- `focus_area_ids(config: Config | None) -> list[str]`: the shipped focus area ids, then those of the focus catalogue a configuration names, without repeats.
 - `chosen_ids(config: Config) -> list[str]`: the ids in the sources file.
 - `find_entries(catalogue, ids) -> list[CatalogueEntry]`: the entries for `ids`, without repeats. Raises `WorkspaceError` for an unknown id.
 - `add_sources(config: Config, entries) -> MergeResult`: `regwatch sources add`: writes the sources file, and the jurisdictions file when a jurisdiction was added. Raises `CatalogueError` when a different source already has an id.

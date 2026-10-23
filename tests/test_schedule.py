@@ -13,6 +13,7 @@ from conftest import NOW, TODAY, FakeFetcher, FakeSystem, snapshot_responses
 
 from regwatch.cli import main
 from regwatch.config import load_config
+from regwatch.fetch import FetchError
 from regwatch.schedule import (
     LABEL,
     ScheduleError,
@@ -228,8 +229,24 @@ def test_verify_sends_the_key_when_one_is_stored(run: Run) -> None:
     assert code == 0
     assert fetcher.seen[0][1] is not None
     fake.keychain.clear()
-    run("sources", "verify", "us-regulations-gov-api", fake=fake, fetcher=fetcher)
-    assert fetcher.seen[1][1] is None
+    code, out, _ = run("sources", "verify", "us-regulations-gov-api", fake=fake, fetcher=fetcher)
+    assert len(fetcher.seen) == 1
+    assert "no key   us-regulations-gov-api" in out
+    assert "0 ok, 0 failed, 1 no key" in out
+    assert code == 4
+
+
+def test_verify_redacts_the_key_from_an_error(run: Run) -> None:
+    class Failing:
+        def fetch(self, url: str, *, credential: object = None) -> str:
+            raise FetchError(f"the server said {KEY}")
+
+    fake = FakeSystem("darwin")
+    fake.keychain["REGWATCH_KEY_REGULATIONS_GOV"] = KEY
+    code, out, _ = run("sources", "verify", "us-regulations-gov-api", fake=fake, fetcher=Failing())
+    assert code == 4
+    assert "the server said [key]" in out
+    assert KEY not in out
 
 
 # --- run ----------------------------------------------------------------------------------

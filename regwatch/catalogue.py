@@ -580,11 +580,13 @@ def filter_entries(
 ) -> list[CatalogueEntry]:
     """The entries that pass every filter given.
 
-    ``jurisdiction`` also matches its subdivisions (``us`` matches ``us-ca``),
+    ``jurisdiction`` matches in any case and also matches its subdivisions
+    (``us`` and ``US`` match ``us-ca``),
     ``focus`` matches an entry that lists the area or lists none (which means
     every area), and ``chosen`` keeps only the ids it holds.
     """
     picked = None if chosen is None else set(chosen)
+    jurisdiction = jurisdiction.lower() if jurisdiction else jurisdiction
     found: list[CatalogueEntry] = []
     for entry in entries:
         if region and entry.region != region:

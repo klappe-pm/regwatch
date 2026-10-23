@@ -26,7 +26,7 @@ regwatch [--version] [--config PATH] <command> [options]
 | 1 | the register is invalid, or `capture` stored nothing |
 | 2 | a usage, configuration, network, state or file error; the message starts with `error:` |
 | 3 | `check --exit-code` or `run` found a source that is `NEW`, `CHANGED` or `SUSPICIOUS` |
-| 4 | `check --exit-code` or `run` found a source that is `ERROR` or `MISSING`, `run` could not capture a source, or `sources verify` could not fetch an address; this wins over 3 |
+| 4 | `check --exit-code` or `run` found a source that is `ERROR` or `MISSING`, `run` could not capture a source, or `sources verify` could not fetch an address or had no key for a keyed source; this wins over 3 |
 
 Argument errors detected by the parser also exit with status 2.
 
@@ -102,7 +102,7 @@ regwatch config show
 
 ## `sources`
 
-Reads the [source catalogue](source-catalogue.md): the file shipped with regwatch, followed by the file named in `[catalogue] extra` when there is one. `list`, `search`, `show` and `verify` work without a configuration file and then read the shipped catalogue only. Each source is shown with its access as `Free`, `Free Key` or `Paid`.
+Reads the [source catalogue](source-catalogue.md): the file shipped with regwatch, followed by the file named in `[catalogue] extra` when there is one. `list`, `search`, `show`, and `verify` with ids or `--all`, work without a configuration file and then read the shipped catalogue only. Each source is shown with its access as `Free`, `Free Key` or `Paid`.
 
 | action | meaning |
 | --- | --- |
@@ -111,20 +111,21 @@ Reads the [source catalogue](source-catalogue.md): the file shipped with regwatc
 | `show ID` | every field of one entry |
 | `add ID [ID ...]` | copy entries into your sources file, adding any jurisdiction they need |
 | `remove ID` | remove a source from your sources file |
-| `verify [ID ...]` | fetch the address of each entry, every entry when no id is given, and print `ok` with the size or `failed` with the reason |
+| `verify [ID ...]` | fetch the address of each entry and print `ok` with the size or `failed` with the reason; with no id it verifies the catalogue entries of your sources file, and with `--all` every catalogue entry |
 
 | option | applies to | meaning |
 | --- | --- | --- |
 | `--region REGION` | `list` | only this region |
-| `--jurisdiction CODE` | `list` | only this jurisdiction and its subdivisions, so `us` also lists `us-ca` |
+| `--jurisdiction CODE` | `list` | only this jurisdiction and its subdivisions, in any case, so `us` and `US` also list `us-ca` |
 | `--kind KIND` | `list` | only this kind |
 | `--category CATEGORY` | `list` | only this category |
 | `--access ACCESS` | `list` | only `free`, `free-key` or `paid` |
-| `--focus ID` | `list` | entries for this focus area, including entries that list no area, which serve every area |
+| `--focus ID` | `list` | entries for this focus area, including entries that list no area, which serve every area; an id that is not a shipped focus area or one of your own catalogue exits 2 and names the valid ids |
 | `--chosen` | `list` | only entries whose id is in your sources file |
+| `--all` | `verify` | verify every catalogue entry instead of your sources |
 | `--json` | `list`, `search`, `show` | print JSON instead of lines: an object with `count` and `sources`, or for `show` one entry. Each entry has every catalogue field and `access_label`. |
 
-`add` never overwrites a different entry: when the sources file already has the id with other content, it exits 2 and writes nothing. An entry already present unchanged is reported `present`. `add` and `remove` need a configuration file. `remove` refuses a source that an obligation row cites, and leaves its snapshot and accepted hash in the state directory. `verify` uses the fetch client with the `[fetch]` settings, or the defaults without a configuration, exits 4 when any address fails, and never changes the catalogue. An id that is not in the catalogue exits 2.
+`add` never overwrites a different entry: when the sources file already has the id with other content, it exits 2 and writes nothing. An entry already present unchanged is reported `present`. `add` and `remove` need a configuration file. `remove` refuses a source that an obligation row cites, and leaves its snapshot and accepted hash in the state directory. `verify` uses the fetch client with the `[fetch]` settings, or the defaults without a configuration, and never changes the catalogue. A keyed entry is fetched with its stored key, as `run` would send it, and any echo of the key in an error is replaced by `[key]`; a keyed entry with no key is not fetched and is reported `no key` with the `regwatch keys set` command that supplies one. It exits 4 when any address fails or any keyed entry has no key. With no id, a source of your sources file that is not in the catalogue is counted and not verified. An id that is not in the catalogue exits 2.
 
 ```text
 regwatch sources search "food recalls"

@@ -145,6 +145,7 @@ from regwatch.workspace import (
     chosen_ids,
     fetcher_for,
     find_entries,
+    focus_area_ids,
     key_lookup,
     keyed_source,
     keyed_sources,
@@ -1310,6 +1311,10 @@ def _print_entries(entries: Sequence[CatalogueEntry], as_json: bool, label: str)
 
 
 def _cmd_sources_list(ctx: _Context, args: argparse.Namespace) -> int:
+    if args.focus is not None:
+        valid = focus_area_ids(ctx.config if ctx.config_path.exists() else None)
+        if args.focus not in valid:
+            raise CommandError(f"unknown focus area '{args.focus}'; use one of: {', '.join(valid)}")
     entries = filter_entries(
         _source_catalogue(ctx),
         region=args.region,
@@ -1404,26 +1409,53 @@ def _cmd_sources_remove(ctx: _Context, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _verify_entries(ctx: _Context, args: argparse.Namespace) -> list[CatalogueEntry]:
+    """The entries to verify: the ids named, every entry with --all, else the user's sources."""
+    if args.ids:
+        return _find_entries(ctx, args.ids)
+    catalogue = _source_catalogue(ctx)
+    if args.all:
+        return list(catalogue)
+    chosen = _chosen_ids(ctx)
+    entries = [entry for entry in catalogue if entry.source_id in set(chosen)]
+    outside = len(set(chosen)) - len(entries)
+    if outside:
+        _say(f"{outside} of your sources are not in the catalogue and are not verified")
+    return entries
+
+
 def _cmd_sources_verify(ctx: _Context, args: argparse.Namespace) -> int:
-    entries = _find_entries(ctx, args.ids) if args.ids else list(_source_catalogue(ctx))
+    entries = _verify_entries(ctx, args)
     fetcher = ctx.live_fetcher()
     failed = 0
+    keyless = 0
     for entry in entries:
+        credential = None
+        if entry.auth is not None and entry.key_env:
+            key = ctx.key_for(entry.key_env)
+            if not key:
+                keyless += 1
+                _say(
+                    f"{'no key':<8} {entry.source_id:<34} "
+                    f"run 'regwatch keys set {entry.source_id}' to verify it"
+                )
+                continue
+            credential = Credential(entry.auth.type, entry.auth.name, key)
         try:
-            key = ctx.key_for(entry.key_env) if entry.auth and entry.key_env else None
-            if entry.auth is not None and key:
-                credential = Credential(entry.auth.type, entry.auth.name, key)
-                body = fetcher.fetch(entry.url, credential=credential)
-            else:
+            if credential is None:
                 body = fetcher.fetch(entry.url)
+            else:
+                body = fetcher.fetch(entry.url, credential=credential)
         except (FetchError, ValueError) as exc:
             failed += 1
-            _say(f"{'failed':<8} {entry.source_id:<34} {exc}")
+            message = str(exc) if credential is None else credential.redact(str(exc))
+            _say(f"{'failed':<8} {entry.source_id:<34} {message}")
             continue
         _say(f"{'ok':<8} {entry.source_id:<34} {len(body.encode('utf-8'))} bytes")
-    _say(f"regwatch sources verify: {len(entries) - failed} ok, {failed} failed")
+    ok = len(entries) - failed - keyless
+    _say(f"regwatch sources verify: {ok} ok, {failed} failed, {keyless} no key")
     _say("The catalogue is not changed; a failure means the address needs checking.")
-    return EXIT_UNVERIFIED if failed else EXIT_OK
+    return EXIT_UNVERIFIED if failed or keyless else EXIT_OK
 
 
 # --- keys --------------------------------------------------------------------
@@ -1992,7 +2024,8 @@ def _add_sources_parser(sub: Any, handlers: dict[str, _Handler]) -> None:
     p.add_argument("id")
 
     p = action("verify", _cmd_sources_verify, "fetch catalogue addresses and report each status")
-    p.add_argument("ids", nargs="*", metavar="ID", help="default: every catalogue source")
+    p.add_argument("ids", nargs="*", metavar="ID", help="default: the sources in your sources file")
+    p.add_argument("--all", action="store_true", help="verify every catalogue source")
 
 
 def main(

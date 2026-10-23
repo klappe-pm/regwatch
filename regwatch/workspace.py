@@ -72,14 +72,19 @@ class WorkspaceError(ValueError):
 # --- the source catalogue ------------------------------------------------------
 
 
+def focus_area_ids(config: Config | None) -> list[str]:
+    """The shipped focus area ids, then those of the user's own focus catalogue."""
+    ids = [area.focus_id for area in load_catalogue(None)]
+    if config is not None and config.profile.catalogue is not None:
+        ids += [area.focus_id for area in load_catalogue(config.profile.catalogue)]
+    return list(dict.fromkeys(ids))
+
+
 def source_catalogue(config: Config | None) -> tuple[CatalogueEntry, ...]:
     """The shipped catalogue, plus the user's extra file when ``config`` names one."""
-    focus_ids = [area.focus_id for area in load_catalogue(None)]
     if config is None:
-        return load_source_catalogue(focus_ids)
-    if config.profile.catalogue is not None:
-        focus_ids += [area.focus_id for area in load_catalogue(config.profile.catalogue)]
-    return load_source_catalogue(dict.fromkeys(focus_ids), config.catalogue.extra)
+        return load_source_catalogue(focus_area_ids(None))
+    return load_source_catalogue(focus_area_ids(config), config.catalogue.extra)
 
 
 def chosen_ids(config: Config) -> list[str]:
