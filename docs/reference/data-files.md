@@ -1,6 +1,6 @@
 # Data Files
 
-This page describes every file in the register: what it holds, every field, and the rule the validator applies to it. The rules are packaged data in `regwatch/data/schema.json`, and `regwatch validate` applies them. The register is yours; regwatch reads these files and never writes them. A synthetic copy of every file is in [examples/register](../../examples/register/README.md).
+This page describes every file in the register: what it holds, every field, and the rule the validator applies to it. The rules are packaged data in `regwatch/data/schema.json`, and `regwatch validate` applies them. The register is yours; regwatch reads these files, and writes only the sources and jurisdictions files, and only when you run `regwatch sources add` or `regwatch sources remove`. A synthetic copy of every file is in [examples/register](../../examples/register/README.md).
 
 ## Conventions
 
@@ -76,6 +76,10 @@ A top-level object with a `sources` list. See [add a source](../how-to-guides/ad
 | `mechanism` | yes | `api`, `rss`, `html`, `email-list` or `manual` |
 | `cadence` | yes | free text, such as `daily`; informational |
 | `notes` | no | free text |
+| `auth` | no | where a keyed source takes its key: `query:NAME` for a query parameter or `header:NAME` for a request header, where `NAME` is 1 to 64 letters, digits, hyphens and underscores |
+| `key_env` | no | the environment variable that can supply the key, an upper case letter then up to 63 upper case letters, digits and underscores |
+
+`auth` and `key_env` are given together or not at all, and a source with `auth` must have an `https` URL. `regwatch sources add` writes both for a keyed catalogue source.
 
 ## Portfolio JSON
 

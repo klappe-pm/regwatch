@@ -17,6 +17,7 @@ from typing import Any
 
 __all__ = [
     "DEFAULT_CONFIG_NAME",
+    "CatalogueSettings",
     "Config",
     "ConfigError",
     "FetchSettings",
@@ -113,6 +114,13 @@ class ProfileSettings:
 
 
 @dataclass(frozen=True)
+class CatalogueSettings:
+    """The user's own source catalogue file, read after the shipped one, if any."""
+
+    extra: Path | None = None
+
+
+@dataclass(frozen=True)
 class Config:
     """The parsed configuration, with every path made absolute."""
 
@@ -124,14 +132,18 @@ class Config:
     ingest: IngestSettings
     config_path: Path
     profile: ProfileSettings = ProfileSettings()
+    catalogue: CatalogueSettings = CatalogueSettings()
 
     def protected_paths(self) -> list[Path]:
         """Files that a user-named output path must never overwrite.
 
-        The register files, this configuration file, the focus catalogue when one
-        is configured, and regwatch's own state files.
+        The register files, this configuration file, the focus catalogue and the
+        extra source catalogue when they are configured, and regwatch's own state
+        files.
         """
         catalogue = [self.profile.catalogue.resolve()] if self.profile.catalogue else []
+        if self.catalogue.extra is not None:
+            catalogue.append(self.catalogue.extra.resolve())
         return [
             *self.register.all_paths(),
             self.config_path.resolve(),
@@ -287,6 +299,12 @@ def _parse_profile(table: dict[str, Any], base: Path) -> ProfileSettings:
     )
 
 
+def _parse_catalogue(table: dict[str, Any], base: Path) -> CatalogueSettings:
+    if "extra" not in table:
+        return CatalogueSettings()
+    return CatalogueSettings(_resolve(base, _string(table, "extra", "catalogue")))
+
+
 def load_config(path: Path) -> Config:
     """Read and validate the configuration file at ``path``.
 
@@ -304,7 +322,9 @@ def load_config(path: Path) -> Config:
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise ConfigError(f"cannot parse configuration file {path}: {exc}") from exc
 
-    unknown_tables = sorted(set(data) - {"register", "state", "fetch", "ingest", "profile"})
+    unknown_tables = sorted(
+        set(data) - {"register", "state", "fetch", "ingest", "profile", "catalogue"}
+    )
     if unknown_tables:
         raise ConfigError(f"unknown configuration tables: {', '.join(unknown_tables)}")
 
@@ -366,6 +386,7 @@ def load_config(path: Path) -> Config:
             base,
         ),
         config_path=path.resolve(),
+        catalogue=_parse_catalogue(_table(data, "catalogue", ("extra",)), base),
         profile=_parse_profile(
             _table(data, "profile", ("focus_areas", "custom_terms", "catalogue")), base
         ),

@@ -2,7 +2,7 @@
 
 Regwatch watches regulatory sources, compares what it finds with a register of obligations that you keep, and renders a briefing that flags what a person should look at. These pages cover installing and using it, looking things up, and changing the code. They follow the four [Diátaxis](https://diataxis.fr/) quadrants, so the folder a page sits in tells you what kind of page it is.
 
-Regwatch flags candidates for human review. It never edits your register or change log, and nothing it produces is legal advice. A qualified person must confirm every flagged item against the primary source text before anyone relies on it.
+Regwatch flags candidates for human review. It never edits your obligations or change log, and nothing it produces is legal advice. It changes your sources and jurisdictions only when you ask it to add or remove a source. A qualified person must confirm every flagged item against the primary source text before anyone relies on it.
 
 ## Tutorials
 
@@ -19,7 +19,7 @@ Index: [How-To Guides](how-to-guides/README.md).
 
 ## Reference
 
-Lookup pages that describe the machinery as it is. [CLI](reference/cli.md) lists every subcommand, option and exit status, [Configuration](reference/configuration.md) lists every key in `regwatch.toml`, [Data Files](reference/data-files.md) lists every field of every register file, [Focus Catalogue](reference/focus-catalogue.md) describes the focus areas and how candidates are matched, [Python API](reference/python-api.md) lists every public function and class, [Source Layout](reference/source-layout.md) describes every module, and [Package Data](reference/package-data.md) describes the packaged field rules. Index: [Reference](reference/README.md).
+Lookup pages that describe the machinery as it is. [CLI](reference/cli.md) lists every subcommand, option and exit status, [Configuration](reference/configuration.md) lists every key in `regwatch.toml`, [Data Files](reference/data-files.md) lists every field of every register file, [Source Catalogue](reference/source-catalogue.md) describes the sources you can choose from, [Focus Catalogue](reference/focus-catalogue.md) describes the focus areas and how candidates are matched, [Python API](reference/python-api.md) lists every public function and class, [Source Layout](reference/source-layout.md) describes every module, and [Package Data](reference/package-data.md) describes the packaged field rules. Index: [Reference](reference/README.md).
 
 ## Explanation
 

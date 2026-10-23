@@ -6,6 +6,9 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Added
 
+- A source catalogue in package data, `regwatch/data/source-catalogue.json`: 575 sources worldwide, each with its jurisdiction, region, kind, category, mechanism, address and whether it is Free, needs a free key or is Paid, checked on 2026-10-23. Loading validates every field strictly, and a catalogue of your own named in the new `[catalogue] extra` setting follows the same rules. [source catalogue](docs/reference/source-catalogue.md) describes it.
+- `regwatch sources` with `list` (filters by region, jurisdiction, kind, category, access, focus area and your chosen sources), `search` (one ranking for every surface), `show`, `add` (copies entries into your sources file and adds missing jurisdictions, never overwriting a different entry), `remove` and `verify`, and `--json` output for `list`, `search` and `show`.
+- Optional `auth` and `key_env` fields in the sources file for sources that need a key.
 - Package scaffold: `pyproject.toml` with the hatchling build backend and the `regwatch` console script. There are no runtime dependencies.
 - The `regwatch` command with the subcommands `validate`, `coverage`, `list`, `portfolio`, `capture`, `check`, `ingest`, `impact`, `themes`, `brief`, `render`, `digest`, `report` and `export`, and later `init` and `config`. [cli reference](docs/reference/cli.md) documents each.
 - A TOML configuration file that names the register files, the state directory, the fetch limits and the ingest filters. [configuration](docs/reference/configuration.md) lists every key.

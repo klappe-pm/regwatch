@@ -18,6 +18,7 @@ Each subcommand is one stage of the engine:
     export    write one flat record per obligation as CSV and JSON
     init      create a project: configuration, an empty register and your focus areas
     config    show the effective configuration
+    sources   list, search, show, add, remove and verify catalogue sources
 
 Exit status: 0 success, 1 the register is invalid or nothing could be captured,
 2 a usage, configuration, network or file error, 3 changes were detected and
@@ -39,8 +40,26 @@ from typing import Any, TextIO, TypeVar
 
 from regwatch import __version__
 from regwatch.briefing import TIERS, build_briefing
+from regwatch.catalogue import (
+    ACCESS,
+    CATEGORIES,
+    KINDS,
+    REGIONS,
+    CatalogueEntry,
+    CatalogueError,
+    filter_entries,
+    load_source_catalogue,
+    merge_sources,
+    rank,
+)
 from regwatch.check import SourceResult, accept_results, capture_sources, check_sources
-from regwatch.config import DEFAULT_CONFIG_NAME, Config, ConfigError, load_config
+from regwatch.config import (
+    DEFAULT_CONFIG_NAME,
+    Config,
+    ConfigError,
+    FetchSettings,
+    load_config,
+)
 from regwatch.document import DISCLAIMER, Document, DocumentError, Section, make_disclaimer
 from regwatch.export import build_records, records_csv
 from regwatch.fetch import Fetcher, FetchError, SafeFetcher
@@ -66,6 +85,8 @@ from regwatch.register import (
     RegisterError,
     Source,
     load_register,
+    obligations_citing_source,
+    read_json_list,
     validate_register,
 )
 from regwatch.render import (
@@ -86,6 +107,7 @@ from regwatch.state import (
     safe_write_bytes,
     safe_write_text,
     save_seen,
+    update_register_file,
     write_tree,
 )
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
@@ -135,7 +157,7 @@ class _Context:
         """The injected fetcher, or a real one built from the fetch settings."""
         if self.fetcher is not None:
             return self.fetcher
-        settings = self.config.fetch
+        settings = self.config.fetch if self.config_path.exists() else FetchSettings()
         return SafeFetcher(
             settings.timeout_seconds,
             settings.max_bytes,
@@ -888,6 +910,169 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# --- source catalogue commands -----------------------------------------------
+
+
+def _source_catalogue(ctx: _Context) -> tuple[CatalogueEntry, ...]:
+    """The shipped catalogue plus the user's extra file when a configuration names one."""
+    focus_ids = [area.focus_id for area in load_catalogue(None)]
+    if not ctx.config_path.exists():
+        return load_source_catalogue(focus_ids)
+    config = ctx.config
+    if config.profile.catalogue is not None:
+        focus_ids += [area.focus_id for area in load_catalogue(config.profile.catalogue)]
+    return load_source_catalogue(dict.fromkeys(focus_ids), config.catalogue.extra)
+
+
+def _chosen_ids(ctx: _Context) -> list[str]:
+    """The ids in the user's sources file."""
+    _data, sources = read_json_list(ctx.config.register.sources, "sources", "sources file")
+    return [str(source.get("source_id", "")) for source in sources]
+
+
+def _entry_line(entry: CatalogueEntry) -> str:
+    return (
+        f"{entry.source_id:<34} {entry.access_label:<8} {entry.jurisdiction:<6} "
+        f"{entry.category:<22} {entry.name}"
+    )
+
+
+def _print_entries(entries: Sequence[CatalogueEntry], as_json: bool, label: str) -> None:
+    if as_json:
+        payload = {"count": len(entries), "sources": [entry.to_dict() for entry in entries]}
+        sys.stdout.write(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+        return
+    for entry in entries:
+        _say(_entry_line(entry))
+    _say(f"regwatch sources {label}: {len(entries)} sources")
+
+
+def _cmd_sources_list(ctx: _Context, args: argparse.Namespace) -> int:
+    entries = filter_entries(
+        _source_catalogue(ctx),
+        region=args.region,
+        jurisdiction=args.jurisdiction,
+        kind=args.kind,
+        category=args.category,
+        access=args.access,
+        focus=args.focus,
+        chosen=_chosen_ids(ctx) if args.chosen else None,
+    )
+    _print_entries(entries, args.json, "list")
+    return EXIT_OK
+
+
+def _cmd_sources_search(ctx: _Context, args: argparse.Namespace) -> int:
+    _print_entries(rank(_source_catalogue(ctx), args.text), args.json, "search")
+    return EXIT_OK
+
+
+def _find_entries(ctx: _Context, ids: Sequence[str]) -> list[CatalogueEntry]:
+    by_id = {entry.source_id: entry for entry in _source_catalogue(ctx)}
+    unknown = [source_id for source_id in ids if source_id not in by_id]
+    if unknown:
+        raise CommandError(
+            f"not in the source catalogue: {', '.join(unknown)}; "
+            "try 'regwatch sources search' to find an id"
+        )
+    return [by_id[source_id] for source_id in dict.fromkeys(ids)]
+
+
+def _cmd_sources_show(ctx: _Context, args: argparse.Namespace) -> int:
+    entry = _find_entries(ctx, [args.id])[0]
+    if args.json:
+        sys.stdout.write(json.dumps(entry.to_dict(), indent=2, ensure_ascii=False) + "\n")
+        return EXIT_OK
+    _say(f"{entry.name} ({entry.access_label})")
+    _say(entry.description)
+    rows = [
+        ("id", entry.source_id),
+        ("publisher", entry.publisher),
+        ("jurisdiction", entry.jurisdiction),
+        ("region", entry.region),
+        ("kind", entry.kind),
+        ("category", entry.category),
+        ("mechanism", entry.mechanism),
+        ("url", entry.url),
+        ("homepage", entry.homepage),
+        ("access", entry.access),
+        ("auth", entry.auth.to_text() if entry.auth else "none"),
+        ("key variable", entry.key_env or "none"),
+        ("sign up", entry.signup_url or "none"),
+        ("focus areas", ", ".join(entry.focus_areas) or "all"),
+        ("language", entry.language),
+        ("cadence", entry.cadence),
+        ("verified", f"{'yes' if entry.verified else 'no'}, checked {entry.checked}"),
+        ("notes", entry.notes or "none"),
+    ]
+    for key, value in rows:
+        _say(f"  {key + ':':<14} {value}")
+    return EXIT_OK
+
+
+def _write_register_list(ctx: _Context, path: Path, data: dict[str, Any]) -> None:
+    text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    update_register_file(path, text, ctx.config.register.all_paths())
+
+
+def _cmd_sources_add(ctx: _Context, args: argparse.Namespace) -> int:
+    entries = _find_entries(ctx, args.ids)
+    paths = ctx.config.register
+    sources_data, sources = read_json_list(paths.sources, "sources", "sources file")
+    jur_data, jurisdictions = read_json_list(
+        paths.jurisdictions, "jurisdictions", "jurisdictions file"
+    )
+    merged = merge_sources(sources, jurisdictions, entries)
+    if merged.added_jurisdictions:
+        _write_register_list(
+            ctx, paths.jurisdictions, {**jur_data, "jurisdictions": merged.jurisdictions}
+        )
+    if merged.added:
+        _write_register_list(ctx, paths.sources, {**sources_data, "sources": merged.sources})
+    for code in merged.added_jurisdictions:
+        _say(f"added      jurisdiction {code} to {paths.jurisdictions}")
+    for entry in entries:
+        state = "added" if entry.source_id in merged.added else "present"
+        _say(f"{state:<10} {entry.source_id:<34} {entry.access_label:<8} {entry.name}")
+    _say(f"regwatch sources add: {len(merged.added)} added, {len(merged.present)} already present")
+    return EXIT_OK
+
+
+def _cmd_sources_remove(ctx: _Context, args: argparse.Namespace) -> int:
+    path = ctx.config.register.sources
+    data, sources = read_json_list(path, "sources", "sources file")
+    kept = [s for s in sources if str(s.get("source_id", "")) != args.id]
+    if len(kept) == len(sources):
+        raise CommandError(f"no source '{args.id}' in {path}")
+    citing = obligations_citing_source(ctx.config, args.id)
+    if citing:
+        raise CommandError(
+            f"obligations cite source '{args.id}': {', '.join(citing)}; "
+            "change their source_id first"
+        )
+    _write_register_list(ctx, path, {**data, "sources": kept})
+    _say(f"regwatch sources remove: removed {args.id} from {path}")
+    _say("Its snapshot and accepted hash stay in the state directory until you delete them.")
+    return EXIT_OK
+
+
+def _cmd_sources_verify(ctx: _Context, args: argparse.Namespace) -> int:
+    entries = _find_entries(ctx, args.ids) if args.ids else list(_source_catalogue(ctx))
+    fetcher = ctx.live_fetcher()
+    failed = 0
+    for entry in entries:
+        try:
+            body = fetcher.fetch(entry.url)
+        except FetchError as exc:
+            failed += 1
+            _say(f"{'failed':<8} {entry.source_id:<34} {exc}")
+            continue
+        _say(f"{'ok':<8} {entry.source_id:<34} {len(body.encode('utf-8'))} bytes")
+    _say(f"regwatch sources verify: {len(entries) - failed} ok, {failed} failed")
+    _say("The catalogue is not changed; a failure means the address needs checking.")
+    return EXIT_UNVERIFIED if failed else EXIT_OK
+
+
 # --- parser ------------------------------------------------------------------
 
 _Handler = Callable[[_Context, argparse.Namespace], int]
@@ -1055,7 +1240,52 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
         help="print every setting, resolved, including focus areas and file roots",
         epilog=DISCLAIMER,
     )
+    _add_sources_parser(sub, handlers)
     return parser, handlers
+
+
+def _add_sources_parser(sub: Any, handlers: dict[str, _Handler]) -> None:
+    sources = sub.add_parser(
+        "sources",
+        help="list, search, show, add, remove and verify catalogue sources",
+        description="Choose sources to watch from the catalogue that ships with regwatch.",
+        epilog=DISCLAIMER,
+    )
+    actions = sources.add_subparsers(dest="sources_command", required=True, metavar="action")
+
+    def action(name: str, handler: _Handler, help_text: str) -> argparse.ArgumentParser:
+        handlers[f"sources {name}"] = handler
+        parser: argparse.ArgumentParser = actions.add_parser(
+            name, help=help_text, description=help_text, epilog=DISCLAIMER
+        )
+        return parser
+
+    p = action("list", _cmd_sources_list, "list catalogue sources, with filters")
+    p.add_argument("--region", choices=list(REGIONS))
+    p.add_argument("--jurisdiction", help="a jurisdiction code; also matches its subdivisions")
+    p.add_argument("--kind", choices=list(KINDS))
+    p.add_argument("--category", choices=list(CATEGORIES))
+    p.add_argument("--access", choices=list(ACCESS))
+    p.add_argument("--focus", metavar="ID", help="sources for this focus area")
+    p.add_argument("--chosen", action="store_true", help="only sources in your sources file")
+    p.add_argument("--json", action="store_true", help="print JSON instead of lines")
+
+    p = action("search", _cmd_sources_search, "search the catalogue, best match first")
+    p.add_argument("text", help="words to look for")
+    p.add_argument("--json", action="store_true", help="print JSON instead of lines")
+
+    p = action("show", _cmd_sources_show, "show every field of one catalogue source")
+    p.add_argument("id")
+    p.add_argument("--json", action="store_true", help="print JSON instead of lines")
+
+    p = action("add", _cmd_sources_add, "copy catalogue sources into your sources file")
+    p.add_argument("ids", nargs="+", metavar="ID")
+
+    p = action("remove", _cmd_sources_remove, "remove a source from your sources file")
+    p.add_argument("id")
+
+    p = action("verify", _cmd_sources_verify, "fetch catalogue addresses and report each status")
+    p.add_argument("ids", nargs="*", metavar="ID", help="default: every catalogue source")
 
 
 def main(
@@ -1079,8 +1309,11 @@ def main(
         today=today or moment.date(),
         now=moment,
     )
+    command = args.command
+    if command == "sources":
+        command = f"sources {args.sources_command}"
     try:
-        return handlers[args.command](ctx, args)
+        return handlers[command](ctx, args)
     except RegisterError as exc:
         if exc.errors != [str(exc)]:
             for error in exc.errors:
@@ -1089,6 +1322,7 @@ def main(
         return EXIT_INVALID
     except (
         CommandError,
+        CatalogueError,
         ConfigError,
         StateError,
         FetchError,

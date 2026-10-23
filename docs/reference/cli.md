@@ -2,7 +2,7 @@
 
 This page describes the `regwatch` command: its global options, every subcommand with its options, what each one reads and writes, and the exit statuses. It is a reference, so it states facts without instruction. For a guided path see [getting started](../tutorials/getting-started.md).
 
-regwatch flags candidates for human review. It never edits the register or the change log, and nothing it produces is legal advice. The help text of every command ends with that statement.
+regwatch flags candidates for human review. It never edits your obligations or the change log, and nothing it produces is legal advice. The help text of every command ends with that statement.
 
 ## Synopsis
 
@@ -32,11 +32,12 @@ Argument errors detected by the parser also exit with status 2.
 
 ## What Gets Written
 
-Commands read the register and never write it. Writes go to exactly these places. A path you name is refused if it is a register file, `regwatch.toml`, `seen.json`, `ingest-candidates.json`, or anything inside the state or snapshots directory, whatever its case or links. Paths are compared by identity, not by name.
+Commands read the register. Only `sources add` and `sources remove` write it, and only the sources and jurisdictions files. Writes go to exactly these places. A path you name is refused if it is a register file, `regwatch.toml`, `seen.json`, `ingest-candidates.json`, or anything inside the state or snapshots directory, whatever its case or links. Paths are compared by identity, not by name.
 
 | command | writes |
 | --- | --- |
 | `init` | the seven scaffold files, listed under [init](#init), in the project folder |
+| `sources add`, `sources remove` | the sources file, and for `add` the jurisdictions file when a jurisdiction is missing |
 | `capture` | one file per source in the snapshots directory |
 | `check --accept` | `seen.json` in the state directory |
 | `ingest` | `ingest-candidates.json` in the state directory |
@@ -81,6 +82,40 @@ Before asking anything but the folder, `init` lists the files that already exist
 
 ```text
 regwatch config show
+```
+
+## `sources`
+
+Reads the [source catalogue](source-catalogue.md): the file shipped with regwatch, followed by the file named in `[catalogue] extra` when there is one. `list`, `search`, `show` and `verify` work without a configuration file and then read the shipped catalogue only. Each source is shown with its access as `Free`, `Free Key` or `Paid`.
+
+| action | meaning |
+| --- | --- |
+| `list` | one line per entry: id, access, jurisdiction, category and name, in catalogue order |
+| `search TEXT` | the entries that match `TEXT`, best match first, ranked as the source catalogue page describes |
+| `show ID` | every field of one entry |
+| `add ID [ID ...]` | copy entries into your sources file, adding any jurisdiction they need |
+| `remove ID` | remove a source from your sources file |
+| `verify [ID ...]` | fetch the address of each entry, every entry when no id is given, and print `ok` with the size or `failed` with the reason |
+
+| option | applies to | meaning |
+| --- | --- | --- |
+| `--region REGION` | `list` | only this region |
+| `--jurisdiction CODE` | `list` | only this jurisdiction and its subdivisions, so `us` also lists `us-ca` |
+| `--kind KIND` | `list` | only this kind |
+| `--category CATEGORY` | `list` | only this category |
+| `--access ACCESS` | `list` | only `free`, `free-key` or `paid` |
+| `--focus ID` | `list` | entries for this focus area, including entries that list no area, which serve every area |
+| `--chosen` | `list` | only entries whose id is in your sources file |
+| `--json` | `list`, `search`, `show` | print JSON instead of lines: an object with `count` and `sources`, or for `show` one entry. Each entry has every catalogue field and `access_label`. |
+
+`add` never overwrites a different entry: when the sources file already has the id with other content, it exits 2 and writes nothing. An entry already present unchanged is reported `present`. `add` and `remove` need a configuration file. `remove` refuses a source that an obligation row cites, and leaves its snapshot and accepted hash in the state directory. `verify` uses the fetch client with the `[fetch]` settings, or the defaults without a configuration, exits 4 when any address fails, and never changes the catalogue. An id that is not in the catalogue exits 2.
+
+```text
+regwatch sources search "food recalls"
+```
+
+```text
+regwatch sources add us-fda-recalls-rss gb-fsa-food-alerts-api
 ```
 
 ## `validate`

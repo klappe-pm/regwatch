@@ -29,7 +29,9 @@
     "method": {"required": true, "enum": ["poll", "subscribe"]},
     "mechanism": {"required": true, "enum": ["api", "rss", "html", "email-list", "manual"]},
     "cadence": {"required": true},
-    "notes": {"required": false}
+    "notes": {"required": false},
+    "auth": {"required": false, "pattern": "^(query|header):[A-Za-z0-9_-]{1,64}$"},
+    "key_env": {"required": false, "pattern": "^[A-Z][A-Z0-9_]{0,63}$"}
   },
   "category_fields": {
     "category_id": {"required": true, "unique": true, "pattern": "^[a-z0-9-]+$"},

@@ -30,6 +30,7 @@ __all__ = [
     "safe_write_text",
     "save_seen",
     "snapshot_path",
+    "update_register_file",
     "write_snapshot",
     "write_tree",
 ]
@@ -89,6 +90,17 @@ def safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None
             raise
     except OSError as exc:
         raise StateError(f"cannot write {path}: {exc.strerror or exc}") from exc
+
+
+def update_register_file(path: Path, text: str, register_paths: Iterable[Path]) -> None:
+    """Rewrite one register file atomically, while every other register file stays protected.
+
+    This is the only write to a register file, and only ``regwatch sources add``
+    and ``regwatch sources remove`` make it, to the sources and jurisdictions files.
+    """
+    target = path.resolve()
+    others = [p for p in register_paths if Path(p).resolve() != target]
+    safe_write_text(path, text, others)
 
 
 def write_tree(directory: Path, files: Mapping[str, str], *, replace: bool) -> None:

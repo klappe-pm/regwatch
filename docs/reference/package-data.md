@@ -1,6 +1,6 @@
 # Package Data
 
-This page describes how non-Python files ship inside the package and how code finds them. Today there are three: the field rules in `regwatch/data/schema.json`, the focus catalogue in `regwatch/data/focus-areas.json`, and the invented example jurisdictions in `regwatch/data/example-jurisdictions.json`. It covers the rule for locating data, how the build includes it, and how to add another file. It is a reference page, so it states how things are and not how to change them.
+This page describes how non-Python files ship inside the package and how code finds them. Today there are five: the field rules in `regwatch/data/schema.json`, the focus catalogue in `regwatch/data/focus-areas.json`, the invented example jurisdictions in `regwatch/data/example-jurisdictions.json`, the source catalogue in `regwatch/data/source-catalogue.json`, and the jurisdiction names in `regwatch/data/jurisdiction-names.json`. It covers the rule for locating data, how the build includes it, and how to add another file. It is a reference page, so it states how things are and not how to change them.
 
 ## The Rule
 
@@ -21,6 +21,8 @@ A path built from `__file__` breaks when the package is installed from a zip, a 
 | `regwatch/data/schema.json` | `register.load_schema` | the field rules for every register file: required fields, allowed values, patterns, types and references |
 | `regwatch/data/focus-areas.json` | `focus.shipped_catalogue_text`, `focus.load_catalogue` | the shipped focus catalogue; `regwatch init` copies it into each project so the user can edit it. The format is in the [focus catalogue reference](focus-catalogue.md). |
 | `regwatch/data/example-jurisdictions.json` | `onboarding.example_jurisdictions` | the invented jurisdictions that `regwatch init --example` offers; a valid `jurisdictions` list with every coverage set to `tracked` or `aggregate` so a new project has no empty confirmed jurisdiction |
+| `regwatch/data/source-catalogue.json` | `catalogue.load_source_catalogue` | the source catalogue that `regwatch sources` reads; the format and the counts are in the [source catalogue reference](source-catalogue.md) |
+| `regwatch/data/jurisdiction-names.json` | `catalogue.jurisdiction_name` | a readable name for each catalogue jurisdiction code, used when `sources add` adds a jurisdiction to a register |
 | `regwatch/py.typed` | type checkers | marks the package as typed |
 
 ## How the Build Includes It

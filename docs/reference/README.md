@@ -7,6 +7,7 @@ Reference pages describe the machinery: the commands, the configuration keys, th
 - [CLI](cli.md): every subcommand of the `regwatch` command with its options, what it reads and writes, and its exit statuses.
 - [Configuration](configuration.md): every key in `regwatch.toml`, with its type, default and meaning.
 - [Data Files](data-files.md): every register file and every field in it, with the rules the validator applies.
+- [Source Catalogue](source-catalogue.md): the sources `regwatch sources` offers, every field of an entry, the extra catalogue, the search ranking and what ships.
 - [Focus Catalogue](focus-catalogue.md): the shipped focus areas, the catalogue file format, how a profile is built and exactly how candidates are matched and ranked.
 - [Python API](python-api.md): every public function, class and constant in the `regwatch` package.
 - [Source Layout](source-layout.md): the repository tree, and what every module in the `regwatch` package owns and imports.

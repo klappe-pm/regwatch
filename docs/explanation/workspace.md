@@ -23,7 +23,8 @@ The catalogue is package data, `regwatch/data/source-catalogue.json`, a list of 
 | `source_id` | unique id, which becomes the snapshot file name when the source is chosen |
 | `name`, `publisher` | what it is and who publishes it |
 | `jurisdiction`, `region` | where it applies, as an ISO code such as `us`, `us-ca`, `eu`, `gb` or `jp`, and a region for grouping |
-| `kind` | regulator, legislature, gazette, court, standards, recalls, data portal, news, industry or aggregator |
+| `kind` | regulator, legislature, gazette, court, standards, recalls, data portal, news, industry, aggregator, lobbying disclosure, interest group, supplier, market data or forecast |
+| `category` | what the source is about, for grouping: regulation, policy and lobbying, ingredients supply, packaging materials, commodities and forecasts, manufacturing and chemicals, logistics and trade, construction and facilities, or industry news |
 | `mechanism`, `url` | how Regwatch reads it and the exact address, as in a sources file |
 | `access` | `free`, `free-key` or `paid` |
 | `auth`, `key_env`, `signup_url` | for keyed sources, where the key goes in the request, the environment variable that overrides the keychain, and where to get a key |
@@ -36,7 +37,7 @@ Choosing a source copies its entry into the user's own sources file, which stays
 
 ## Search
 
-`regwatch sources search TEXT` ranks entries by how well the text matches the name, publisher, jurisdiction, kind and description, with an exact jurisdiction or id match first. The same ranking serves three places: the search command, the type-ahead in the setup questions (completion through `readline` where the terminal supports it, otherwise a numbered list after each query), and the search box in the web app, which calls the same function through the local server. One ranking function means a source found in one place is found the same way in the others.
+`regwatch sources search TEXT` ranks entries by how well the text matches the id, name, publisher, jurisdiction, region, kind, category and description, with an exact jurisdiction or id match first. The same ranking serves three places: the search command, the type-ahead in the setup questions (completion through `readline` where the terminal supports it, otherwise a numbered list after each query), and the search box in the web app, which calls the same function through the local server. One ranking function means a source found in one place is found the same way in the others.
 
 ## API Keys
 

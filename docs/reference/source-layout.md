@@ -11,7 +11,8 @@ regwatch/
   .github/             issue and pull request templates, the banner, workflows/release.yml
   scripts/             make-banner.py, which draws the README banner
   regwatch/            the package
-    data/              packaged data: schema.json, focus-areas.json, example-jurisdictions.json
+    data/              packaged data: schema.json, focus-areas.json, example-jurisdictions.json,
+                       source-catalogue.json, jurisdiction-names.json
     py.typed           marks the package as typed
   tests/               the test suite
     fixtures/          small hostile and ordinary inputs
@@ -31,7 +32,8 @@ Modules are listed from the bottom of the dependency order to the top. A module 
 | `extract.py` | reducing untrusted content to a signal and hashing it; imports nothing else from the package |
 | `register.py` | the register data model, reading the files, validating them against `data/schema.json`, and building immutable objects |
 | `focus.py` | the focus catalogue, focus profiles and whole-word matching of candidate text; imports `config` and `register` |
-| `state.py` | snapshots, the last-seen state, and `safe_write_text`, `safe_write_bytes` and `write_tree`, the only functions that write files |
+| `catalogue.py` | the source catalogue: loading and validating the shipped and extra files, the one search ranking, filters, and turning a chosen entry into a sources file entry; imports `fetch` for its URL checks |
+| `state.py` | snapshots, the last-seen state, and `safe_write_text`, `safe_write_bytes`, `update_register_file` and `write_tree`, the only functions that write files |
 | `check.py` | change detection and capture, built from `fetch`, `extract`, `register` and `state` |
 | `ingest.py` | building the API query and turning a response into unconfirmed candidates |
 | `impact.py` | exposure, scope and attribute gates, severity scoring, focus ranking and theme findings |
@@ -48,14 +50,14 @@ Modules are listed from the bottom of the dependency order to the top. A module 
 - `fetch.py` is the only module that may import `socket`, `ssl`, `http.client` or `ipaddress`, and the only one that opens a connection. A test checks that it imports no subprocess, shell, pickle or ctypes module and calls no `os.system` or `os.popen`.
 - `extract.py` and `ingest.py` are the only modules that parse fetched content. Neither may evaluate it.
 - `state.py` is the only module that writes files. Every other module that needs a file written calls it.
-- `register.py` and `config.py` are read only with respect to the register. Nothing in the package opens a register file for writing.
+- `register.py` and `config.py` are read only with respect to the register. The one write to a register file is `state.update_register_file`, which `cli.py` calls for `sources add` and `sources remove`, on the sources and jurisdictions files only, with every other register file still protected.
 - `cli.py` is the only module that prints. The other modules return values and raise exceptions, which makes them usable from a script.
 - Every module declares `__all__`. A name that is not in it is internal.
 - Every module is typed and passes `mypy --strict`.
 
 ## Tests by Module
 
-Each module has a test file named for it, apart from `synthesis.py` and `briefing.py`, which share `test_briefs.py`, and `fetch.py`, whose `https` path is tested through a fake opener. `test_focus.py` covers the catalogue, matching, ranking and the focus split in every briefing, and `test_onboarding.py` covers `regwatch init`, `regwatch config show` and the profile table, driving the real prompts through a scripted `input`. `test_hardening.py` and `test_security_review.py` hold the regression tests for the findings of the two security reviews. `test_cli.py` runs every command through `main` with a fake fetcher and a fixed clock. `test_docs.py` checks the documentation and the repository layout, and `test_no_personal_terms.py` checks every tracked file for private terms. See [run the tests](../how-to-guides/run-the-tests.md).
+Each module has a test file named for it, apart from `synthesis.py` and `briefing.py`, which share `test_briefs.py`, and `fetch.py`, whose `https` path is tested through a fake opener. `test_focus.py` covers the catalogue, matching, ranking and the focus split in every briefing, and `test_catalogue.py` covers the catalogue rules, the shipped file, the ranking, the filters and the merge into a sources file, and `test_sources_cli.py` covers every `regwatch sources` action. `test_onboarding.py` covers `regwatch init`, `regwatch config show` and the profile table, driving the real prompts through a scripted `input`. `test_hardening.py` and `test_security_review.py` hold the regression tests for the findings of the two security reviews. `test_cli.py` runs every command through `main` with a fake fetcher and a fixed clock. `test_docs.py` checks the documentation and the repository layout, and `test_no_personal_terms.py` checks every tracked file for private terms. See [run the tests](../how-to-guides/run-the-tests.md).
 
 ## Examples
 

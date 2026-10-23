@@ -15,7 +15,8 @@ Reads `regwatch.toml`. See [configuration](configuration.md) for the keys.
 - `DEFAULT_CONFIG_NAME: str`: `"regwatch.toml"`.
 - `load_config(path: Path) -> Config`: parse and validate a configuration file. Raises `ConfigError`.
 - `ConfigError`: the configuration file is missing, unreadable or invalid.
-- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path` and `profile`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files and the focus catalogue when one is configured, which a user-named output must never overwrite.
+- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path`, `profile` and `catalogue`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files, and the focus catalogue and the extra source catalogue when they are configured, which a user-named output must never overwrite.
+- `CatalogueSettings`: frozen dataclass with `extra`, the `[catalogue]` table.
 - `ProfileSettings`: frozen dataclass with `focus_areas`, `custom_terms` and `catalogue`, the `[profile]` table.
 - `RegisterPaths`: frozen dataclass of the register file paths: `obligations`, `jurisdictions`, `categories`, `sources`, `portfolio`, and the optional `detail`, `changelog`, `enforcement` and `themes`. `all_paths()` returns every configured path, resolved, for write protection.
 - `FetchSettings`: frozen dataclass with `timeout_seconds`, `total_timeout_seconds`, `max_bytes`, `user_agent`, `allow_private_hosts` and `allowed_file_roots`.
@@ -51,8 +52,28 @@ The data model, loading and validation. See [data files](data-files.md).
 - `parse_date(value: str) -> date | None`: parse an ISO date, or return `None`.
 - `split_list(value: str, delimiter: str) -> list[str]`: split a delimited cell into trimmed, non-empty items.
 - `ancestors(jurisdiction_id: str, parents: dict[str, str]) -> list[str]`: the parent chain, nearest first, stopping on a cycle.
+- `read_json_list(path: Path, key: str, label: str) -> tuple[dict[str, Any], list[dict[str, Any]]]`: read a register JSON file and the list of objects under `key`, with the whole object so a rewrite keeps the other keys. Raises `RegisterError`.
+- `obligations_citing_source(config: Config, source_id: str) -> list[str]`: the ids of obligation rows that cite a source.
 - `RegisterError`: the register is unreadable, malformed or invalid; `errors` holds the messages.
 - Frozen dataclasses: `Register`, `Jurisdiction`, `Category`, `Source`, `Obligation`, `Product`, `Portfolio`, `Citation`, `DetailRecord`, `ChangeEvent`, `EnforcementTheme`, `Enforcement` and `Theme`. Their fields match the columns and keys in [data files](data-files.md), with list fields as tuples.
+
+## `catalogue`
+
+The source catalogue. See [source catalogue](source-catalogue.md).
+
+- `load_source_catalogue(focus_ids: Iterable[str], extra: Path | None = None) -> tuple[CatalogueEntry, ...]`: the shipped entries followed by those of the extra file. Raises `CatalogueError`.
+- `parse_source_catalogue(data: object, focus_ids: Iterable[str], label: str = ...) -> tuple[CatalogueEntry, ...]`: validate a decoded catalogue file. Raises `CatalogueError` naming every invalid entry.
+- `entry_from_dict(data: object, focus_ids: Iterable[str], where: str = "entry") -> CatalogueEntry`: validate and build one entry.
+- `rank(entries: Sequence[CatalogueEntry], text: str) -> list[CatalogueEntry]`: the one search ranking, best match first.
+- `filter_entries(entries, *, region=None, jurisdiction=None, kind=None, category=None, access=None, focus=None, chosen=None) -> list[CatalogueEntry]`: the entries that pass every filter given.
+- `entry_to_source(entry: CatalogueEntry, jurisdiction_id: str | None = None) -> dict[str, str]`: the sources file entry for a chosen catalogue entry.
+- `merge_sources(sources, jurisdictions, entries) -> MergeResult`: add entries to a sources list with the jurisdictions they need. Raises `CatalogueError`, changing nothing, when an id is already used by a different entry.
+- `jurisdiction_name(code: str) -> str`: a readable name for a jurisdiction code.
+- `CatalogueEntry`: frozen dataclass with every catalogue field, `auth` as an `Auth` or `None`, plus `access_label`, `keyed` and `to_dict()`.
+- `Auth`: frozen dataclass with `type` and `name`; `to_text()` gives `type:name`.
+- `MergeResult`: frozen dataclass with `sources`, `jurisdictions`, `added`, `present` and `added_jurisdictions`.
+- `CatalogueError`: the catalogue is unreadable or invalid, or a choice cannot be applied.
+- Constants: `FIELDS`, `REGIONS`, `KINDS`, `CATEGORIES`, `MECHANISMS`, `ACCESS`, `CADENCES` and `ACCESS_LABELS`.
 
 ## `state`
 
@@ -60,6 +81,7 @@ Snapshots, the last-seen state and the only write path.
 
 - `safe_write_text(path: Path, text: str, protected: Iterable[Path]) -> None`: write UTF-8 text atomically, replacing any unencodable character. Raises `StateError` if `path` is a protected file, compared by identity with `os.path.samefile` when both exist and by case folded name otherwise, or if it is a directory.
 - `safe_write_bytes(path: Path, data: bytes, protected: Iterable[Path]) -> None`: the same for bytes.
+- `update_register_file(path: Path, text: str, register_paths: Iterable[Path]) -> None`: rewrite one register file atomically while every other register file stays protected. Only `sources add` and `sources remove` call it.
 - `snapshot_path(snapshots_dir: Path, source_id: str) -> Path`: the snapshot file for a source id. Raises `StateError` for an id that does not match `SOURCE_ID_RE`, so an id can never escape the directory.
 - `read_snapshot(snapshots_dir: Path, source_id: str) -> str | None`: the stored text, or `None`.
 - `write_snapshot(snapshots_dir: Path, source_id: str, content: str, protected: Iterable[Path]) -> Path`: store content and return the path.

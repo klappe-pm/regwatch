@@ -4,7 +4,7 @@ This page explains what regwatch protects against and how, for a reader deciding
 
 ## What Regwatch Trusts
 
-regwatch trusts your configuration file and your register files. They are yours, and regwatch reads them as written. It does not trust anything that arrives from outside: feed contents, web pages, API responses, the file you pass to `ingest --from-file`, and the candidates file in the state directory, which a person or another program may have edited. Each is handled as described below.
+regwatch trusts your configuration file and your register files. They are yours, and regwatch reads them as written. It also trusts the source catalogue that ships with it, which is data reviewed in pull requests, and the extra catalogue file you name; a source chosen from either still goes through every fetch check, and every catalogue address must pass the fetch client's URL checks before the catalogue loads. It does not trust anything that arrives from outside: feed contents, web pages, API responses, the file you pass to `ingest --from-file`, and the candidates file in the state directory, which a person or another program may have edited. Each is handled as described below.
 
 It reads no secret. There are no API keys, tokens or passwords anywhere in the configuration, and no setting comes from the environment. Proxy environment variables such as `HTTPS_PROXY` are deliberately ignored; see below.
 
@@ -78,7 +78,7 @@ A hash comparison can be defeated by the content itself: a source that starts se
 
 ## The Write Path
 
-regwatch writes only to its state directory and to paths you name on the command line. Every write goes through one function that writes to a temporary file in the same directory and renames it into place, so an interrupted run never leaves a half-written file.
+regwatch writes only to its state directory, to paths you name on the command line, and, when you run `regwatch sources add` or `regwatch sources remove`, to your sources and jurisdictions files. That rewrite goes through the same atomic write, refuses a file that is a symbolic link, and keeps every other register file protected, and `add` never replaces a different entry that already has the id. Every write goes through one function that writes to a temporary file in the same directory and renames it into place, so an interrupted run never leaves a half-written file.
 
 An output path that is itself a symbolic link is refused with `is a symbolic link`, so a link planted in a shared folder cannot make regwatch replace a file somewhere else. Folders above the file may be links, and regwatch follows them; see the limit below. The new file replaces the one at the literal path: an existing file keeps its permission bits, and a new file gets the permissions your umask allows (usually 0644), as any ordinary program would give it. regwatch writes no file that is meant to be private. Snapshots, the last-seen hashes, ingest candidates and every file you name are ordinary output, and if one holds something you want kept private, set the umask or the folder permissions for it.
 

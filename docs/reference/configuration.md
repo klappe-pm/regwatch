@@ -8,7 +8,7 @@ A complete working file is [examples/regwatch.toml](../../examples/regwatch.toml
 
 ## Register
 
-Required table. The first five keys are required; the last four are optional. regwatch only ever reads these files.
+Required table. The first five keys are required; the last four are optional. regwatch reads these files, and writes only two of them, the sources and jurisdictions files, and only when you run `regwatch sources add` or `regwatch sources remove`.
 
 | key | type | meaning |
 | --- | --- | --- |
@@ -59,6 +59,14 @@ Optional table, written by `regwatch init`. It records what matters to your busi
 | `catalogue` | path, optional | the catalogue shipped with regwatch | a catalogue file that replaces the shipped one; see [focus catalogue](focus-catalogue.md). It is never overwritten by an output path you name. |
 
 With no areas and no custom terms nothing is ranked and every candidate counts as in focus.
+
+## Catalogue
+
+Optional table. A source catalogue of your own, read after the one shipped with regwatch, for sources the shipped catalogue lacks; see [source catalogue](source-catalogue.md).
+
+| key | type | default | meaning |
+| --- | --- | --- | --- |
+| `extra` | path, optional | none | a catalogue file in the shipped format. Every entry follows the shipped rules, and an id the shipped catalogue uses is refused. It is never overwritten by an output path you name. |
 
 ## Ingest
 
