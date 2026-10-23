@@ -82,7 +82,7 @@ regwatch --version
 
 ## Quick Start
 
-Set up your own project. `regwatch init` asks where it lives, which focus areas apply to your business (non-alcoholic beverages, alcoholic beverages, cannabis and hemp products, traditional foods, dietary supplements, infant food, pet food, cosmetics), which jurisdictions to watch, whether local files may be read as sources, and a contact for the User-Agent header:
+Set up your own project. `regwatch init` asks where it lives, which focus areas apply to your business (non-alcoholic beverages, alcoholic beverages, cannabis and hemp products, traditional foods, dietary supplements, infant food, pet food, cosmetics), which jurisdictions to watch, which catalogue sources to follow (search as you type, each marked Free, Free Key or Paid), whether local files may be read as sources, and a contact for the User-Agent header. Then it helps you store any API keys, offers to schedule runs and runs once:
 
 ```bash
 regwatch init --dir ~/my-regwatch

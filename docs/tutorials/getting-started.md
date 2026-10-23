@@ -28,7 +28,7 @@ The [install guide](../how-to-guides/install.md) covers other install methods an
 
 ## Create Your Project
 
-`regwatch init` sets up a project folder: a configuration file, an empty register and your focus areas. Run it and answer the questions. Press Enter to skip any question; the defaults are the safe ones.
+`regwatch init` sets up a project folder: a configuration file, a register with the sources you choose, and your focus areas. Run it and answer the questions. Press Enter to skip any question; the defaults are the safe ones.
 
 ```bash
 regwatch init
@@ -39,10 +39,11 @@ It asks, in order:
 - Where the project lives. It offers the current folder. If you run it from your home directory it asks for a folder instead of assuming one, for example `~/my-regwatch`.
 - Which focus areas apply to your business. It prints a numbered list: non-alcoholic beverages, alcoholic beverages, cannabis and hemp products, traditional foods, dietary supplements, infant food, pet food and cosmetics. Answer with numbers or ids separated by commas, then add any extra words of your own.
 - Which jurisdictions to watch. These are free text; regwatch makes an identifier from each name.
+- Which sources to follow. It lists the catalogue sources that fit your focus areas and jurisdictions, grouped by category and region, each marked Free, Free Key or Paid. Type numbers or ids to select them, or words to search the whole catalogue, and press Enter when you are done. You can choose more later with `regwatch sources`.
 - Whether regwatch may read local files as sources, and from which folders. The default is no.
 - A contact, such as an email address, that is sent in the User-Agent header so site owners can see who is reading their pages.
 
-It then shows a summary and asks before it writes anything. It never overwrites a file that exists unless you add `--force`. To skip the questions, give every answer as a flag, which also makes the command usable in a script:
+It then shows a summary and asks before it writes anything. After writing, it helps you store the key of any source that needs one, offers to schedule regular runs, and offers a first run; each answer defaults to no. It never overwrites a file that exists unless you add `--force`. To skip the questions, give every answer as a flag, which also makes the command usable in a script:
 
 ```bash
 regwatch init --dir ~/my-regwatch --focus pet-food --term "freeze dried" --jurisdiction Westmark --contact me@example.com --yes

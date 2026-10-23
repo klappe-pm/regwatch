@@ -51,7 +51,7 @@ Commands read the register. Only `sources add` and `sources remove` write it, an
 
 ## `init`
 
-Creates a project: `regwatch.toml`, an empty register that validates, and a copy of the focus catalogue. It asks its questions on the terminal with plain prompts and needs no other program. Every question has a flag, a question whose flag is given is not asked, and `--yes` takes the default for every question that has no flag, so the command can run without a terminal. It ignores the global `--config` option: the configuration file is always `regwatch.toml` in the project folder.
+Creates a project: `regwatch.toml`, a register that validates with the sources you choose, and a copy of the focus catalogue, then offers to store keys, schedule runs and run once. It asks its questions on the terminal with plain prompts and needs no other program. Every question has a flag, a question whose flag is given is not asked, and `--yes` takes the default for every question that has no flag, so the command can run without a terminal. It ignores the global `--config` option: the configuration file is always `regwatch.toml` in the project folder.
 
 | option | meaning |
 | --- | --- |
@@ -64,6 +64,15 @@ Creates a project: `regwatch.toml`, an empty register that validates, and a copy
 | `--example` | offer the invented example jurisdictions (Northland, Southvale and their regions) as the default answer. They are never offered otherwise. |
 | `--yes` | take the default for every question without a flag and do not ask to confirm |
 | `--force` | replace files that already exist |
+| `--sources ID,ID` | catalogue sources to watch, separated by commas; an empty value chooses none. Without it the sources are chosen interactively, and `--yes` chooses none. An id not in the catalogue exits 2 and writes nothing. |
+| `--schedule`, `--no-schedule` | after writing, install a recurring run as `schedule --install` does, or do not ask. Without either the question is asked, and `--yes` does not schedule. |
+| `--first-run`, `--no-first-run` | after writing, run `regwatch run` once, or do not ask. Without either the question is asked when sources were chosen, and `--yes` does not run. With a first run, the exit status is that of `run`. |
+
+The questions come in this order: the project folder, focus areas, custom terms, jurisdictions, sources, local file roots, the contact, and the confirmation. After the files are written come the keys of chosen keyed sources, the schedule and the first run. A closed input stream after the files are written counts as no.
+
+Choosing sources: `init` lists the catalogue sources that fit the chosen focus areas and jurisdictions, grouped by category and then region, each numbered with its name, `Free`, `Free Key` or `Paid`, id and description. An entry fits a focus area when it lists the area or lists none, and fits a jurisdiction when its code, the country above a subdivision, or the name of either matches the jurisdiction's id or name; international entries always fit. At the prompt, numbers or ids separated by commas or spaces select a source or unselect a selected one, any other words search the whole catalogue with the [one ranking](source-catalogue.md#search) and print the best 20 results numbered (the numbers then refer to that list), `+` asks for the fields of a source the catalogue lacks and checks them like a catalogue entry, and Enter finishes. When standard input is a terminal, Tab completes catalogue ids and names.
+
+Keys: for each chosen source that needs a key, `init` prints where to get one and, unless `--yes` is given or no keychain tool exists, asks whether to store it now and reads it without echo, as `keys set` does. Otherwise it prints the `keys set` command and the environment variable to use.
 
 Interactive answers are separated by commas. A flag value is one item, so a name that contains a comma is possible only as a flag. An unusable answer is explained and asked again. A closed input stream stops the command with `error:` and a hint to use flags or `--yes`.
 
@@ -73,8 +82,9 @@ Files written, all inside the project folder:
 | --- | --- |
 | `regwatch.toml` | the register paths, the state directory, the `[profile]` table and, only when answered, `[fetch]` |
 | `register/obligations.csv` | the header row only |
-| `register/jurisdictions.json` | one tracked jurisdiction per name |
-| `register/categories.json`, `register/sources.json` | empty lists |
+| `register/jurisdictions.json` | one tracked jurisdiction per name, and a tracked jurisdiction for each chosen source whose jurisdiction is not among them |
+| `register/sources.json` | the chosen sources, as `sources add` writes them |
+| `register/categories.json` | an empty list |
 | `register/portfolio.json` | the name `My portfolio` and no products |
 | `focus-areas.json` | a copy of the shipped catalogue, for you to edit |
 

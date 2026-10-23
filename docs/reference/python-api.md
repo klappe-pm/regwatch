@@ -232,8 +232,9 @@ What `regwatch init` writes and the checks on its answers. Nothing here prints o
 
 - `SCAFFOLD_NAMES: tuple[str, ...]`: the files `init` writes, relative to the project folder.
 - `CATALOGUE_NAME: str`: `"focus-areas.json"`.
-- `InitPlan(directory, focus_areas=(), custom_terms=(), jurisdictions=(), file_roots=(), contact="")`: frozen dataclass of the answers.
-- `scaffold_files(plan: InitPlan) -> dict[str, str]`: the text of every file, keyed by relative path. Raises `OnboardingError` if an answer cannot be stored in TOML.
+- `InitPlan(directory, focus_areas=(), custom_terms=(), jurisdictions=(), file_roots=(), contact="", sources=())`: frozen dataclass of the answers; `sources` holds the chosen `CatalogueEntry` values.
+- `matching_entries(entries, focus_areas, jurisdictions) -> list[CatalogueEntry]`: the catalogue entries that fit the chosen focus areas and jurisdictions, as `init` lists them.
+- `scaffold_files(plan: InitPlan) -> dict[str, str]`: the text of every file, keyed by relative path, with the chosen sources and the jurisdictions they need. Raises `OnboardingError` if an answer cannot be stored in TOML.
 - `parse_focus_choice(tokens, catalogue) -> tuple[str, ...]`: identifiers or one-based numbers to identifiers.
 - `jurisdiction_records(names) -> tuple[dict[str, str], ...]`: tracked jurisdiction records with identifiers made from the names.
 - `example_jurisdictions() -> tuple[dict[str, str], ...]`: the invented jurisdictions that `init --example` offers.
@@ -243,4 +244,4 @@ What `regwatch init` writes and the checks on its answers. Nothing here prints o
 
 ## `cli`
 
-- `main(argv=None, *, fetcher=None, today=None, now=None) -> int`: run the command line and return the exit status. `fetcher`, `today` and `now` let tests and embedders supply a fake network client and a fixed clock.
+- `main(argv=None, *, fetcher=None, today=None, now=None, system=None) -> int`: run the command line and return the exit status. `fetcher`, `today`, `now` and `system` let tests and embedders supply a fake network client, a fixed clock, and a `System` whose runner stands in for the keychain tools, `launchctl` and `crontab`.

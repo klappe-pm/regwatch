@@ -46,10 +46,13 @@ from regwatch.briefing import TIERS, build_briefing
 from regwatch.catalogue import (
     ACCESS,
     CATEGORIES,
+    FIELDS,
     KINDS,
+    MECHANISMS,
     REGIONS,
     CatalogueEntry,
     CatalogueError,
+    entry_from_dict,
     filter_entries,
     load_source_catalogue,
     merge_sources,
@@ -80,6 +83,7 @@ from regwatch.onboarding import (
     clean_terms,
     example_jurisdictions,
     jurisdiction_records,
+    matching_entries,
     parse_focus_choice,
     scaffold_files,
     user_agent_for,
@@ -858,20 +862,310 @@ def _summary(plan: InitPlan, names: Sequence[str], existing: Sequence[str]) -> l
         f"Jurisdictions: {', '.join(j['name'] for j in plan.jurisdictions) or 'none'}",
         f"Local file sources: {', '.join(plan.file_roots) if plan.file_roots else 'not allowed'}",
         f"User agent: {user_agent_for(plan.contact) if plan.contact else 'the default'}",
+        f"Sources: {', '.join(e.source_id for e in plan.sources) or 'none'}",
     ]
     return lines
+
+
+# --- init: choosing sources ---------------------------------------------------
+
+PICK_LIMIT = 20
+_REGION_NAMES = {
+    "north-america": "North America",
+    "latin-america": "Latin America",
+    "europe": "Europe",
+    "asia-pacific": "Asia Pacific",
+    "middle-east-africa": "Middle East and Africa",
+    "global": "Global",
+}
+
+
+def _title(identifier: str) -> str:
+    """``policy-and-lobbying`` as ``Policy and Lobbying``."""
+    words = identifier.split("-")
+    return " ".join(
+        word if index and word in ("and", "of") else word.capitalize()
+        for index, word in enumerate(words)
+    )
+
+
+def _source_line(number: int, entry: CatalogueEntry, chosen: Mapping[str, CatalogueEntry]) -> str:
+    mark = "x" if entry.source_id in chosen else " "
+    return (
+        f"  {number:>3}. [{mark}] {entry.name} ({entry.access_label}), {entry.source_id}: "
+        f"{entry.description}"
+    )
+
+
+def _show_grouped(
+    entries: Sequence[CatalogueEntry], chosen: Mapping[str, CatalogueEntry]
+) -> list[CatalogueEntry]:
+    """Print ``entries`` grouped by category, then region, numbered. Returns them in that order."""
+    order = {category: index for index, category in enumerate(CATEGORIES)}
+    regions = {region: index for index, region in enumerate(REGIONS)}
+    ordered = sorted(entries, key=lambda e: (order.get(e.category, 99), regions.get(e.region, 99)))
+    heading = ""
+    for number, entry in enumerate(ordered, start=1):
+        current = f"{_title(entry.category)}, {_REGION_NAMES.get(entry.region, entry.region)}"
+        if current != heading:
+            heading = current
+            _say(f"{heading}:")
+        _say(_source_line(number, entry, chosen))
+    return ordered
+
+
+def _show_numbered(
+    entries: Sequence[CatalogueEntry], chosen: Mapping[str, CatalogueEntry]
+) -> list[CatalogueEntry]:
+    shown = list(entries[:PICK_LIMIT])
+    for number, entry in enumerate(shown, start=1):
+        _say(_source_line(number, entry, chosen))
+    if len(entries) > PICK_LIMIT:
+        _say(f"  ... and {len(entries) - PICK_LIMIT} more; type more words to narrow the search")
+    if not shown:
+        _say("  no source matches; try other words, or + to add one that is not listed")
+    return shown
+
+
+def _toggle_tokens(
+    answer: str, shown: Sequence[CatalogueEntry], by_id: Mapping[str, CatalogueEntry]
+) -> list[CatalogueEntry] | None:
+    """The entries an answer names by number or id, or None when it is a search instead."""
+    tokens = [token for token in re.split(r"[\s,]+", answer) if token]
+    picked: list[CatalogueEntry] = []
+    for token in tokens:
+        if token.isdecimal() and 1 <= int(token) <= len(shown):
+            picked.append(shown[int(token) - 1])
+        elif token in by_id:
+            picked.append(by_id[token])
+        else:
+            return None
+    return picked
+
+
+def _ask_custom_source(
+    by_id: Mapping[str, CatalogueEntry], today: dt.date
+) -> CatalogueEntry | None:
+    """Ask for the fields of a source the catalogue lacks. None when an answer is unusable."""
+    _say("Add a source that is not listed. Each answer is checked like a catalogue entry.")
+    answers = {
+        "source_id": _prompt("  Id, lowercase words joined by hyphens, such as us-my-feed: "),
+        "name": _prompt("  Name: "),
+        "jurisdiction": _prompt("  Jurisdiction code, such as us, us-ca, eu or intl: ").lower(),
+        "url": _prompt("  https address to watch: "),
+        "mechanism": _prompt(f"  Mechanism, one of {', '.join(MECHANISMS)} [html]: ") or "html",
+        "cadence": _prompt("  Cadence, hourly, daily or weekly [daily]: ") or "daily",
+        "description": _prompt("  One sentence on what it publishes: "),
+    }
+    data: dict[str, Any] = {
+        **answers,
+        "publisher": answers["name"],
+        "region": "global",
+        "kind": "regulator",
+        "category": "regulation",
+        "homepage": answers["url"],
+        "access": "free",
+        "auth": None,
+        "key_env": None,
+        "signup_url": None,
+        "focus_areas": [],
+        "language": "en",
+        "verified": False,
+        "checked": today.isoformat(),
+        "notes": "Added during regwatch init.",
+    }
+    try:
+        entry = entry_from_dict({key: data[key] for key in FIELDS}, (), "the new source")
+    except CatalogueError as exc:
+        _say(f"  {exc}", file=sys.stderr)
+        return None
+    if entry.source_id in by_id:
+        _say(
+            f"  {entry.source_id} is already in the catalogue; choose it by its id", file=sys.stderr
+        )
+        return None
+    return entry
+
+
+class _Completer:
+    """Readline completion of catalogue ids and names, used only on a terminal."""
+
+    def __init__(self, entries: Sequence[CatalogueEntry]) -> None:
+        self.words = sorted({e.source_id for e in entries} | {e.name for e in entries})
+        self.matches: list[str] = []
+
+    def __call__(self, text: str, state: int) -> str | None:
+        if state == 0:
+            low = text.lower()
+            self.matches = [w for w in self.words if w.lower().startswith(low)]
+        return self.matches[state] if state < len(self.matches) else None
+
+
+def _with_completion(ctx: _Context, entries: Sequence[CatalogueEntry]) -> Callable[[], None]:
+    """Turn on completion when standard input is a terminal; return the function that undoes it."""
+    if not ctx.system.stdin_is_terminal():
+        return lambda: None
+    try:
+        import readline
+    except ImportError:  # pragma: no cover (every supported platform has readline)
+        return lambda: None
+    previous, delims = readline.get_completer(), readline.get_completer_delims()
+    readline.set_completer(_Completer(entries))
+    readline.set_completer_delims(",")
+    readline.parse_and_bind("tab: complete")
+
+    def restore() -> None:
+        readline.set_completer(previous)
+        readline.set_completer_delims(delims)
+
+    return restore
+
+
+def _pick_sources(
+    ctx: _Context, catalogue: Sequence[CatalogueEntry], matches: Sequence[CatalogueEntry]
+) -> tuple[CatalogueEntry, ...]:
+    by_id = {entry.source_id: entry for entry in catalogue}
+    chosen: dict[str, CatalogueEntry] = {}
+    _say(f"Sources that match your focus areas and jurisdictions ({len(matches)}):")
+    shown = _show_grouped(matches, chosen)
+    restore = _with_completion(ctx, catalogue)
+    try:
+        while True:
+            answer = _prompt(
+                "Sources: numbers or ids to select or unselect, words to search, "
+                "+ to add one not listed, Enter when done: "
+            )
+            if not answer:
+                break
+            if answer == "+":
+                entry = _ask_custom_source(by_id, ctx.today)
+                if entry is not None:
+                    chosen[entry.source_id] = entry
+                    _say(f"  added {entry.source_id}")
+                continue
+            picked = _toggle_tokens(answer, shown, by_id)
+            if picked is None:
+                shown = _show_numbered(rank(catalogue, answer), chosen)
+                continue
+            for entry in picked:
+                if chosen.pop(entry.source_id, None) is None:
+                    chosen[entry.source_id] = entry
+                    _say(f"  selected {entry.source_id} ({entry.access_label})")
+                else:
+                    _say(f"  unselected {entry.source_id}")
+    finally:
+        restore()
+    return tuple(chosen.values())
+
+
+def _ask_sources(
+    ctx: _Context,
+    args: argparse.Namespace,
+    focus_areas: Sequence[str],
+    jurisdictions: Sequence[dict[str, str]],
+) -> tuple[CatalogueEntry, ...]:
+    catalogue = load_source_catalogue([area.focus_id for area in load_catalogue(None)])
+    if args.sources is not None:
+        by_id = {entry.source_id: entry for entry in catalogue}
+        ids = list(dict.fromkeys(_comma_list(args.sources)))
+        unknown = [source_id for source_id in ids if source_id not in by_id]
+        if unknown:
+            raise CommandError(f"not in the source catalogue: {', '.join(unknown)}")
+        return tuple(by_id[source_id] for source_id in ids)
+    if args.yes:
+        return ()
+    return _pick_sources(ctx, catalogue, matching_entries(catalogue, focus_areas, jurisdictions))
+
+
+# --- init: after writing ------------------------------------------------------
+
+
+def _offer(question: str) -> bool:
+    """Ask a yes or no question after the files are written. A closed input means no."""
+    try:
+        return _prompt(question).lower() in YES
+    except CommandError:
+        return False
+
+
+def _init_keys(ctx: _Context, args: argparse.Namespace, entries: Sequence[CatalogueEntry]) -> None:
+    store = ctx.keystore()
+    for entry in entries:
+        if entry.key_env is None:
+            continue
+        _say(f"{entry.source_id} needs a key ({entry.access_label}).")
+        if entry.signup_url:
+            _say(f"  Get one at {entry.signup_url}")
+        if store.status(entry.key_env).present:
+            _say("  A key is already available.")
+            continue
+        if (
+            args.yes
+            or store.backend is None
+            or not _offer(f"  Store the key for {entry.source_id} now? [y/N]: ")
+        ):
+            _say(f"  Later, run: regwatch --config {ctx.config_path} keys set {entry.source_id}")
+            _say(f"  or set the environment variable {entry.key_env}.")
+            continue
+        try:
+            value = ctx.system.read_secret(clean_line(f"  Key for {entry.source_id} (not shown): "))
+            store.set(entry.key_env, value.strip())
+        except (EOFError, KeyStoreError) as exc:
+            reason = str(exc) if isinstance(exc, KeyStoreError) else "no key was given"
+            _say(f"  {reason}; run 'regwatch keys set {entry.source_id}' later", file=sys.stderr)
+            continue
+        _say(f"  Stored in {store.backend_label}.")
+
+
+def _init_after(ctx: _Context, args: argparse.Namespace, plan: InitPlan) -> int:
+    project = _Context(
+        config_path=plan.directory / SCAFFOLD_NAMES[0],
+        fetcher=ctx.fetcher,
+        today=ctx.today,
+        now=ctx.now,
+        system=ctx.system,
+        clock=ctx.clock,
+    )
+    _init_keys(project, args, plan.sources)
+    schedule = args.schedule
+    if schedule is None:
+        schedule = not args.yes and _offer(
+            "Run capture and check on a schedule (launchd on macOS, cron elsewhere)? [y/N]: "
+        )
+    if schedule:
+        _cmd_schedule(
+            project,
+            argparse.Namespace(install=True, remove=False, every=None, dry_run=False, show=False),
+        )
+    else:
+        _say(f"To schedule runs later: regwatch --config {project.config_path} schedule --install")
+    first = args.first_run
+    if first is None:
+        first = (
+            not args.yes
+            and bool(plan.sources)
+            and _offer("Run a first capture and check now? [y/N]: ")
+        )
+    if first:
+        return _cmd_run(project, argparse.Namespace())
+    return EXIT_OK
 
 
 def _cmd_init(ctx: _Context, args: argparse.Namespace) -> int:
     directory = _init_directory(args)
     existing = _refuse_existing(directory, args.force)
+    focus_areas = _ask_focus(args)
+    custom_terms = _ask_terms(args)
+    jurisdictions = _ask_jurisdictions(args)
+    sources = _ask_sources(ctx, args, focus_areas, jurisdictions)
     plan = InitPlan(
         directory=directory,
-        focus_areas=_ask_focus(args),
-        custom_terms=_ask_terms(args),
-        jurisdictions=_ask_jurisdictions(args),
+        focus_areas=focus_areas,
+        custom_terms=custom_terms,
+        jurisdictions=jurisdictions,
         file_roots=_ask_file_roots(args, directory),
         contact=_ask_contact(args),
+        sources=sources,
     )
     files = scaffold_files(plan)
     _say()
@@ -884,11 +1178,12 @@ def _cmd_init(ctx: _Context, args: argparse.Namespace) -> int:
     _refuse_existing(directory, args.force)
     _write_scaffold(directory, files, replace=args.force)
     _say(f"regwatch init: wrote {len(files)} files in {directory}")
-    _say("Next, describe your products in register/portfolio.json and add sources to")
-    _say("register/sources.json, then check the register:")
+    code = _init_after(ctx, args, plan)
+    _say("Next, describe your products in register/portfolio.json, choose more sources with")
+    _say("'regwatch sources', then check the register:")
     _say(f"  regwatch --config {directory / SCAFFOLD_NAMES[0]} validate")
     _say(NOTICE)
-    return EXIT_OK
+    return code
 
 
 def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
@@ -1573,6 +1868,23 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
         help="use the default for every question that has no flag, and do not ask to confirm",
     )
     p.add_argument("--force", action="store_true", help="replace files that already exist")
+    p.add_argument(
+        "--sources",
+        metavar="ID,ID",
+        help="catalogue sources to watch, separated by commas; an empty value chooses none",
+    )
+    p.add_argument(
+        "--schedule",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="install a recurring run after writing, or with --no-schedule do not ask",
+    )
+    p.add_argument(
+        "--first-run",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="run a first capture and check after writing, or with --no-first-run do not ask",
+    )
 
     p = add("config", _cmd_config, "show the effective configuration")
     actions = p.add_subparsers(dest="config_command", required=True, metavar="action")
