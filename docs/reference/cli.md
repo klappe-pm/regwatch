@@ -359,7 +359,7 @@ The JSON interface the pages use is under `/api/`. Every route needs the session
 | `/api/settings/premium` | POST | sets `[premium] enabled` to `enabled`, true or false |
 | `/api/search` | GET | up to 8 sources, changes and obligations each that match `q` |
 
-Only a run started from the Automations page reaches the network, and only one runs at a time. An error is a JSON object with one short `error` message that never holds file contents: 400 for a bad request, 403 for a refused host, origin or token, 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, a source id already used by a different source, a key with no keychain tool, or a run already in progress, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register, and 500 otherwise.
+Only a run started from the Automations page reaches the network, and only one runs at a time. An error is a JSON object with one short `error` message that never holds file contents: 400 for a bad request, 403 for a refused host, origin or token, 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, a source id already used by a different source, a key with no keychain tool, or a run already in progress, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register, and 500 otherwise. A connection that sends nothing for 30 seconds is closed, and when 32 connections are already being handled a new one is closed without an answer.
 
 ## `premium`
 

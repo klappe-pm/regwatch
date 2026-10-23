@@ -353,6 +353,97 @@ def test_a_change_cannot_carry_the_token_in_its_address(fresh: LocalServer) -> N
     assert fresh.session is None
 
 
+# --- idle and excess connections --------------------------------------------------
+
+
+def test_an_idle_connection_times_out() -> None:
+    from regwatch.server import HANDLER_TIMEOUT_SECONDS, _Handler
+
+    assert HANDLER_TIMEOUT_SECONDS == 30
+    assert _Handler.timeout == HANDLER_TIMEOUT_SECONDS
+
+
+def test_a_connection_that_sends_nothing_frees_its_thread(
+    server: LocalServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The handler timeout reaches the socket, so a silent client cannot hold a thread."""
+    import threading
+
+    from regwatch.server import _Handler
+
+    monkeypatch.setattr(_Handler, "timeout", 0.2)
+    client, end = socket.socketpair()
+    try:
+        worker = threading.Thread(
+            target=server.finish_request, args=(end, ("127.0.0.1", 50000)), daemon=True
+        )
+        worker.start()
+        worker.join(5)
+        assert not worker.is_alive()
+    finally:
+        client.close()
+        end.close()
+
+
+def test_connections_beyond_the_cap_are_closed_at_once(server: LocalServer) -> None:
+    import threading
+    import time
+
+    import regwatch.server as server_module
+
+    held: list[tuple[socket.socket, socket.socket]] = []
+    try:
+        for _ in range(server_module.MAX_CONNECTIONS):
+            client, end = socket.socketpair()
+            held.append((client, end))
+            server.process_request(end, ("127.0.0.1", 50000))
+        assert threading.active_count() >= server_module.MAX_CONNECTIONS
+        extra_client, extra_end = socket.socketpair()
+        server.process_request(extra_end, ("127.0.0.1", 50001))
+        extra_client.settimeout(2)
+        assert extra_client.recv(1) == b""  # closed without being handled
+        extra_client.close()
+    finally:
+        for client, _end in held:
+            client.close()
+    # Once the held connections end, their slots are free again.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        client, end = socket.socketpair()
+        server.process_request(end, ("127.0.0.1", 50002))
+        client.sendall(
+            f"GET /api/status HTTP/1.0\r\nHost: 127.0.0.1:{server.port}\r\n\r\n".encode()
+        )
+        client.settimeout(2)
+        if client.recv(12):
+            client.close()
+            break
+        client.close()
+        time.sleep(0.05)
+    else:
+        pytest.fail("no slot came free after the held connections closed")
+
+
+def test_the_slot_is_released_when_a_thread_cannot_start(
+    server: LocalServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import http.server
+
+    def fail(*args: object) -> None:
+        raise RuntimeError("cannot start a thread")
+
+    monkeypatch.setattr(http.server.ThreadingHTTPServer, "process_request", fail)
+    client, end = socket.socketpair()
+    with pytest.raises(RuntimeError):
+        server.process_request(end, ("127.0.0.1", 50000))
+    client.close()
+    end.close()
+    acquired = [server._slots.acquire(blocking=False) for _ in range(40)]
+    import regwatch.server as server_module
+
+    assert acquired.count(True) == server_module.MAX_CONNECTIONS
+
+
 # --- files ----------------------------------------------------------------------
 
 

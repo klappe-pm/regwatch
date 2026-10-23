@@ -60,6 +60,7 @@ All notable changes to this project are documented in this file. The format foll
 - `regwatch ui`: the token in the address is single use. The first browser that opens it gets a separate random session cookie and the token is spent, so the printed address, the terminal scrollback and the copy in the browser's command line (readable by every local user on Linux) no longer grant access once the browser has opened it. A second use is refused with a message that says to restart the server.
 - Keyed fetches: a response body that echoes the key (as raw text, percent-encoded, HTML-escaped or JSON-escaped) has it replaced with `[key]` before it is returned, so it is never stored in a snapshot. An error message has the key removed before it is cleaned and cut to 1,000 characters and again after cleaning, so a key cut at the limit or split by an invisible character no longer leaves a fragment.
 - `regwatch keys set` on macOS refuses a key that would make the line written to `security -i` longer than 4,095 bytes, which `security` would split at its 4,096 byte buffer and read the tail as a second command. The message says how long the key may be for that key name and names the environment variable to use instead.
+- `regwatch ui`: a connection that makes no progress for 30 seconds is closed, and at most 32 connections are handled at once, so another local program holding idle connections open can no longer exhaust the server's threads.
 
 ### Fixed
 

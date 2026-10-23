@@ -14,7 +14,9 @@ refused when its ``Host`` is not this server's own address, when it changes
 state and its ``Origin`` is not this server's own origin, or when it has no
 valid token. Files are served only from inside the build folder, after symbolic
 links are resolved, with a content security policy that allows no other origin.
-Errors are short JSON messages that hold no file contents. Requests are not
+A connection that makes no progress for 30 seconds is closed, and at most 32
+connections are handled at once, so idle connections cannot exhaust the handler
+threads. Errors are short JSON messages that hold no file contents. Requests are not
 logged, because the first one carries the token in its query.
 """
 
@@ -44,6 +46,13 @@ __all__ = ["LocalServer", "ServerError", "content_security_policy", "web_root"]
 
 HOST = "127.0.0.1"
 MAX_BODY_BYTES = 65_536
+# A connection that sends nothing, or sends a request a byte at a time, is closed
+# after this long without progress, so it cannot hold a handler thread for ever.
+HANDLER_TIMEOUT_SECONDS = 30
+# At most this many connections are handled at once; any more are closed at once.
+# One browser tab opens a handful, so this leaves room for several tabs while a
+# flood of idle connections from another local program cannot exhaust threads.
+MAX_CONNECTIONS = 32
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -124,6 +133,25 @@ class LocalServer(http.server.ThreadingHTTPServer):
         # The session value the launch token was traded for; None until then.
         self.session: str | None = None
         self._exchange_lock = threading.Lock()
+        self._slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        """Hand the connection to a thread, or close it when every slot is taken."""
+        if not self._slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        """Handle one connection in its thread and free its slot when done."""
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
 
     @property
     def url(self) -> str:
@@ -163,6 +191,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     server: LocalServer
     server_version = "regwatch"
     sys_version = ""
+    # Applied to the connection's socket before the request is read.
+    timeout = HANDLER_TIMEOUT_SECONDS
 
     def log_message(self, format: str, *args: Any) -> None:
         """Log nothing: the first request carries the token in its query."""
