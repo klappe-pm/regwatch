@@ -84,6 +84,7 @@ __all__ = [
     "ScheduleState",
     "WorkspaceError",
     "add_sources",
+    "check_key_allowed",
     "chosen_ids",
     "document_bytes",
     "document_plan",
@@ -226,6 +227,17 @@ def keyed_source(
         key_env, signup = PROVIDER_KEYS[source_id]
         return KeyedSource(source_id, key_env, signup)
     raise WorkspaceError(f"'{source_id}' is not a source that needs a key")
+
+
+def check_key_allowed(config: Config | None, source_id: str) -> None:
+    """Refuse to store a language model provider key while premium is off.
+
+    Generated copy is a premium feature, so its provider keys (``llm-anthropic`` and
+    ``llm-openai``) can be stored only with premium on; a key for a source can
+    always be stored. Removing a key is never refused.
+    """
+    if source_id in PROVIDER_KEYS and (config is None or not config.premium.enabled):
+        raise WorkspaceError(premium_refusal("Generated copy"))
 
 
 def key_lookup(store: KeyStore) -> Callable[[str], str | None]:

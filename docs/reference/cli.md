@@ -149,7 +149,7 @@ Keeps the keys that keyed sources need in the system keychain: the macOS login k
 | `list` | each keyed source with `stored`, `set in the environment`, `missing` or `missing (no keychain tool)`; with a configuration the keyed sources of your sources file, without one the keyed catalogue sources |
 | `remove SOURCE_ID` | delete the stored key; says so when the environment variable still supplies one |
 
-`SOURCE_ID` is a keyed source in your sources file or in the catalogue, or `llm-anthropic` or `llm-openai` for the key of a language model provider, kept under the fixed variable `REGWATCH_KEY_ANTHROPIC` or `REGWATCH_KEY_OPENAI`. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, a key too long for the line `security` reads on macOS (3,906 to 4,006 characters depending on the key name), or a machine with neither keychain tool exits 2; the last two name the environment variable to use instead.
+`SOURCE_ID` is a keyed source in your sources file or in the catalogue, or `llm-anthropic` or `llm-openai` for the key of a language model provider, kept under the fixed variable `REGWATCH_KEY_ANTHROPIC` or `REGWATCH_KEY_OPENAI`; a provider key is stored only while premium features are on, and otherwise exits 2 naming `regwatch premium on`. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, a key too long for the line `security` reads on macOS (3,906 to 4,006 characters depending on the key name), or a machine with neither keychain tool exits 2; the last two name the environment variable to use instead.
 
 ## `run`
 
@@ -391,7 +391,7 @@ The JSON interface the pages use is under `/api/`. Every route needs the session
 | `/api/automations` | GET | whether premium is on, the installed schedule (launchd or cron, its cadence and next run), the run records newest first, and whether a run is in progress |
 | `/api/automations/run` | POST | starts the code `regwatch run` runs in a background thread and answers at once; 409 while a run is in progress |
 | `/api/keys` | GET | for each keyed source you watch, its id, its environment variable, whether a key is available and where from (environment or keychain), and its sign-up page; never a key |
-| `/api/keys/set` | POST | stores `key` for `source_id` through the code `keys set` runs; answers only whether one is stored; `source_id` may also be a provider key id, `llm-anthropic` or `llm-openai` |
+| `/api/keys/set` | POST | stores `key` for `source_id` through the code `keys set` runs; answers only whether one is stored; `source_id` may also be a provider key id, `llm-anthropic` or `llm-openai`, which answers 403 while premium is off |
 | `/api/keys/remove` | POST | removes the stored key for `source_id` through the code `keys remove` runs, and says whether the environment still supplies one |
 | `/api/settings` | GET | the focus areas, the focus catalogue, whether premium is on, the design specification with the safe fonts and page sizes, and the `[llm]` settings with, for each provider key, its id, its environment variable, whether one is available and where from, and its sign-up page; never a key |
 | `/api/settings/focus` | POST | sets `[profile] focus_areas` to `focus_areas`, ids from the catalogue |

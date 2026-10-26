@@ -24,7 +24,7 @@ regwatch --config ~/my-register/regwatch.toml llm use openai --model gpt-5-mini
 
 ## Store the Provider Key
 
-Anthropic and OpenAI need a key. Regwatch prints where to get one, then reads it without echoing it and stores it in the system keychain, exactly as it stores a source key; see [keep API keys](keep-api-keys.md).
+Anthropic and OpenAI need a key, which Regwatch stores only while premium features are on. Regwatch prints where to get one, then reads it without echoing it and stores it in the system keychain, exactly as it stores a source key; see [keep API keys](keep-api-keys.md).
 
 ```bash
 regwatch --config ~/my-register/regwatch.toml keys set llm-anthropic

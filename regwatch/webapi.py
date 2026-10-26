@@ -70,6 +70,7 @@ from regwatch.workspace import (
     MAX_SINCE_DAYS,
     WorkspaceError,
     add_sources,
+    check_key_allowed,
     chosen_ids,
     document_bytes,
     document_plan,
@@ -655,7 +656,11 @@ class Api:
         """Store a key, as ``regwatch keys set`` does. The answer never holds the key."""
         source_id = _body_text(body, "source_id", 100)
         key = _body_text(body, "key", 4096)
-        _config, key_env = self._keyed(source_id)
+        config, key_env = self._keyed(source_id)
+        try:
+            check_key_allowed(config, source_id)
+        except WorkspaceError as exc:
+            raise ApiError(403, str(exc)) from exc
         store = self._store()
         if store.backend is None:
             raise ApiError(

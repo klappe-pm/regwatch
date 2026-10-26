@@ -155,6 +155,7 @@ from regwatch.workspace import (
     KeyedSource,
     WorkspaceError,
     add_sources,
+    check_key_allowed,
     chosen_ids,
     document_bytes,
     document_plan,
@@ -1450,6 +1451,10 @@ def _keyed_source(ctx: _Context, source_id: str) -> KeyedSource:
 
 def _cmd_keys_set(ctx: _Context, args: argparse.Namespace) -> int:
     item = _keyed_source(ctx, args.source_id)
+    try:
+        check_key_allowed(ctx.config if ctx.config_path.exists() else None, args.source_id)
+    except WorkspaceError as exc:
+        raise CommandError(str(exc)) from exc
     store = ctx.keystore()
     if store.backend is None:
         raise CommandError(

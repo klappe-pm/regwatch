@@ -45,7 +45,7 @@ A few catalogue sources need a free or paid key. regwatch keeps keys out of ever
 - No message regwatch writes holds a key. The keychain functions name the variable and the exit status of the tool, never the value, and an unusable key is refused without being repeated.
 - Every program is started by one function, `run_command` in `regwatch/system.py`, with an argument list and never a shell, with a 15 second timeout, and with its output captured. Tests replace it, so the suite never touches a real keychain.
 
-The keys of the language model providers are kept the same way under fixed names, `REGWATCH_KEY_ANTHROPIC` and `REGWATCH_KEY_OPENAI`, stored with `regwatch keys set llm-anthropic` or `llm-openai`. A configuration file cannot point a provider at another variable. The Anthropic key goes only in the `x-api-key` header and the OpenAI key only in an `Authorization: Bearer` header, both only over `https` to the provider's own host.
+The keys of the language model providers are kept the same way under fixed names, `REGWATCH_KEY_ANTHROPIC` and `REGWATCH_KEY_OPENAI`, stored with `regwatch keys set llm-anthropic` or `llm-openai`, or the web app's key form, only while premium features are on, because generated copy is one of them; removing one is always allowed. A configuration file cannot point a provider at another variable. The Anthropic key goes only in the `x-api-key` header and the OpenAI key only in an `Authorization: Bearer` header, both only over `https` to the provider's own host.
 
 What this does not cover: anyone who can run programs as your user can read your keychain and your environment, as they could for any other program you use.
 

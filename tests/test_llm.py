@@ -452,11 +452,11 @@ def test_a_provider_key_is_kept_like_a_source_key(
 ) -> None:
     fake = FakeSystem("linux")
     fake.secret = KEY
+    run(project, capsys, "premium", "on")
     code, out, _err = run(project, capsys, "keys", "set", "llm-anthropic", fake=fake)
     assert code == 0 and fake.keychain == {"REGWATCH_KEY_ANTHROPIC": KEY}
     assert "console.anthropic.com" in out and KEY not in out
     assert all(KEY not in " ".join(call) for call in fake.calls)
-    run(project, capsys, "premium", "on")
     code, out, _err = run(project, capsys, "llm", "status", fake=fake)
     assert "REGWATCH_KEY_ANTHROPIC: keychain" in out
     code, out, _err = run(project, capsys, "keys", "remove", "llm-anthropic", fake=fake)

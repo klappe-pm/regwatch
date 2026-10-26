@@ -16,6 +16,7 @@ from conftest import NOW, TODAY, FakeFetcher, FakeSystem
 from test_server import TOKEN, request
 
 import regwatch.design as design_module
+from regwatch.cli import main
 from regwatch.config import Config, DocumentDesign, load_config
 from regwatch.design import (
     LOGO_LOCATION_MESSAGE,
@@ -47,7 +48,7 @@ from regwatch.register import load_register
 from regwatch.sanitize import defang_links, link_like
 from regwatch.server import PREVIEW_POLICY, LocalServer, content_security_policy
 from regwatch.settings import SettingsError, set_design, set_premium
-from regwatch.webapi import Api
+from regwatch.webapi import Api, ApiError
 
 FACTS = [Fact("change:nl-notices", "changes", "Northland notices content changed")]
 
@@ -345,3 +346,57 @@ def test_the_place_is_checked_before_the_disk_is_touched(
     with pytest.raises(DesignError):
         load_logo(outside / "logo.png", [project])
     assert looked == []
+
+
+# --- S7: provider keys only with premium on -----------------------------------------
+
+PROVIDER_KEY = "fake" + "-provider-" + "key-6620"
+
+
+@pytest.mark.parametrize("key_id", ["llm-anthropic", "llm-openai"])
+def test_the_key_route_refuses_a_provider_key_while_premium_is_off(
+    project: Path, key_id: str
+) -> None:
+    fake = FakeSystem("linux")
+    api = Api(project, lambda: TODAY, system=fake.system())
+    with pytest.raises(ApiError) as caught:
+        api.handle("POST", "/api/keys/set", {}, {"source_id": key_id, "key": PROVIDER_KEY})
+    assert caught.value.status == 403 and "regwatch premium on" in caught.value.message
+    assert fake.keychain == {} and PROVIDER_KEY not in caught.value.message
+    set_premium(project, True)
+    status, payload = api.handle(
+        "POST", "/api/keys/set", {}, {"source_id": key_id, "key": PROVIDER_KEY}
+    )
+    assert status == 200 and payload["present"] is True and len(fake.keychain) == 1
+
+
+@pytest.mark.parametrize("key_id", ["llm-anthropic", "llm-openai"])
+def test_keys_set_refuses_a_provider_key_while_premium_is_off(
+    project: Path, capsys: pytest.CaptureFixture[str], key_id: str
+) -> None:
+    fake = FakeSystem("linux")
+    fake.secret = PROVIDER_KEY
+    code = main(["--config", str(project), "keys", "set", key_id], system=fake.system())
+    err = capsys.readouterr().err
+    assert code == 2 and "Generated copy is a premium feature" in err
+    assert "regwatch premium on" in err and fake.keychain == {}
+
+
+def test_keys_set_without_a_configuration_refuses_a_provider_key(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = FakeSystem("linux")
+    fake.secret = PROVIDER_KEY
+    code = main(
+        ["--config", str(tmp_path / "none.toml"), "keys", "set", "llm-openai"],
+        system=fake.system(),
+    )
+    assert code == 2 and "premium feature" in capsys.readouterr().err and fake.keychain == {}
+
+
+def test_a_provider_key_can_still_be_removed_while_premium_is_off(project: Path) -> None:
+    fake = FakeSystem("linux")
+    fake.keychain["REGWATCH_KEY_ANTHROPIC"] = PROVIDER_KEY
+    api = Api(project, lambda: TODAY, system=fake.system())
+    status, payload = api.handle("POST", "/api/keys/remove", {}, {"source_id": "llm-anthropic"})
+    assert status == 200 and payload["removed"] is True and fake.keychain == {}
