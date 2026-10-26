@@ -713,6 +713,39 @@ def test_a_get_error_keeps_its_status_but_reads_no_body() -> None:
     assert caught.value.status == 503 and caught.value.body == ""
 
 
+# --- D1: the help says what the docs say ------------------------------------------------
+
+
+def help_text(capsys: pytest.CaptureFixture[str], *args: str) -> str:
+    with pytest.raises(SystemExit):
+        main([*args, "--help"])
+    return " ".join(capsys.readouterr().out.split())
+
+
+def test_the_help_states_the_ranges_choices_and_defaults(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert "1 to 366 (default: 7)" in help_text(capsys, "newsletter")
+    document = help_text(capsys, "document")
+    assert "digest (the register by jurisdiction)" in document and "(default: briefing)" in document
+    assert "docx (Word) or md (Markdown) (default: html)" in document
+    keys = help_text(capsys, "keys", "set")
+    assert "llm-anthropic and llm-openai store the key of a language model provider" in keys
+    assert "SOURCE_ID a keyed source id, or llm-anthropic or llm-openai" in keys
+    assert "with use only" in help_text(capsys, "llm")
+
+
+@pytest.mark.parametrize("action", ["on", "off", "status"])
+def test_a_model_without_use_is_refused(
+    project: Path, capsys: pytest.CaptureFixture[str], action: str
+) -> None:
+    set_premium(project, True)
+    code = main(["--config", str(project), "llm", action, "--model", "gpt-test"], today=TODAY)
+    err = capsys.readouterr().err
+    assert code == 2 and "--model goes with use" in err
+    assert load_config(project).llm.model == ""
+
+
 # --- T1: the mutations that survived the earlier suite ---------------------------------
 
 

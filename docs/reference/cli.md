@@ -435,7 +435,7 @@ Shows or changes the language model behind generated copy, the `[llm]` table in 
 | `status` | change nothing |
 | `on`, `off` | set `[llm] enabled` |
 | `use PROVIDER` | set `[llm] provider` to `anthropic`, `openai` or `ollama`, and `[llm] model` to `--model`, or to empty for the provider's default |
-| `--model NAME` | with `use`, the model name |
+| `--model NAME` | with `use` only, the model name; with `status`, `on` or `off` it exits 2 rather than drop the name |
 
 Each prints `regwatch llm: <on or off>, <provider>, <model>`, then where the provider's key comes from (`environment`, `keychain`, `missing` or `unavailable`) with the `keys set` command that stores one, or, when no keychain tool was found (`unavailable`), the environment variable to set instead, or for Ollama the address it runs at, which needs no key and no `allow_private_hosts`. The provider keys are kept with `keys set llm-anthropic` and `keys set llm-openai`.
 

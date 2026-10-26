@@ -154,6 +154,9 @@ from regwatch.system import System
 from regwatch.webapi import Api
 from regwatch.wording import count, provider_name
 from regwatch.workspace import (
+    DOCUMENT_FORMATS,
+    DOCUMENT_KINDS,
+    MAX_SINCE_DAYS,
     KeyedSource,
     WorkspaceError,
     add_sources,
@@ -1840,6 +1843,9 @@ def _cmd_newsletter(ctx: _Context, args: argparse.Namespace) -> int:
 
 def _cmd_llm(ctx: _Context, args: argparse.Namespace) -> int:
     """Show or change the generated copy settings, ``[llm]`` in regwatch.toml."""
+    if args.model is not None and args.action != "use":
+        # Without use the model would be dropped silently.
+        raise CommandError("--model goes with use: 'regwatch llm use PROVIDER --model NAME'")
     if args.action != "status":
         _require_premium(ctx, "Generated copy")
         if args.action == "use":
@@ -2083,17 +2089,34 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
         "write a send-ready newsletter from a period's changes as .eml, .html and .txt",
     )
     p.add_argument(
-        "--since", type=int, default=7, metavar="DAYS", help="the period in days (default: 7)"
+        "--since",
+        type=int,
+        default=7,
+        metavar="DAYS",
+        help=f"the period in days, today included, 1 to {MAX_SINCE_DAYS} (default: 7)",
     )
     p.add_argument("--generate", action="store_true", help="have the language model write the copy")
     p.add_argument("--out", help="file stem for the three files; default in the current folder")
 
     p = add("document", _cmd_document, "write a briefing, digest or report in your design")
-    p.add_argument("--kind", choices=["briefing", "digest", "report"], default="briefing")
+    p.add_argument(
+        "--kind",
+        choices=list(DOCUMENT_KINDS),
+        default="briefing",
+        help=(
+            "briefing (the tiered briefing), digest (the register by jurisdiction) or report "
+            "(the change and due alert) (default: briefing)"
+        ),
+    )
     p.add_argument(
         "--tier", choices=list(TIERS), default="v2", help="detail level of a briefing (default: v2)"
     )
-    p.add_argument("--format", choices=["html", "docx", "md"], default="html")
+    p.add_argument(
+        "--format",
+        choices=list(DOCUMENT_FORMATS),
+        default="html",
+        help="html (print it to save a PDF), docx (Word) or md (Markdown) (default: html)",
+    )
     p.add_argument(
         "--generate", action="store_true", help="open with a summary the language model writes"
     )
@@ -2104,7 +2127,10 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
     p.add_argument(
         "provider", nargs="?", choices=list(LLM_PROVIDERS), help="with use: the provider"
     )
-    p.add_argument("--model", help="with use: the model name; default the provider's default")
+    p.add_argument(
+        "--model",
+        help="with use only: the model name; default the provider's default",
+    )
     return parser, handlers
 
 
@@ -2122,11 +2148,16 @@ def _add_keys_parser(sub: Any, handlers: dict[str, _Handler]) -> None:
         help="prompt for a key and store it",
         description=(
             "Say where to get a key for a keyed source, prompt for it without echoing it, "
-            "and store it in the system keychain. The key is never printed."
+            "and store it in the system keychain. The key is never printed. llm-anthropic "
+            "and llm-openai store the key of a language model provider for generated copy."
         ),
         epilog=DISCLAIMER,
     )
-    p.add_argument("source_id", metavar="SOURCE_ID", help="a keyed source id")
+    p.add_argument(
+        "source_id",
+        metavar="SOURCE_ID",
+        help="a keyed source id, or llm-anthropic or llm-openai for a language model key",
+    )
     handlers["keys list"] = _cmd_keys_list
     actions.add_parser(
         "list",
