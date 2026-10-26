@@ -20,7 +20,15 @@ import re
 import unicodedata
 from urllib.parse import urlsplit
 
-__all__ = ["MAX_URL_LENGTH", "clean_line", "clean_text", "escape_markdown", "safe_https_url"]
+__all__ = [
+    "MAX_URL_LENGTH",
+    "clean_line",
+    "clean_text",
+    "defang_links",
+    "escape_markdown",
+    "link_like",
+    "safe_https_url",
+]
 
 MAX_URL_LENGTH = 2000
 _CONTROL = re.compile("[\x00-\x1f\x7f-\x9f]")
@@ -47,6 +55,7 @@ _AUTOLINK_DOT = re.compile(r"(?:www)\.|\.(?=\S)", re.IGNORECASE)
 # character is not a scheme character, so each run is tried once and the check is linear.
 _SCHEME_RUN = re.compile(r"(?<![A-Za-z0-9+.\-])([A-Za-z0-9+.\-]+):(?=[^\s:])")
 _LETTER = re.compile("[A-Za-z]")
+_DOT_LETTER = re.compile(r"\.(?=[^\W\d_])")
 _BACKTICK_RUN = re.compile(r"`+")
 _WHITESPACE = re.compile(r"(\s+)")
 _RULE_ONLY = re.compile(r"[-=\s]+")
@@ -148,6 +157,51 @@ def _escape_token(token: str) -> str:
     escaped = _MD_SPECIAL.sub(r"\\\1", token)
     escaped = _AUTOLINK_COLON.sub(r"\\:", escaped)
     return _AUTOLINK_DOT.sub(_escape_dot, escaped)
+
+
+def _link_like_token(token: str) -> bool:
+    """True when ``token`` is a word a renderer, a mail client or a word processor could link."""
+    if _needs_code_span(token) or "://" in token:
+        return True
+    for match in _AUTOLINK_DOT.finditer(token):
+        after = token[match.end() : match.end() + 1]
+        if match.group(0).lower() == "www." or after.isalpha():
+            return True
+    return False
+
+
+def link_like(text: str) -> bool:
+    """True when a word of ``text`` looks like a link: it holds an ``@``, a ``scheme:``
+    run, ``://``, ``www.`` or a dot followed by a letter, as a web address, an email
+    address and a bare domain such as ``host.com`` all do."""
+    return any(_link_like_token(token) for token in text.split())
+
+
+def _defang_token(token: str) -> str:
+    if not _link_like_token(token):
+        return token
+    token = token.replace("@", "[@]").replace("://", "[:]//")
+    token = _SCHEME_RUN.sub(_defang_scheme, token)
+    return _DOT_LETTER.sub("[.]", token)
+
+
+def _defang_scheme(match: re.Match[str]) -> str:
+    return match.group(1) + ("[:]" if _LETTER.search(match.group(1)) else ":")
+
+
+def defang_links(text: str) -> str:
+    """``text`` with every word that looks like a link written so nothing can link it.
+
+    A mail client links ``host.com``, ``www.host``, ``https://host`` and
+    ``name@host`` on its own, so an address in untrusted text would become a link
+    the reader can click. In each such word ``@`` becomes ``[@]``, the colon of a
+    scheme ``[:]`` and every dot before a letter ``[.]``, the usual way an address is
+    shown so it stays readable but is not a link. Other words are left as they are.
+    """
+    return "".join(
+        part if not part or part.isspace() else _defang_token(part)
+        for part in _WHITESPACE.split(text)
+    )
 
 
 def escape_markdown(text: str) -> str:

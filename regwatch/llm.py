@@ -40,7 +40,7 @@ from regwatch.fetch import Credential, FetchError, SafeFetcher
 from regwatch.impact import Impact
 from regwatch.keys import PROVIDER_KEYS
 from regwatch.register import ChangeEvent, Obligation
-from regwatch.sanitize import clean_text
+from regwatch.sanitize import clean_text, defang_links, link_like
 
 __all__ = [
     "ENDPOINTS",
@@ -92,7 +92,8 @@ SYSTEM_PROMPT = (
     "Use only the facts you are given. Do not add any fact, date, number, name, place or claim "
     "that is not in them, and do not guess. Do not give legal advice. Every passage must cite, "
     "in its cites list, the ids of the facts it draws on, exactly as they are written. "
-    "Write plain sentences with no markup, links, headings or lists. "
+    "Write plain sentences with no markup, links, headings or lists, and no web address, email "
+    "address or domain name; write abbreviations without dots inside them (US, not U.S.). "
     "Answer with one JSON object and nothing else, in this form: "
     '{"passages": [{"section": "opening", "text": "One to three sentences.", '
     '"cites": ["change:example-id"]}]}. '
@@ -379,7 +380,9 @@ def candidate_facts(candidates: Iterable[Mapping[str, Any]]) -> list[Fact]:
 
         def text(key: str, item: Mapping[str, Any] = candidate) -> str:
             value = item.get(key)
-            return clean_text(value, 300) if isinstance(value, str) else ""
+            # The candidates file is untrusted, so an address in it is written so no
+            # mail client or word processor turns it into a link.
+            return defang_links(clean_text(value, 300)) if isinstance(value, str) else ""
 
         facts.append(
             _fact(
@@ -494,6 +497,12 @@ def parse_passages(
             continue
         if not body:
             result.dropped.append(f"passage {number}: no text")
+            continue
+        if link_like(body):
+            # A fetched page can ask the model for a link; generated copy may hold none.
+            result.dropped.append(
+                f"passage {number}: it holds a web address, an email address or a domain name"
+            )
             continue
         if not isinstance(cites, list) or not cites or not all(isinstance(c, str) for c in cites):
             result.dropped.append(f"passage {number}: it cites no fact")

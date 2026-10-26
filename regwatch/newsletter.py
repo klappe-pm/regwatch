@@ -42,7 +42,7 @@ from regwatch.llm import (
 )
 from regwatch.register import ChangeEvent, Register, parse_date
 from regwatch.render import passage_html, render_newsletter_text
-from regwatch.sanitize import clean_text, safe_https_url
+from regwatch.sanitize import clean_text, defang_links, safe_https_url
 
 __all__ = [
     "EMAIL_WIDTH",
@@ -127,8 +127,11 @@ def _plain(value: object, limit: int = 300) -> str:
 
 
 def _candidate_line(candidate: Mapping[str, Any]) -> str:
-    line = f"{_plain(candidate.get('date'), 10)}, {_plain(candidate.get('agency'), 120)}: "
-    line += _plain(candidate.get("headline"), 240)
+    # The candidates file is untrusted: an address in its text is written so no mail
+    # client links it, and the only link is the checked source address.
+    agency = defang_links(_plain(candidate.get("agency"), 120))
+    line = f"{_plain(candidate.get('date'), 10)}, {agency}: "
+    line += defang_links(_plain(candidate.get("headline"), 240))
     link = safe_https_url(candidate.get("source_url"))
     return f"{line} ({link})" if link else line
 
