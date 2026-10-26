@@ -67,6 +67,7 @@ __all__ = [
     "obligation_facts",
     "parse_passages",
     "provider_for",
+    "provider_message",
 ]
 
 KEY_IDS = {"llm-anthropic": "anthropic", "llm-openai": "openai"}
@@ -80,6 +81,13 @@ ENDPOINTS = {
 }
 ANTHROPIC_VERSION = "2023-06-01"
 ANTHROPIC_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+ANTHROPIC_FALLBACK_MODELS = frozenset(
+    {"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
+)
+"""The models the Anthropic server side fallback accepts; any other model is sent without it."""
+RETRY_STATUSES = frozenset({429, 529, *range(500, 600)})
+RETRY_DELAY_SECONDS = 2.0
+MAX_PROVIDER_MESSAGE = 200
 SECTIONS = ("opening", "changes", "candidates", "impacts", "obligations")
 MAX_FACTS = 200
 MAX_FACT_CHARACTERS = 400
@@ -196,37 +204,70 @@ def _count(value: object) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
+def provider_message(body: str) -> str:
+    """The provider's own reason in an error body, cleaned and cut to 200 characters.
+
+    Anthropic and OpenAI answer ``{"error": {"message": ...}}`` and Ollama
+    ``{"error": "..."}``; anything else gives an empty string.
+    """
+    try:
+        data = json.loads(body)
+    except (ValueError, RecursionError):
+        return ""
+    error = data.get("error") if isinstance(data, dict) else None
+    message = error.get("message") if isinstance(error, dict) else error
+    if not isinstance(message, str):
+        return ""
+    return clean_text(message, MAX_PROVIDER_MESSAGE).strip()
+
+
 class AnthropicProvider:
     """The Anthropic Messages API, with the key in the ``x-api-key`` header.
 
-    The request opts in to the server side fallback, so a request the model declines
-    is answered by another model where the API can, and a final refusal is reported.
+    For a model in ``ANTHROPIC_FALLBACK_MODELS`` the request opts in to the server
+    side fallback, so a request the model declines is answered by another model where
+    the API can, and a final refusal is reported; any other model would refuse the
+    request with the option, so it is sent without it. A request the API answers with
+    status 429, 500 to 599 or 529 (busy or failing) is sent once more after a pause.
     """
 
     name = "anthropic"
 
-    def __init__(self, poster: Poster, key: str, model: str) -> None:
+    def __init__(
+        self,
+        poster: Poster,
+        key: str,
+        model: str,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self.poster = poster
         self.credential = Credential("header", "x-api-key", key)
         self.model = model
+        self.sleep = sleep
 
     def complete(self, system: str, prompt: str, max_tokens: int) -> Completion:
-        body = self.poster.post_json(
-            ENDPOINTS["anthropic"],
-            {
-                "model": self.model,
-                "max_tokens": max_tokens,
-                "system": system,
-                "messages": [{"role": "user", "content": prompt}],
-                "output_config": {"effort": "low"},
-                "fallbacks": "default",
-            },
-            credential=self.credential,
-            headers={
-                "anthropic-version": ANTHROPIC_VERSION,
-                "anthropic-beta": ANTHROPIC_FALLBACK_BETA,
-            },
-        )
+        payload: dict[str, object] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": prompt}],
+            "output_config": {"effort": "low"},
+        }
+        headers = {"anthropic-version": ANTHROPIC_VERSION}
+        if self.model in ANTHROPIC_FALLBACK_MODELS:
+            payload["fallbacks"] = "default"
+            headers["anthropic-beta"] = ANTHROPIC_FALLBACK_BETA
+        try:
+            body = self.poster.post_json(
+                ENDPOINTS["anthropic"], payload, credential=self.credential, headers=headers
+            )
+        except FetchError as exc:
+            if exc.status not in RETRY_STATUSES:
+                raise
+            self.sleep(RETRY_DELAY_SECONDS)
+            body = self.poster.post_json(
+                ENDPOINTS["anthropic"], payload, credential=self.credential, headers=headers
+            )
         data = _json(body, self.name)
         if data.get("stop_reason") == "refusal":
             raise GenerationError("the anthropic model declined to write this copy")
@@ -657,7 +698,9 @@ def generate(
         )
     except FetchError as exc:
         finish("error")
-        raise GenerationError(f"the {provider.name} request failed: {exc}") from None
+        detail = provider_message(exc.body)
+        reason = f"{exc}: {detail}" if detail else str(exc)
+        raise GenerationError(f"the {provider.name} request failed: {reason}") from None
     except GenerationError as exc:
         finish(exc.outcome)
         raise

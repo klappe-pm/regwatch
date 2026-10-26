@@ -85,6 +85,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- Anthropic: the server side fallback option and its `anthropic-beta` header were sent for every model, so a model without the fallback (such as Claude Haiku 5.5) refused every request. They are now sent only for `claude-fable-5-1`, `claude-opus-5-5`, `claude-opus-5` and `claude-sonnet-5-5`. A request answered with status 429, 500 to 599 or 529 is sent once more after two seconds, and a failed request now ends with the provider's own reason from its error body, cleaned and cut to 200 characters, instead of the status alone.
 - A generated passage for a section the newsletter does not show (obligations) was counted as generated copy but never shown, and a section's summary could be written from another section's facts. The request now names the sections the output shows, a passage for any other is dropped with the reason, and a passage for a section other than the opening must cite at least one fact of that section.
 - A generated passage that cited more than 20 facts was kept with only the first 20 shown beside it, silently hiding facts it was written from. It is now dropped with the reason.
 - A PNG logo in the newsletter `.eml` file showed as an attachment in some mail programs. The logo part is now `Content-Disposition: inline`, and the `multipart/related` part names its root with `type="text/html"`, as RFC 2387 asks.

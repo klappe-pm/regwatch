@@ -14,14 +14,20 @@ from typing import Any
 
 import pytest
 from conftest import NOW, TODAY, FakeSystem
+from test_fetch import make, web
 from test_llm import FACTS, KEY, FakePoster, FakeProvider, answer
 from test_newsletter import FakePoster as NewsletterPoster
 
 from regwatch.cli import main
 from regwatch.config import load_config
+from regwatch.fetch import Credential, FetchError
 from regwatch.llm import (
+    ANTHROPIC_FALLBACK_BETA,
+    ANTHROPIC_FALLBACK_MODELS,
     MAX_CITES,
+    MAX_PROVIDER_MESSAGE,
     OLLAMA_CONTEXT,
+    RETRY_DELAY_SECONDS,
     AnthropicProvider,
     Fact,
     GenerationError,
@@ -29,6 +35,7 @@ from regwatch.llm import (
     OpenAIProvider,
     generate,
     parse_passages,
+    provider_message,
 )
 from regwatch.newsletter import NEWSLETTER_SECTIONS, newsletter_content
 from regwatch.register import load_register
@@ -223,3 +230,119 @@ def test_the_newsletter_command_drops_a_passage_for_its_missing_section(
     assert "only for these sections: opening, changes, candidates, impacts" in json.dumps(
         poster.payloads[0]
     )
+
+
+# --- C9: the Anthropic fallback only where it exists, one retry, the provider's reason --
+
+DONE = json.dumps({"stop_reason": "end_turn", "content": [{"type": "text", "text": "ok"}]})
+
+
+class SequencePoster(FakePoster):
+    """Answers each POST with the next item: a body, or an error to raise."""
+
+    def __init__(self, *items: str | Exception) -> None:
+        super().__init__()
+        self.items = list(items)
+
+    def post_json(self, url: str, payload: Any, **kwargs: Any) -> str:
+        self.answer = self.items[len(self.calls)]
+        return super().post_json(url, payload, **kwargs)
+
+
+@pytest.mark.parametrize("model", sorted(ANTHROPIC_FALLBACK_MODELS))
+def test_a_fallback_model_is_sent_the_fallback_option_and_its_header(model: str) -> None:
+    poster = FakePoster(DONE)
+    AnthropicProvider(poster, KEY, model).complete("S", "P", 10)
+    call = poster.calls[0]
+    assert call["payload"]["fallbacks"] == "default"
+    assert call["headers"]["anthropic-beta"] == ANTHROPIC_FALLBACK_BETA
+
+
+@pytest.mark.parametrize("model", ["claude-haiku-5-5", "claude-sonnet-5", "m"])
+def test_another_model_is_sent_neither_the_fallback_option_nor_its_header(model: str) -> None:
+    poster = FakePoster(DONE)
+    AnthropicProvider(poster, KEY, model).complete("S", "P", 10)
+    call = poster.calls[0]
+    assert "fallbacks" not in call["payload"]
+    assert call["headers"] == {"anthropic-version": "2023-06-01"}
+    assert call["payload"]["output_config"] == {"effort": "low"}
+
+
+@pytest.mark.parametrize("status", [429, 500, 503, 599, 529])
+def test_a_busy_or_failing_answer_is_retried_once_after_a_pause(status: int) -> None:
+    pauses: list[float] = []
+    busy = FetchError(f"HTTP status {status}", status=status)
+    poster = SequencePoster(busy, DONE)
+    completion = AnthropicProvider(poster, KEY, "m", sleep=pauses.append).complete("S", "P", 10)
+    assert completion.text == "ok" and len(poster.calls) == 2
+    assert pauses == [RETRY_DELAY_SECONDS] and RETRY_DELAY_SECONDS > 0
+    assert poster.calls[0]["payload"] == poster.calls[1]["payload"]
+
+
+def test_a_second_failure_is_not_retried_again() -> None:
+    pauses: list[float] = []
+    busy = FetchError("HTTP status 529", status=529)
+    poster = SequencePoster(busy, busy, DONE)
+    with pytest.raises(FetchError):
+        AnthropicProvider(poster, KEY, "m", sleep=pauses.append).complete("S", "P", 10)
+    assert len(poster.calls) == 2 and len(pauses) == 1
+
+
+@pytest.mark.parametrize("error", [FetchError("HTTP status 400", status=400), FetchError("x")])
+def test_a_request_error_or_a_failed_connection_is_not_retried(error: FetchError) -> None:
+    pauses: list[float] = []
+    poster = SequencePoster(error, DONE)
+    with pytest.raises(FetchError):
+        AnthropicProvider(poster, KEY, "m", sleep=pauses.append).complete("S", "P", 10)
+    assert len(poster.calls) == 1 and pauses == []
+
+
+def test_the_providers_reason_is_added_to_the_error_cleaned_and_cut() -> None:
+    reason = "model: \x1b[31mnot found" + " and more" * 40
+    body = json.dumps({"type": "error", "error": {"type": "not_found", "message": reason}})
+    failure = FetchError("HTTP status 404", status=404, body=body)
+    with pytest.raises(GenerationError) as caught:
+        generate(FakeProvider(failure), FACTS, "x", max_tokens=10)
+    message = str(caught.value)
+    assert message.startswith("the fake request failed: HTTP status 404: model: [31mnot found")
+    assert "\x1b" not in message
+    detail = message.split("HTTP status 404: ", 1)[1]
+    assert len(detail) <= MAX_PROVIDER_MESSAGE == 200
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ('{"error": {"message": "Overloaded"}}', "Overloaded"),
+        ('{"error": "model llama9 not found"}', "model llama9 not found"),
+        ('{"error": {"code": 5}}', ""),
+        ("<html>bad gateway</html>", ""),
+        ("[1]", ""),
+        ("", ""),
+    ],
+)
+def test_the_providers_reason_is_read_from_its_error_body(body: str, expected: str) -> None:
+    assert provider_message(body) == expected
+
+
+def test_an_error_without_a_reason_reads_as_before() -> None:
+    with pytest.raises(GenerationError, match=r"^the fake request failed: HTTP status 502$"):
+        generate(FakeProvider(FetchError("HTTP status 502", status=502)), FACTS, "x", max_tokens=1)
+
+
+def test_a_post_error_keeps_its_status_and_body_without_the_key() -> None:
+    credential = Credential("header", "x-api-key", KEY)
+    reason = json.dumps({"error": {"message": f"bad key {KEY}"}}).encode()
+    head = f"HTTP/1.1 401 Unauthorized\r\nContent-Length: {len(reason)}\r\n\r\n".encode()
+    network = web(head + reason)
+    with pytest.raises(FetchError) as caught:
+        make(network).post_json("https://example.org/", {}, credential=credential)
+    assert caught.value.status == 401
+    assert KEY not in caught.value.body and provider_message(caught.value.body) == "bad key [key]"
+
+
+def test_a_get_error_keeps_its_status_but_reads_no_body() -> None:
+    network = web(b"HTTP/1.1 503 Busy\r\nContent-Length: 4\r\n\r\nbusy")
+    with pytest.raises(FetchError) as caught:
+        make(network).fetch("https://example.org/")
+    assert caught.value.status == 503 and caught.value.body == ""

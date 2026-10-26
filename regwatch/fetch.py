@@ -96,6 +96,7 @@ Wrapper = Callable[[socket.socket, str], socket.socket]
 
 
 MAX_MESSAGE_CHARACTERS = 1000
+MAX_ERROR_BODY_BYTES = 16384
 
 
 class FetchError(Exception):
@@ -112,13 +113,29 @@ class FetchError(Exception):
     limit nor a key a server split with an invisible character survives. The
     uncleaned message is kept in ``raw`` so a caller that learns the secret later
     can rebuild the error the same way; it is never shown.
+
+    ``status`` is the HTTP status the server answered with, when it answered with
+    one that is not a success, and ``body`` is the start of the error body a POST
+    received (at most ``MAX_ERROR_BODY_BYTES``), with the secret removed by
+    ``redact``. The body is not cleaned and is never shown as it is: a caller reads
+    the provider's own message out of it and cleans that.
     """
 
-    def __init__(self, message: object = "", redact: Callable[[str], str] | None = None) -> None:
+    def __init__(
+        self,
+        message: object = "",
+        redact: Callable[[str], str] | None = None,
+        *,
+        status: int | None = None,
+        body: str = "",
+    ) -> None:
         text = str(message)
         if redact is not None:
             text = redact(clean_text(redact(text)))
+            body = redact(body)
         self.raw = text
+        self.status = status
+        self.body = body
         super().__init__(clean_text(text, MAX_MESSAGE_CHARACTERS))
 
 
@@ -401,7 +418,9 @@ class SafeFetcher:
         except FetchError as exc:
             if credential is None:
                 raise
-            raise FetchError(exc.raw, redact=credential.redact) from None
+            raise FetchError(
+                exc.raw, redact=credential.redact, status=exc.status, body=exc.body
+            ) from None
         text = data.decode("utf-8", errors="replace")
         return credential.redact(text) if credential is not None else text
 
@@ -595,7 +614,18 @@ class SafeFetcher:
                     raise FetchError(f"HTTP status {response.status} without a Location header")
                 return b"", _utf8_header(location)
             if not 200 <= response.status < 300:
-                raise FetchError(f"HTTP status {response.status}")
+                detail = ""
+                if method == "POST":
+                    # An API says why it refused in the error body; keep the start of it.
+                    try:
+                        detail = response.read(MAX_ERROR_BODY_BYTES).decode(
+                            "utf-8", errors="replace"
+                        )
+                    except (OSError, http.client.HTTPException, ValueError):
+                        detail = ""
+                raise FetchError(
+                    f"HTTP status {response.status}", status=response.status, body=detail
+                )
             declared = response.getheader("Content-Length")
             if declared is not None and declared.isdigit() and int(declared) > self.max_bytes:
                 raise FetchError(f"response is larger than the limit of {self.max_bytes} bytes")
