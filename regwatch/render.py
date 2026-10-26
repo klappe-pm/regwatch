@@ -66,23 +66,35 @@ FACTS_LABEL = "Written from these facts"
 _FACT_ID = re.compile(r"[a-z]+:[^\s`]{1,120}")
 
 
-def _fact_markdown(fact: str) -> str:
-    """A cited fact, ``id: text``, with the id alone in a code span and the text escaped.
+def _fact_markdown(fact: str, fact_id: str = "") -> str:
+    """A cited fact with its id alone in a code span before it, and the text escaped.
 
-    Escaping the whole line put the id's colon pattern and the colon after it in
-    one code span; the id is written on its own so the separator stays outside.
+    The id is the matching entry of the passage's ``cites``; a fact saved in the
+    older ``id: text`` form carries it at its start. Escaping a whole ``id: text``
+    line put the colon after the id inside the code span; the id is written on its
+    own so the separator stays outside.
     """
-    fact_id, separator, text = clean_text(fact).partition(": ")
-    if separator and _FACT_ID.fullmatch(fact_id):
+    text = clean_text(fact)
+    if not fact_id:
+        head, separator, rest = text.partition(": ")
+        if separator and _FACT_ID.fullmatch(head):
+            fact_id, text = head, rest
+    if fact_id and _FACT_ID.fullmatch(fact_id):
+        prefix = f"{fact_id}: "
+        text = text.removeprefix(prefix)
         return f"`{fact_id}`: {escape_markdown(text)}"
-    return _md(fact)
+    return _md(text)
 
 
 def _passage_markdown(passage: GeneratedPassage) -> list[str]:
     lines = [f"{GENERATED_LABEL}: {_md(passage.text)}", ""]
     if passage.facts:
+        ids = passage.cites if len(passage.cites) == len(passage.facts) else []
         lines += [f"{FACTS_LABEL}:", ""]
-        lines += [f"- {_fact_markdown(fact)}" for fact in passage.facts]
+        lines += [
+            f"- {_fact_markdown(fact, ids[index] if ids else '')}"
+            for index, fact in enumerate(passage.facts)
+        ]
         lines.append("")
     return lines
 
@@ -92,7 +104,8 @@ def render_markdown(doc: Document) -> str:
     lines = [f"# {_md(doc.title)}", ""]
     if doc.subtitle:
         lines += [f"_{_md(doc.subtitle)}_", ""]
-    lines += [f"Generated {_md(doc.generated)}.", ""]
+    if doc.date_line:
+        lines += [_md(doc.date_line), ""]
     for section in doc.sections:
         lines += ["#" * section.level + f" {_md(section.heading)}", ""]
         for passage in section.generated:
@@ -135,7 +148,9 @@ def render_newsletter_text(doc: Document) -> str:
     lines = [_line(doc.title)]
     if doc.subtitle:
         lines.append(_line(doc.subtitle))
-    lines += [f"Generated {_line(doc.generated)}.", ""]
+    if doc.date_line:
+        lines.append(_line(doc.date_line))
+    lines.append("")
     for section in doc.sections:
         lines += [_line(section.heading).upper(), ""]
         for passage in section.generated:
@@ -200,10 +215,11 @@ def render_newsletter_html(doc: Document) -> str:
         body.append(
             f'<p style="margin:6px 0 0 0;color:#555;font-size:14px;">{esc(_line(doc.subtitle))}</p>'
         )
-    body.append(
-        '<p style="margin:6px 0 0 0;color:#888;font-size:12px;">'
-        f"Generated {esc(_line(doc.generated))}.</p>"
-    )
+    if doc.date_line:
+        body.append(
+            '<p style="margin:6px 0 0 0;color:#888;font-size:12px;">'
+            f"{esc(_line(doc.date_line))}</p>"
+        )
     body.append("</td></tr>")
     for section in doc.sections:
         body.append('<tr><td style="padding:16px 32px 0 32px;">')
@@ -326,7 +342,8 @@ def render_document_html(
     if doc.subtitle:
         out.append(f'<p class="subtitle">{esc(_line(doc.subtitle))}</p>')
     out.append("</div></header>")
-    out.append(f'<p class="date">Generated {esc(_line(doc.generated))}.</p>')
+    if doc.date_line:
+        out.append(f'<p class="date">{esc(_line(doc.date_line))}</p>')
     for section in doc.sections:
         tag = f"h{min(max(section.level, 2), 4)}"
         out.append(f"<section><{tag}>{esc(_line(section.heading))}</{tag}>")
@@ -554,7 +571,8 @@ def render_document_xml(
     parts.append(_para(doc.title, style="Title"))
     if doc.subtitle:
         parts.append(_para(doc.subtitle, style="Subtitle"))
-    parts.append(_para(f"Generated {doc.generated}.", style="Small"))
+    if doc.date_line:
+        parts.append(_para(doc.date_line, style="Small"))
     for section in doc.sections:
         level = min(max(section.level - 1, 1), 3)
         parts.append(_para(section.heading, style=f"Heading{level}"))

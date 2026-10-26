@@ -168,9 +168,19 @@ The document model shared by every briefing and renderer.
 - `DISCLAIMER: str`: the standard statement that nothing produced is legal advice.
 - `make_disclaimer(extra: str = "") -> str`: the standard disclaimer followed by `extra`.
 - `Section(heading, level=2, paragraphs=[], bullets=[], generated=[])`: a heading with paragraphs, bullets and generated passages. Level 2 is a section, 3 and 4 are subsections.
-- `GeneratedPassage(text, cites=[], facts=[], provider="", model="")`: text a language model wrote, the ids it cites, the facts behind them as `id: text` lines, and what wrote it. A section's `generated` key is present in `to_dict()` only when it holds a passage.
-- `Document(title, generated, subtitle="", sections=[], disclaimer=DISCLAIMER)`: a titled, dated list of sections. `to_dict()` returns a JSON-serialisable form. `Document.from_dict(data)` builds one from parsed JSON, checks every field, and always restores the disclaimer. Raises `DocumentError`.
+- `GeneratedPassage(text, cites=[], facts=[], provider="", model="")`: text a language model wrote, the ids it cites, the text of the facts behind them in the same order, and what wrote it. HTML, plain text and Word show the facts' text only; Markdown puts each fact's id in a code span before its text. A section's `generated` key is present in `to_dict()` only when it holds a passage.
+- `Document(title, generated, subtitle="", sections=[], disclaimer=DISCLAIMER)`: a titled, dated list of sections. `date_line` is "Prepared 15 November 2026." for the renderers, or empty when the title or the subtitle already says the date. `to_dict()` returns a JSON-serialisable form. `Document.from_dict(data)` builds one from parsed JSON, checks every field, and always restores the disclaimer. Raises `DocumentError`.
 - `DocumentError`: a document model is malformed.
+
+## `wording`
+
+Plain wording for the sentences regwatch builds.
+
+- `count(n, one, many=None) -> str`: `n` with the noun in the right number, zero to nine in words: "one source", "four sources", "12 sources". `number(n)` is the number alone.
+- `join_clauses(clauses) -> str`: the non-empty clauses joined with commas and a final "and". Every summary sentence is built from its non-zero clauses only.
+- `long_date(day)`, `prose_date(value)` and `date_range(start, end)`: "15 November 2026", and a period as "20 to 26 October" or "28 September to 4 October", with the years when it crosses one.
+- `status_phrase(status, detail="")`: what a source check found in words: "first snapshot taken", "content changed", "no snapshot yet", "could not be read (detail)", "looks wrong (detail)".
+- `severity_label(severity)` ("act now" for `act-now`) and `provider_name(provider)` (Anthropic, OpenAI, Ollama).
 
 ## `design`
 
@@ -182,7 +192,7 @@ The logo of the design specification; the rest of `[document]` is checked in `co
 
 ## `newsletter`
 
-- `newsletter_content(register, results, impacts, candidates, today, since_days) -> NewsletterContent`: the period's changed sources, change log events, candidates and act now or high severity impacts; `facts()` gives them as facts for generated copy.
+- `newsletter_content(register, results, impacts, candidates, today, since_days) -> NewsletterContent`: the period's changed sources, change log events, candidates and act now or high severity impacts, with the source names (`names`) and the jurisdiction names (`places`); `facts()` gives them as facts for generated copy.
 - `build_newsletter(register, content, design, generated=None) -> Document`: the newsletter as a document, with generated passages in place of the fixed sentences they cover.
 - `render_email_html(doc, design, footer, *, logo=None, logo_src="") -> str`, `render_email_text(doc, design, footer) -> str` and `email_bytes(subject, text, html_body, now, logo=None) -> bytes`: the HTML email, the text part and the `.eml` file.
 
@@ -191,7 +201,7 @@ The logo of the design specification; the rest of `[document]` is checked in `co
 Generated copy. See [the language model stage](../explanation/security-model.md#the-language-model-stage).
 
 - `Fact(fact_id, section, text)`: one structured fact with its id; `line` is `id: text`.
-- `change_facts(results, names)`, `event_facts(events)`, `candidate_facts(candidates)`, `impact_facts(impacts)`, `obligation_facts(obligations) -> list[Fact]`: facts from check results, change log events, ingest candidates, impacts and obligations, each cleaned and cut to 400 characters.
+- `change_facts(results, names)`, `event_facts(events, places=None)`, `candidate_facts(candidates)`, `impact_facts(impacts, places=None)`, `obligation_facts(obligations, places=None) -> list[Fact]`: facts from check results, change log events, ingest candidates, impacts and obligations, each cleaned and cut to 400 characters. They read as plain sentences: a source by its name and what was found ("FDA news: content changed"), dates in prose, a jurisdiction by its name from `places` (jurisdiction names by id), a severity by its label, and no separator left behind by an empty field.
 - `Provider`: a protocol with `name`, `model` and `complete(system, prompt, max_tokens) -> Completion`. `AnthropicProvider(poster, key, model)`, `OpenAIProvider(poster, key, model)` and `OllamaProvider(poster, model)` implement it over any `Poster`, an object with `post_json`. An answer the provider cut off at `max_tokens` (Anthropic `stop_reason` `max_tokens`, OpenAI `finish_reason` `length`, Ollama `done_reason` `length`) raises `GenerationError` naming `[llm] max_tokens`. Ollama is asked for `format` `json` with `num_predict` set to `max_tokens` and `num_ctx` 16384. `AnthropicProvider(poster, key, model, sleep=time.sleep)` sends `fallbacks` `default` and the `anthropic-beta` header `ANTHROPIC_FALLBACK_BETA` only for a model in `ANTHROPIC_FALLBACK_MODELS` (`claude-fable-5-1`, `claude-opus-5-5`, `claude-opus-5` and `claude-sonnet-5-5`), and sends a request answered with status 429, 500 to 599 or 529 once more after `RETRY_DELAY_SECONDS` (2 seconds).
 - `provider_message(body: str) -> str`: the provider's own reason in an error body (`{"error": {"message": ...}}` or `{"error": "..."}`), cleaned and cut to 200 characters, or an empty string.
 - `GenerationError(message, outcome="refused")`: generated copy could not be written; `outcome` is what the call record says (`refused`, `cut off`, `unreadable` or `error`).

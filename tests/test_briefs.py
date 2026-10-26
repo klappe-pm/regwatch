@@ -44,15 +44,16 @@ def test_daily_brief_with_changes_and_errors(config: Config, register: Register)
     doc = daily_brief(register, results, assess_impacts(register, TODAY), TODAY)
     assert headings(doc) == ["What Changed", "Effective Within 30 Days", "Flagged For Review"]
     changed = section(doc, "What Changed")
-    assert "4 upstream source(s) changed" in changed.paragraphs[0]
-    assert "NEW: nl-notices" in changed.bullets
-    assert "ERROR: broken (fetch failed: boom)" in changed.bullets
+    assert "Four upstream sources have changed" in changed.paragraphs[0]
+    assert "Northland regulator notices feed: first snapshot taken" in changed.bullets
+    assert "broken: could not be read (fetch failed: boom)" in changed.bullets
     assert section(doc, "Effective Within 30 Days").bullets == [
-        "2026-11-15, nl-west: West Region School Food Rule (enacted)"
+        "15 November 2026, Northland West Region: West Region School Food Rule (enacted)"
     ]
     flagged = section(doc, "Flagged For Review").bullets
-    assert (
-        flagged[0] == "Cinnamon Breakfast Cereal: West Region School Food Rule (nl-west, act-now)"
+    assert flagged[0] == (
+        "Cinnamon Breakfast Cereal: West Region School Food Rule "
+        "(Northland West Region, act now severity)"
     )
     assert len(flagged) == 3
     assert doc.title == "Example Pantry Co. regulatory daily brief"
@@ -87,16 +88,15 @@ def test_weekly_synthesis(register: Register) -> None:
         "Cinnamon Breakfast Cereal",
     ]
     summary = section(doc, "Executive Summary").paragraphs
-    assert "models 3 product(s)" in summary[0]
+    assert "models three products" in summary[0]
     assert (
-        "7 obligation(s) across 6 jurisdiction(s), 4 of them with confirmed coverage" in summary[0]
+        "seven obligations across six jurisdictions, four of them with confirmed coverage"
+        in summary[0]
     )
-    assert (
-        "7 candidate impact(s) were flagged: 3 act-now, 0 high, 4 watch and 0 informational"
-        in summary[1]
-    )
-    assert "3 of 3 product(s)" in summary[1]
-    assert "4 obligation(s) reach an effective date within a year" in summary[2]
+    # Only the severities that occur are named.
+    assert "Seven candidate impacts were flagged: three act now and four watch." in summary[1]
+    assert "Three of three products carry at least one." in summary[1]
+    assert "Four obligations reach an effective date within a year" in summary[2]
     assert "Themes" in headings(doc)
     assert section(doc, "Sweeteners and added sugar").bullets[-1].startswith("Action:")
     actions = section(doc, "Suggested Review Items").bullets

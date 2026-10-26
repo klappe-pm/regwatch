@@ -26,11 +26,13 @@ from test_newsletter import append, make_png
 import regwatch.cli
 import regwatch.llm
 import regwatch.webapi
+from regwatch.check import SourceResult
 from regwatch.cli import main
 from regwatch.config import DocumentDesign, load_config
 from regwatch.design import Logo
 from regwatch.document import Document, GeneratedPassage, Section
 from regwatch.fetch import Credential, FetchError
+from regwatch.impact import Impact
 from regwatch.llm import (
     ANTHROPIC_FALLBACK_BETA,
     ANTHROPIC_FALLBACK_MODELS,
@@ -43,6 +45,7 @@ from regwatch.llm import (
     GenerationError,
     OllamaProvider,
     OpenAIProvider,
+    candidate_facts,
     generate,
     parse_passages,
     provider_message,
@@ -51,6 +54,8 @@ from regwatch.newsletter import (
     NEWSLETTER_SECTIONS,
     NOWRAP,
     NewsletterContent,
+    _candidate_line,
+    build_newsletter,
     newsletter_content,
     render_email_html,
 )
@@ -58,6 +63,17 @@ from regwatch.register import load_register
 from regwatch.render import docx_bytes, render_markdown
 from regwatch.settings import set_llm, set_premium
 from regwatch.webapi import Api, ApiError
+from regwatch.wording import (
+    count,
+    date_range,
+    join_clauses,
+    long_date,
+    number,
+    prose_date,
+    provider_name,
+    severity_label,
+    status_phrase,
+)
 from regwatch.workspace import NO_FACTS_NOTICE, SVG_LOGO_NOTE, document_plan
 
 # --- C3: an answer cut off at max_tokens is a clear error -----------------------------
@@ -540,6 +556,140 @@ def test_a_png_logo_gives_no_logo_note(project: Path) -> None:
     set_premium(project, True)
     api = Api(project, lambda: TODAY, clock=lambda: NOW)
     assert api.handle("GET", "/api/newsletter", {"since": "7"}, {})[1]["logo_note"] == ""
+
+
+# --- W1: plain wording -----------------------------------------------------------------
+
+WEB_EXPORT = Path(regwatch.webapi.__file__).resolve().parent / "web"
+PLURAL_HEDGE = re.compile(r"\b[a-z]{2,}\(s\)(?= [a-z]|\.(?:\s|$|\"|<))")
+
+
+def test_count_writes_small_numbers_in_words_and_the_right_plural() -> None:
+    assert count(1, "source") == "one source"
+    assert count(4, "source") == "four sources"
+    assert count(12, "source") == "12 sources"
+    assert count(0, "item") == "no items"
+    assert count(2, "body", "bodies") == "two bodies"
+    assert number(0) == "none" and number(7) == "seven" and number(10) == "10"
+
+
+def test_clauses_are_joined_with_commas_and_a_final_and() -> None:
+    assert join_clauses(["a", "", "b", "c"]) == "a, b and c"
+    assert join_clauses(["", "a", ""]) == "a"
+    assert join_clauses(["a", "b"]) == "a and b"
+    assert join_clauses([]) == ""
+
+
+def test_dates_read_as_prose() -> None:
+    day = dt.date
+    assert long_date(day(2026, 11, 15)) == "15 November 2026"
+    assert date_range(day(2026, 10, 20), day(2026, 10, 26)) == "20 to 26 October"
+    assert date_range(day(2026, 9, 28), day(2026, 10, 4)) == "28 September to 4 October"
+    assert date_range(day(2026, 12, 28), day(2027, 1, 3)) == "28 December 2026 to 3 January 2027"
+    assert date_range(day(2026, 10, 19), day(2026, 10, 19)) == "19 October 2026"
+    assert prose_date("2026-11-15") == "15 November 2026" and prose_date("soon") == "soon"
+
+
+@pytest.mark.parametrize(
+    ("status", "detail", "phrase"),
+    [
+        ("NEW", "", "first snapshot taken"),
+        ("CHANGED", "", "content changed"),
+        ("MISSING", "no snapshot; capture one", "no snapshot yet"),
+        ("ERROR", "HTTP status 500", "could not be read (HTTP status 500)"),
+        ("ERROR", "", "could not be read"),
+        ("SUSPICIOUS", "signal is empty", "looks wrong (signal is empty)"),
+    ],
+)
+def test_a_source_status_reads_as_words(status: str, detail: str, phrase: str) -> None:
+    assert status_phrase(status, detail) == phrase
+
+
+def test_severities_and_providers_have_display_names() -> None:
+    assert severity_label("act-now") == "act now" and severity_label("info") == "information"
+    assert [provider_name(p) for p in ("anthropic", "openai", "ollama")] == [
+        "Anthropic",
+        "OpenAI",
+        "Ollama",
+    ]
+
+
+def test_the_opening_names_only_what_the_period_holds(project: Path) -> None:
+    register = load_register(load_config(project))
+    changed = SourceResult("nl-notices", "CHANGED", "snapshot", "a" * 64)
+    content = newsletter_content(register, [changed], [], [], TODAY, 7)
+    doc = build_newsletter(register, content, DocumentDesign())
+    opening = doc.sections[0].paragraphs[0]
+    assert opening == "From 13 to 19 October: one source change to look at."
+    assert "unconfirmed" not in opening and "0" not in opening
+    assert doc.sections[1].bullets[0] == "Northland regulator notices feed: content changed"
+    assert doc.sections[1].paragraphs == ["In this period one source changed."]
+    empty = newsletter_content(register, [], [], [], TODAY, 7)
+    quiet = build_newsletter(register, empty, DocumentDesign()).sections[0].paragraphs[0]
+    assert quiet == "Nothing changed and nothing new was found from 13 to 19 October."
+
+
+def test_impacts_name_the_jurisdiction_and_the_severity(project: Path) -> None:
+    config = load_config(project)
+    register = load_register(config)
+    impact = Impact("p", "Bar", "o", "Labels", "nl", "enacted", "2026-11-15", (), "act-now")
+    content = newsletter_content(register, [], [impact], [], TODAY, 7)
+    section = build_newsletter(register, content, DocumentDesign()).sections[-1]
+    assert section.bullets == [
+        "Bar: Labels (Northland, act now severity, effective 15 November 2026)"
+    ]
+    assert section.paragraphs == [
+        "One candidate impact of act now or high severity; it needs a person to confirm it."
+    ]
+
+
+def test_a_candidate_with_empty_fields_has_no_stray_separators() -> None:
+    facts = candidate_facts([{"headline": "Fee notice"}, {"agency": "FDA"}, {}])
+    assert [f.text for f in facts] == [
+        "Unconfirmed: Fee notice.",
+        "Unconfirmed, FDA.",
+        "Unconfirmed.",
+    ]
+    assert _candidate_line({"headline": "Fee notice"}) == "Fee notice"
+    assert _candidate_line({"date": "2026-10-15", "agency": "FDA"}) == "15 October 2026, FDA"
+
+
+def test_the_date_line_is_left_out_when_the_title_or_subtitle_says_it() -> None:
+    assert Document("Brief", "2026-10-19").date_line == "Prepared 19 October 2026."
+    assert Document("Brief (2026-10-19)", "2026-10-19").date_line == ""
+    assert Document("News", "2026-10-19", subtitle="13 to 19 October").date_line == ""
+
+
+def test_no_rendered_output_says_s_in_brackets(project: Path, tmp_path: Path) -> None:
+    set_premium(project, True)
+    out = tmp_path / "out"
+    assert (
+        main(
+            ["--config", str(project), "newsletter", "--out", str(out / "n")], today=TODAY, now=NOW
+        )
+        == 0
+    )
+    for kind in ("briefing", "digest", "report"):
+        for fmt in ("html", "md"):
+            args = ["--config", str(project), "document", "--kind", kind, "--format", fmt]
+            assert main([*args, "--out", str(out / kind)], today=TODAY, now=NOW) == 0
+    for command in (["brief", "--kind", "daily"], ["brief", "--kind", "weekly"], ["report"]):
+        assert (
+            main(
+                ["--config", str(project), *command, "--out", str(out / command[-1])],
+                today=TODAY,
+                now=NOW,
+            )
+            == 0
+        )
+    written = [p for p in out.iterdir() if p.suffix in (".html", ".md", ".txt", ".eml")]
+    assert len(written) >= 9
+    for path in written:
+        assert "(s)" not in path.read_text(encoding="utf-8", errors="replace"), path.name
+    for path in WEB_EXPORT.rglob("*"):
+        if path.suffix in (".html", ".txt", ".js"):
+            hits = PLURAL_HEDGE.findall(path.read_text(encoding="utf-8", errors="replace"))
+            assert hits == [], f"{path.name}: {hits}"
 
 
 # --- C11: Word prints the design footer once, in the page footer -----------------------

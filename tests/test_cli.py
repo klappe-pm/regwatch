@@ -320,7 +320,7 @@ def test_brief_writes_markdown_and_model(run, tmp_path: Path) -> None:  # type: 
 def test_daily_brief_fetch_mode(run) -> None:  # type: ignore[no-untyped-def]
     result = run("brief", "--kind", "daily", "--fetch", fetcher=FakeFetcher())
     assert result.code == 0
-    assert "ERROR: nl-notices" in result.out
+    assert "Northland regulator notices feed: could not be read" in result.out
 
 
 def test_brief_includes_ingest_candidates_in_v3(run) -> None:  # type: ignore[no-untyped-def]
@@ -431,9 +431,9 @@ def test_report(run, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     out, payload = tmp_path / "r.md", tmp_path / "r.json"
     result = run("report", "--out", str(out), "--json", str(payload))
     assert result.code == 0
-    assert "4 source change(s) flagged for review" in result.err
+    assert "four source changes flagged for review" in result.err
     text = out.read_text(encoding="utf-8")
-    assert "NEW: nl-notices (snapshot)" in text
+    assert "Northland regulator notices feed: first snapshot taken" in text
     assert "## Obligations Effective Within 365 Days" in text
     data = json.loads(payload.read_text(encoding="utf-8"))
     assert data["window_days"] == 365
@@ -445,8 +445,9 @@ def test_report(run, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
 
 def test_report_notes_missing_snapshots_and_errors(run, config: Config) -> None:  # type: ignore[no-untyped-def]
     (config.snapshots_dir / "nl-notices.txt").unlink()
-    assert "1 source(s) have no snapshot" in run("report").out
-    assert "ERROR: nl-notices" in run("report", "--fetch", fetcher=FakeFetcher()).out
+    assert "One source has no snapshot yet" in run("report").out
+    fetched = run("report", "--fetch", fetcher=FakeFetcher()).out
+    assert "Northland regulator notices feed: could not be read" in fetched
 
 
 def test_export(run, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]

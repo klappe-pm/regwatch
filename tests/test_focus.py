@@ -339,9 +339,12 @@ def test_candidates_are_split_and_each_group_is_capped(register: Register) -> No
     assert names[start + 2] == "Newly Detected Outside Your Focus Areas, Unconfirmed"
     assert names[start + 3] == "2026-10-09: Fee schedule"
     assert "2026-10-08: Another fee" not in names
-    assert "3 item(s)" in section(doc, "Newly Detected, Unconfirmed").paragraphs[0]
     assert (
-        "2 item(s)"
+        "Three items from the ingest feed"
+        in section(doc, "Newly Detected, Unconfirmed").paragraphs[0]
+    )
+    assert (
+        "Two items from the ingest feed mention none"
         in section(doc, "Newly Detected Outside Your Focus Areas, Unconfirmed").paragraphs[0]
     )
 

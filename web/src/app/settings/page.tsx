@@ -17,6 +17,7 @@ import {
 import { postJson, useApi } from "@/lib/api";
 import { colorWarning, contrastWithWhite } from "@/lib/contrast";
 import { sampleTitle } from "@/lib/design-title";
+import { providerName } from "@/lib/labels";
 import type { DesignSettings, LlmSettings, ProviderKey, Settings } from "@/lib/types";
 
 type Saved = (message: string) => void;
@@ -232,7 +233,7 @@ function ProviderKeyRow({ row, onSaved }: { row: ProviderKey; onSaved: Saved }) 
     setValue("");
     try {
       await postJson("/api/keys/set", { source_id: row.id, key });
-      onSaved(`Stored the ${row.provider} key in the keychain.`);
+      onSaved(`Stored the ${providerName(row.provider)} key in the keychain.`);
     } catch (reason) {
       onSaved(reason instanceof Error ? reason.message : "The key could not be stored.");
     }
@@ -241,7 +242,7 @@ function ProviderKeyRow({ row, onSaved }: { row: ProviderKey; onSaved: Saved }) 
   async function remove() {
     try {
       await postJson("/api/keys/remove", { source_id: row.id });
-      onSaved(`Removed the ${row.provider} key from the keychain.`);
+      onSaved(`Removed the ${providerName(row.provider)} key from the keychain.`);
     } catch (reason) {
       onSaved(reason instanceof Error ? reason.message : "The key could not be removed.");
     }
@@ -257,7 +258,7 @@ function ProviderKeyRow({ row, onSaved }: { row: ProviderKey; onSaved: Saved }) 
           type="password"
           autoComplete="off"
           spellCheck={false}
-          aria-label={`Key for ${row.provider}`}
+          aria-label={`Key for ${providerName(row.provider)}`}
           placeholder="Paste the key"
           className={`${CONTROL} w-48`}
           value={value}

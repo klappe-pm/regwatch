@@ -1,5 +1,16 @@
 /** Display names for the values the server sends as identifiers. */
 
+/** A language model provider's own name: Anthropic, OpenAI, Ollama. */
+export const PROVIDERS: Record<string, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  ollama: "Ollama",
+};
+
+export function providerName(provider: string): string {
+  return PROVIDERS[provider] ?? provider;
+}
+
 export const CATEGORIES: [string, string][] = [
   ["regulation", "Regulation"],
   ["policy-and-lobbying", "Policy and Lobbying"],

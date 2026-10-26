@@ -23,7 +23,10 @@ export function copyNotice(what: "HTML" | "text", html: string): string {
  */
 export function generateNotice(result: GenerateOutcome): string {
   if (result.notice) return result.notice;
-  return result.dropped.length
-    ? `Generated. ${result.dropped.length} passage(s) were left out because they cited facts they were not given.`
-    : "Generated. Check each passage against the facts listed under it.";
+  const left = result.dropped.length;
+  if (!left) return "Generated. Check each passage against the facts listed under it.";
+  const what = left === 1 ? "One passage was" : `${left} passages were`;
+  // Each reason says why: a fact it was not given, a number or link it made up, a
+  // section the output does not show, and so on.
+  return `Generated. ${what} left out: ${result.dropped.join("; ")}. Check the rest against the facts listed under each.`;
 }

@@ -619,6 +619,7 @@ def document_plan(
         raise WorkspaceError(f"the tier must be one of {', '.join(TIERS)}")
     register = load_register(config)
     upcoming = upcoming_obligations(register.obligations, DOCUMENT_WINDOW_DAYS, today)
+    places = {j.jurisdiction_id: j.name for j in register.jurisdictions}
     limit = DOCUMENT_FACT_LIMIT
     if kind == "briefing":
         focus = build_profile(config.profile)
@@ -630,19 +631,19 @@ def document_plan(
         events = sorted(register.changelog, key=lambda e: e.date, reverse=True)[:8]
         urgent = [i for i in impacts if i.severity in ("act-now", "high")][:10]
         facts = [
-            *event_facts(events),
+            *event_facts(events, places),
             *candidate_facts(candidates[:8]),
-            *impact_facts(urgent),
-            *obligation_facts(upcoming[:10]),
+            *impact_facts(urgent, places),
+            *obligation_facts(upcoming[:10], places),
         ]
     elif kind == "digest":
         doc = digest_document(register, today, DOCUMENT_WINDOW_DAYS)
-        facts = obligation_facts(upcoming[:limit])
+        facts = obligation_facts(upcoming[:limit], places)
     else:
         results = check_sources(register.sources, load_seen(config.seen_path), config.snapshots_dir)
         names = {s.source_id: s.name for s in register.sources}
         doc = report_document(register, results, today, DOCUMENT_WINDOW_DAYS)
-        facts = [*change_facts(results, names)[:limit], *obligation_facts(upcoming[:limit])]
+        facts = [*change_facts(results, names)[:limit], *obligation_facts(upcoming[:limit], places)]
     doc.title = config.document.title(doc.title, doc.generated)
     return doc, facts
 

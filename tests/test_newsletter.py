@@ -202,9 +202,10 @@ def test_generated_copy_is_labelled_kept_with_its_facts_and_recorded(
     assert "left out a generated passage" in err and "change:no-such-source" in err
     page = (tmp_path / "n.html").read_text(encoding="utf-8")
     assert ">Generated</span>Four &lt;b&gt;sources&lt;/b&gt; moved this month." in page
-    assert "change:nl-notices: Northland regulator notices feed is new" in page
+    assert "<li>Northland regulator notices feed: first snapshot taken</li>" in page
+    assert "change:nl-notices" not in page
     # The section whose passage was dropped keeps its fixed sentence.
-    assert "development(s) were recorded in the change log" in page
+    assert "In this period four sources changed." in page and "(s)" not in page
     text = (tmp_path / "n.txt").read_text(encoding="utf-8")
     assert "[Generated] Four <b>sources</b> moved this month." in text
     prompt = json.dumps(poster.payloads[0])
@@ -270,6 +271,6 @@ def test_the_content_keeps_only_the_period(project: Path) -> None:
     assert content.candidates == () and content.changes == () and content.impacts == ()
     doc = build_newsletter(register, content, DocumentDesign())
     # Thirty days ending today, today included.
-    assert doc.subtitle == "2026-09-20 to 2026-10-19"
+    assert doc.subtitle == "20 September to 19 October"
     assert "No candidate impact" in doc.sections[-1].paragraphs[0]
     assert change_facts([], {}) == []

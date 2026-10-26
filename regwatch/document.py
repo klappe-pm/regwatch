@@ -15,6 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from regwatch.register import parse_date
+from regwatch.wording import MONTHS, long_date
+
 __all__ = [
     "DISCLAIMER",
     "Document",
@@ -110,6 +113,24 @@ class Document:
     subtitle: str = ""
     sections: list[Section] = field(default_factory=list)
     disclaimer: str = DISCLAIMER
+
+    @property
+    def date_line(self) -> str:
+        """ "Prepared 15 November 2026.", or "" when the title or subtitle already says the date.
+
+        A newsletter's subtitle names its period and a title format may carry the date,
+        so a separate date line there only repeats it.
+        """
+        if not self.generated:
+            return ""
+        day = parse_date(self.generated)
+        said = [self.generated]
+        if day is not None:
+            said += [long_date(day), f"{day.day} {MONTHS[day.month - 1]}"]
+        heading = f"{self.title} {self.subtitle}"
+        if any(form in heading for form in said):
+            return ""
+        return f"Prepared {long_date(day) if day is not None else self.generated}."
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serialisable form of the document."""

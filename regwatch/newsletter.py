@@ -23,7 +23,7 @@ import email.policy
 import html
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email.message import EmailMessage
 from email.utils import format_datetime
 from typing import Any
@@ -44,6 +44,14 @@ from regwatch.llm import (
 from regwatch.register import ChangeEvent, Register, parse_date
 from regwatch.render import passage_html, render_newsletter_text
 from regwatch.sanitize import clean_text, defang_links, safe_https_url
+from regwatch.wording import (
+    count,
+    date_range,
+    join_clauses,
+    prose_date,
+    severity_label,
+    status_phrase,
+)
 
 __all__ = [
     "EMAIL_WIDTH",
@@ -81,14 +89,16 @@ class NewsletterContent:
     candidates: tuple[Mapping[str, Any], ...]
     impacts: tuple[Impact, ...]
     names: Mapping[str, str]
+    places: Mapping[str, str] = field(default_factory=dict)
+    """Jurisdiction names by id, so a reader sees "United States", not "us"."""
 
     def facts(self) -> list[Fact]:
         """The facts generated copy may be written from: every item in the newsletter."""
         return [
             *change_facts(self.changes, self.names),
-            *event_facts(self.events),
+            *event_facts(self.events, self.places),
             *candidate_facts(self.candidates),
-            *impact_facts(self.impacts),
+            *impact_facts(self.impacts, self.places),
         ]
 
 
@@ -124,6 +134,7 @@ def newsletter_content(
         candidates=tuple(c for c in candidates if in_period(c.get("date")))[:MAX_ITEMS],
         impacts=tuple(i for i in impacts if i.severity in ("act-now", "high"))[:MAX_IMPACTS],
         names={s.source_id: s.name for s in register.sources},
+        places={j.jurisdiction_id: j.name for j in register.jurisdictions},
     )
 
 
@@ -135,10 +146,20 @@ def _candidate_line(candidate: Mapping[str, Any]) -> str:
     # The candidates file is untrusted: an address in its text is written so no mail
     # client links it, and the only link is the checked source address.
     agency = defang_links(_plain(candidate.get("agency"), 120))
-    line = f"{_plain(candidate.get('date'), 10)}, {agency}: "
-    line += defang_links(_plain(candidate.get("headline"), 240))
+    headline = defang_links(_plain(candidate.get("headline"), 240))
+    when = prose_date(_plain(candidate.get("date"), 10))
+    lead = ", ".join(part for part in (when, agency) if part)
+    line = f"{lead}: {headline}" if lead and headline else lead or headline
     link = safe_https_url(candidate.get("source_url"))
     return f"{line} ({link})" if link else line
+
+
+def _impact_line(impact: Impact, places: Mapping[str, str]) -> str:
+    place = places.get(impact.jurisdiction, impact.jurisdiction)
+    details = [place, f"{severity_label(impact.severity)} severity"]
+    if impact.effective_date:
+        details.append(f"effective {prose_date(impact.effective_date)}")
+    return f"{impact.product_name}: {impact.obligation_title} ({', '.join(details)})"
 
 
 def build_newsletter(
@@ -155,23 +176,42 @@ def build_newsletter(
 
     changes, events = content.changes, content.events
     candidates, impacts = content.candidates, content.impacts
+    period = date_range(content.start, content.end)
+    unread = [r for r in changes if r.needs_attention]
+    moved = [r for r in changes if not r.needs_attention]
+    clauses = [
+        count(len(moved), "source change") + " to look at" if moved else "",
+        count(len(unread), "source") + " that could not be checked" if unread else "",
+        count(len(events), "recorded development") if events else "",
+        count(len(candidates), "unconfirmed item") + " from the feed" if candidates else "",
+        count(len(impacts), "candidate impact") + " of act now or high severity" if impacts else "",
+    ]
     opening_text = (
-        f"From {content.start.isoformat()} to {content.end.isoformat()}: "
-        f"{len(changes)} source change(s) to look at, {len(events)} recorded development(s), "
-        f"{len(candidates)} unconfirmed item(s) from the feed and {len(impacts)} candidate "
-        "impact(s) of act now or high severity."
+        f"From {period}: {join_clauses(clauses)}."
+        if any(clauses)
+        else f"Nothing changed and nothing new was found from {period}."
     )
     paragraphs, passages = summary("opening", opening_text)
     sections = [Section("In This Issue", paragraphs=paragraphs, generated=passages)]
 
     changed_lines = [
-        f"{r.status}: {content.names.get(r.source_id, r.source_id)}"
-        + (f" ({_plain(r.detail, 200)})" if r.detail else "")
+        f"{content.names.get(r.source_id, r.source_id)}: "
+        f"{status_phrase(r.status, _plain(r.detail, 200))}"
         for r in changes
-    ] + [f"{e.date}, {e.jurisdiction}: {e.headline}" for e in events]
+    ] + [
+        f"{prose_date(e.date)}, {content.places.get(e.jurisdiction, e.jurisdiction)}: {e.headline}"
+        for e in events
+    ]
+    clauses = [
+        f"{count(len(moved), 'source')} changed" if moved else "",
+        f"{count(len(unread), 'source')} could not be checked" if unread else "",
+        f"{count(len(events), 'development')} {'was' if len(events) == 1 else 'were'} "
+        "recorded in the change log"
+        if events
+        else "",
+    ]
     fixed = (
-        f"{len(changes)} source(s) changed or could not be read, and {len(events)} development(s) "
-        "were recorded in the change log in this period."
+        f"In this period {join_clauses(clauses)}."
         if changed_lines
         else "No source changed and no development was recorded in this period."
     )
@@ -181,8 +221,10 @@ def build_newsletter(
     )
 
     fixed = (
-        f"{len(candidates)} item(s) from the ingest feed need a person to confirm them before "
-        "they are added to the change log."
+        f"{count(len(candidates), 'item').capitalize()} from the ingest feed "
+        f"{'needs' if len(candidates) == 1 else 'need'} a person to confirm "
+        f"{'it' if len(candidates) == 1 else 'them'} before "
+        f"{'it is' if len(candidates) == 1 else 'they are'} added to the change log."
         if candidates
         else "The ingest feed found nothing new in this period."
     )
@@ -197,8 +239,9 @@ def build_newsletter(
     )
 
     fixed = (
-        f"{len(impacts)} candidate impact(s) of act now or high severity; each needs a person "
-        "to confirm it."
+        f"{count(len(impacts), 'candidate impact').capitalize()} of act now or high severity; "
+        + ("it needs" if len(impacts) == 1 else "each needs")
+        + " a person to confirm it."
         if impacts
         else "No candidate impact of act now or high severity."
     )
@@ -207,19 +250,14 @@ def build_newsletter(
         Section(
             "Impacts To Review",
             paragraphs=paragraphs,
-            bullets=[
-                f"{i.product_name}: {i.obligation_title} ({i.jurisdiction}, {i.severity}"
-                + (f", effective {i.effective_date}" if i.effective_date else "")
-                + ")"
-                for i in impacts
-            ],
+            bullets=[_impact_line(i, content.places) for i in impacts],
             generated=passages,
         )
     )
     today = content.end.isoformat()
     return Document(
         title=design.title(f"{register.portfolio.name} regulatory newsletter", today),
-        subtitle=f"{content.start.isoformat()} to {today}",
+        subtitle=period,
         generated=today,
         sections=sections,
         disclaimer=make_disclaimer(register.portfolio.disclaimer),

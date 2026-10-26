@@ -152,6 +152,7 @@ from regwatch.synthesis import (
 )
 from regwatch.system import System
 from regwatch.webapi import Api
+from regwatch.wording import count, provider_name
 from regwatch.workspace import (
     KeyedSource,
     WorkspaceError,
@@ -664,7 +665,8 @@ def _cmd_report(ctx: _Context, args: argparse.Namespace) -> int:
         _say(f"regwatch report: wrote {args.json}")
     if flagged:
         _say(
-            f"regwatch report: {len(flagged)} source change(s) flagged for review", file=sys.stderr
+            f"regwatch report: {count(len(flagged), 'source change')} flagged for review",
+            file=sys.stderr,
         )
     return EXIT_OK
 
@@ -1848,7 +1850,8 @@ def _cmd_llm(ctx: _Context, args: argparse.Namespace) -> int:
             set_llm(ctx.config_path, enabled=args.action == "on")
     config = load_config(ctx.config_path)
     llm = config.llm
-    _say(f"regwatch llm: {'on' if llm.enabled else 'off'}, {llm.provider}, {llm.effective_model}")
+    state = "on" if llm.enabled else "off"
+    _say(f"regwatch llm: {state}, {provider_name(llm.provider)}, {llm.effective_model}")
     key_env = LLM_KEYS.get(llm.provider)
     if key_env:
         where = ctx.keystore().status(key_env).source

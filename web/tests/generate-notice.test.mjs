@@ -19,6 +19,14 @@ test("a notice from the server is shown instead of Generated", () => {
   assert.equal(generateNotice({ dropped: ["passage 1: x"], notice }), notice);
 });
 
+test("dropped passages are counted in words and given their own reasons", () => {
+  const one = generateNotice({ dropped: ["passage 2: it uses the number 9, which no fact it cites holds"] });
+  assert.match(one, /^Generated\. One passage was left out: passage 2: it uses the number 9/);
+  const two = generateNotice({ dropped: ["passage 1: a", "passage 3: b"] });
+  assert.match(two, /^Generated\. 2 passages were left out: passage 1: a; passage 3: b\./);
+  assert.doesNotMatch(one + two, /\(s\)|facts they were not given/);
+});
+
 test("without a notice the page says the copy was generated", () => {
   assert.match(generateNotice({ dropped: [], notice: "" }), /^Generated\. Check each passage/);
   assert.match(generateNotice({ dropped: [] }), /^Generated\./);

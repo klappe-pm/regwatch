@@ -220,14 +220,17 @@ def test_facts_carry_ids_and_clean_text(register: Register) -> None:
     ]
     changes = change_facts(results, {"us-fda-news": "FDA news"})
     assert [f.fact_id for f in changes] == ["change:us-fda-news", "change:broken"]
-    assert changes[0].text == "FDA news is changed"
-    assert "HTTP status 500" in changes[1].text
+    assert changes[0].text == "FDA news: content changed"
+    assert changes[1].text == "broken: could not be read (HTTP status 500)"
     candidates = candidate_facts([{"headline": "Rule\x1b[2J one", "date": "2026-10-01"}, {}])
     assert [f.fact_id for f in candidates] == ["candidate:1", "candidate:2"]
     assert "\x1b" not in candidates[0].text and candidates[0].text.startswith("Unconfirmed")
     impact = Impact("p 1", "Bar", "o:2", "Labels", "us", "proposed", "2027-01-01", (), "high")
     assert impact_facts([impact])[0].fact_id == "impact:p-1/o-2"
-    assert "effective 2027-01-01" in impact_facts([impact])[0].text
+    assert impact_facts([impact], {"us": "United States"})[0].text == (
+        "Bar may be affected by Labels (United States, proposed, high severity, "
+        "effective 1 January 2027)"
+    )
     obligations = obligation_facts(register.obligations[:2])
     assert all(f.fact_id.startswith("obligation:") for f in obligations)
     events = event_facts(register.changelog[:1])
@@ -258,7 +261,7 @@ def test_a_passage_citing_given_facts_is_kept_with_those_facts() -> None:
     result = parse_passages(text, FACTS, "fake", "m")
     opening = result.section("opening")[0]
     assert opening.text == "Two things moved." and opening.cites == FACTS_IDS()
-    assert opening.facts == [f.line for f in FACTS]
+    assert opening.facts == [f.text for f in FACTS]
     assert (opening.provider, opening.model) == ("fake", "m")
     assert result.section("impacts")[0].text == "Bar is affected."
     assert result.count == 2 and result.dropped == [] and result.section("changes") == []
@@ -423,7 +426,7 @@ def test_changing_the_llm_needs_premium(project: Path, capsys: pytest.CaptureFix
         assert code == 2 and "regwatch premium on" in err and "premium feature" in err
     assert load_config(project).llm == LlmSettings()
     code, out, _err = run(project, capsys, "llm", "status")
-    assert code == 0 and "regwatch llm: off, anthropic, claude-opus-5-5" in out
+    assert code == 0 and "regwatch llm: off, Anthropic, claude-opus-5-5" in out
     assert "regwatch premium on" in out
 
 
@@ -432,7 +435,7 @@ def test_the_llm_command_sets_the_provider_model_and_switch(
 ) -> None:
     run(project, capsys, "premium", "on")
     code, out, _err = run(project, capsys, "llm", "use", "openai", "--model", "gpt-test")
-    assert code == 0 and "openai, gpt-test" in out
+    assert code == 0 and "OpenAI, gpt-test" in out
     assert "regwatch keys set llm-openai" in out
     code, out, _err = run(project, capsys, "llm", "on")
     assert code == 0 and "regwatch llm: on" in out

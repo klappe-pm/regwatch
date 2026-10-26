@@ -151,7 +151,9 @@ def test_generate_opens_with_a_labelled_summary(run: Runner, project: Path, tmp_
     summary = page.index("<h2>Summary</h2>")
     assert summary < page.index("<h2>Scope</h2>")
     assert '<span class="tag">Generated</span>Three dates are close.' in page
-    assert "event:2026-10-01-1: 2026-10-01, sv: Nutrition Claims Regulation" in page
+    # The fact is shown as text: its id stays in the passage's cites.
+    assert "<li>1 October 2026, Southvale: Nutrition Claims Regulation" in page
+    assert "event:2026-10-01-1" not in page
     assert "Invented." not in page
     prompt = json.dumps(poster.payloads[0])
     assert "a regulatory briefing" in prompt and KEY not in prompt

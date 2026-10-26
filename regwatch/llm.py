@@ -42,6 +42,7 @@ from regwatch.impact import Impact
 from regwatch.keys import PROVIDER_KEYS
 from regwatch.register import ChangeEvent, Obligation
 from regwatch.sanitize import clean_text, defang_links, link_like
+from regwatch.wording import prose_date, provider_name, severity_label, status_phrase
 
 __all__ = [
     "ENDPOINTS",
@@ -130,7 +131,8 @@ class GenerationError(Exception):
 
 def _cut_off(provider: str, max_tokens: int) -> GenerationError:
     return GenerationError(
-        f"the {provider} answer was cut off at {max_tokens} tokens, the [llm] max_tokens "
+        f"the {provider_name(provider)} answer was cut off at {max_tokens} tokens, the [llm] "
+        "max_tokens "
         "limit; raise max_tokens in regwatch.toml or ask for a shorter period",
         outcome="cut off",
     )
@@ -189,9 +191,13 @@ def _json(body: str, provider: str) -> dict[str, Any]:
     try:
         data = json.loads(body)
     except (ValueError, RecursionError) as exc:
-        raise GenerationError(f"the {provider} answer was not JSON", "unreadable") from exc
+        raise GenerationError(
+            f"the {provider_name(provider)} answer was not JSON", "unreadable"
+        ) from exc
     if not isinstance(data, dict):
-        raise GenerationError(f"the {provider} answer was not a JSON object", "unreadable")
+        raise GenerationError(
+            f"the {provider_name(provider)} answer was not a JSON object", "unreadable"
+        )
     return data
 
 
@@ -269,7 +275,7 @@ class AnthropicProvider:
             )
         data = _json(body, self.name)
         if data.get("stop_reason") == "refusal":
-            raise GenerationError("the anthropic model declined to write this copy")
+            raise GenerationError("the Anthropic model declined to write this copy")
         if data.get("stop_reason") == "max_tokens":
             raise _cut_off(self.name, max_tokens)
         content = data.get("content")
@@ -314,7 +320,7 @@ class OpenAIProvider:
         message = first.get("message") if isinstance(first, dict) else None
         text = message.get("content") if isinstance(message, dict) else None
         if isinstance(message, dict) and message.get("refusal"):
-            raise GenerationError("the openai model declined to write this copy")
+            raise GenerationError("the OpenAI model declined to write this copy")
         if isinstance(first, dict) and first.get("finish_reason") == "length":
             raise _cut_off(self.name, max_tokens)
         usage = _object(data.get("usage"))
@@ -407,7 +413,7 @@ def provider_for(
         return AnthropicProvider(poster, key, model)
     except ValueError as exc:
         raise GenerationError(
-            f"the stored {settings.provider} key cannot be sent; store it again"
+            f"the stored {provider_name(settings.provider)} key cannot be sent; store it again"
         ) from exc
 
 
@@ -423,27 +429,49 @@ def _id_part(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9._/-]+", "-", value).strip("-")[:60] or "item"
 
 
+def _sentence(lead: str, *rest: str) -> str:
+    """``lead`` and the non-empty ``rest`` as sentences, each ending with one full stop."""
+    parts = [part.strip().rstrip(".") for part in (lead, *rest) if part and part.strip()]
+    return " ".join(f"{part}." for part in parts)
+
+
+def _labelled(label: str, text: str) -> str:
+    """``label: text``, or whichever of the two is not empty."""
+    return f"{label}: {text}" if label and text else label or text
+
+
+def _place(code: str, places: Mapping[str, str] | None) -> str:
+    return (places or {}).get(code, code)
+
+
 def change_facts(results: Iterable[SourceResult], names: Mapping[str, str]) -> list[Fact]:
-    """One fact per source that changed or needs attention."""
+    """One fact per source that changed or needs attention: its name and what was found."""
     return [
         _fact(
             f"change:{_id_part(r.source_id)}",
             "changes",
-            f"{names.get(r.source_id, r.source_id)} is {r.status.lower()}"
-            + (f" ({r.detail})" if r.detail else ""),
+            f"{names.get(r.source_id, r.source_id)}: {status_phrase(r.status, r.detail)}",
         )
         for r in results
         if r.flagged or r.needs_attention
     ]
 
 
-def event_facts(events: Iterable[ChangeEvent]) -> list[Fact]:
-    """One fact per recorded change log event."""
+def event_facts(
+    events: Iterable[ChangeEvent], places: Mapping[str, str] | None = None
+) -> list[Fact]:
+    """One fact per recorded change log event, dated and placed in words."""
     return [
         _fact(
             f"event:{_id_part(e.date)}-{index}",
             "changes",
-            f"{e.date}, {e.jurisdiction}: {e.headline}. {e.what_happened}",
+            _sentence(
+                _labelled(
+                    ", ".join(p for p in (prose_date(e.date), _place(e.jurisdiction, places)) if p),
+                    e.headline,
+                ),
+                e.what_happened,
+            ),
         )
         for index, e in enumerate(events, start=1)
     ]
@@ -460,41 +488,56 @@ def candidate_facts(candidates: Iterable[Mapping[str, Any]]) -> list[Fact]:
             # mail client or word processor turns it into a link.
             return defang_links(clean_text(value, 300)) if isinstance(value, str) else ""
 
+        lead = ", ".join(
+            part for part in ("Unconfirmed", prose_date(text("date")), text("agency")) if part
+        )
         facts.append(
             _fact(
                 f"candidate:{index}",
                 "candidates",
-                f"Unconfirmed, {text('date')}, {text('agency')}: {text('headline')}. "
-                f"{text('what_happened')}",
+                _sentence(_labelled(lead, text("headline")), text("what_happened")),
             )
         )
     return facts
 
 
-def impact_facts(impacts: Iterable[Impact]) -> list[Fact]:
+def _details(*parts: str) -> str:
+    kept = [part for part in parts if part]
+    return f" ({', '.join(kept)})" if kept else ""
+
+
+def impact_facts(impacts: Iterable[Impact], places: Mapping[str, str] | None = None) -> list[Fact]:
     """One fact per candidate impact of an obligation on a product."""
     return [
         _fact(
             f"impact:{_id_part(i.product_id)}/{_id_part(i.obligation_id)}",
             "impacts",
-            f"{i.product_name} may be affected by {i.obligation_title} ({i.jurisdiction}, "
-            f"{i.status}, severity {i.severity}"
-            + (f", effective {i.effective_date}" if i.effective_date else "")
-            + ")",
+            f"{i.product_name} may be affected by {i.obligation_title}"
+            + _details(
+                _place(i.jurisdiction, places),
+                i.status,
+                f"{severity_label(i.severity)} severity",
+                f"effective {prose_date(i.effective_date)}" if i.effective_date else "",
+            ),
         )
         for i in impacts
     ]
 
 
-def obligation_facts(obligations: Iterable[Obligation]) -> list[Fact]:
+def obligation_facts(
+    obligations: Iterable[Obligation], places: Mapping[str, str] | None = None
+) -> list[Fact]:
     """One fact per obligation, for documents built from the register."""
     return [
         _fact(
             f"obligation:{_id_part(o.obligation_id)}",
             "obligations",
-            f"{o.title} ({o.jurisdiction}, {o.status}"
-            + (f", effective {o.effective_date}" if o.effective_date else "")
-            + ")",
+            o.title
+            + _details(
+                _place(o.jurisdiction, places),
+                o.status,
+                f"effective {prose_date(o.effective_date)}" if o.effective_date else "",
+            ),
         )
         for o in obligations
     ]
@@ -648,7 +691,8 @@ def parse_passages(
             GeneratedPassage(
                 text=body,
                 cites=cited,
-                facts=[known[c].line for c in cited],
+                # The ids stay in cites; a reader sees the facts' text alone.
+                facts=[known[c].text for c in cited],
                 provider=provider,
                 model=model,
             )
@@ -704,7 +748,9 @@ def generate(
         finish("error")
         detail = provider_message(exc.body)
         reason = f"{exc}: {detail}" if detail else str(exc)
-        raise GenerationError(f"the {provider.name} request failed: {reason}") from None
+        raise GenerationError(
+            f"the {provider_name(provider.name)} request failed: {reason}"
+        ) from None
     except GenerationError as exc:
         finish(exc.outcome)
         raise
