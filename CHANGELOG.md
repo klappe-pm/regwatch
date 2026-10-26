@@ -85,6 +85,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- A generated passage for a section the newsletter does not show (obligations) was counted as generated copy but never shown, and a section's summary could be written from another section's facts. The request now names the sections the output shows, a passage for any other is dropped with the reason, and a passage for a section other than the opening must cite at least one fact of that section.
 - A generated passage that cited more than 20 facts was kept with only the first 20 shown beside it, silently hiding facts it was written from. It is now dropped with the reason.
 - A PNG logo in the newsletter `.eml` file showed as an attachment in some mail programs. The logo part is now `Content-Disposition: inline`, and the `multipart/related` part names its root with `type="text/html"`, as RFC 2387 asks.
 - Pressing Generate a second time on the Newsletters or Documents page left the first copy in the preview, because the page asked for the same address again and kept what it had. Each successful Generate now changes the address the page and its preview load, so the new copy is shown.

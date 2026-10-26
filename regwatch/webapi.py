@@ -53,7 +53,8 @@ from regwatch.fetch import Fetcher
 from regwatch.focus import FocusProfile, build_profile, load_catalogue
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.keys import PROVIDER_KEYS, KeyStore, KeyStoreError
-from regwatch.llm import Fact, GenerationError, GenerationResult, Poster
+from regwatch.llm import SECTIONS, Fact, GenerationError, GenerationResult, Poster
+from regwatch.newsletter import NEWSLETTER_SECTIONS
 from regwatch.register import Register, load_register
 from regwatch.render import docx_bytes, render_markdown, render_newsletter_html
 from regwatch.sanitize import clean_text, safe_https_url
@@ -852,7 +853,12 @@ class Api:
             self._generated.pop(next(iter(self._generated)))
 
     def _generate(
-        self, config: Config, cache: str, facts: Sequence[Fact], purpose: str
+        self,
+        config: Config,
+        cache: str,
+        facts: Sequence[Fact],
+        purpose: str,
+        sections: Sequence[str] = SECTIONS,
     ) -> GenerationResult:
         if not config.llm.enabled:
             raise ApiError(409, "generated copy is off; turn it on in Settings")
@@ -860,7 +866,13 @@ class Api:
             raise ApiError(409, "generated copy is already being written")
         try:
             result = generated_copy(
-                config, facts, purpose, key_lookup(self._store()), self.poster, self.clock
+                config,
+                facts,
+                purpose,
+                key_lookup(self._store()),
+                self.poster,
+                self.clock,
+                sections=sections,
             )
         except GenerationError as exc:
             # The message holds the provider's status with the key removed, never a prompt.
@@ -884,6 +896,7 @@ class Api:
                 cache,
                 content.facts(),
                 f"the newsletter for {content.start.isoformat()} to {content.end.isoformat()}",
+                NEWSLETTER_SECTIONS,
             )
         elif generated:
             result = self._generated.get(cache)

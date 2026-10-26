@@ -196,8 +196,8 @@ Generated copy. See [the language model stage](../explanation/security-model.md#
 - `GenerationError(message, outcome="refused")`: generated copy could not be written; `outcome` is what the call record says (`refused`, `cut off`, `unreadable` or `error`).
 - `provider_for(settings: LlmSettings, poster, key_for) -> Provider`: the provider `[llm]` names, with its key from `key_for(key_env)`. Raises `GenerationError` when a key is missing.
 - `llm_fetcher(config: Config) -> SafeFetcher`: the fetch client for a call, with the `[llm]` deadline.
-- `generate(provider, facts, purpose, *, max_tokens, record=None) -> GenerationResult`: one call; `record` receives the provider, the model, the token counts, the duration and the outcome. Raises `GenerationError`.
-- `parse_passages(text, facts, provider="", model="") -> GenerationResult`: the passages that cite only the given facts, by section, with the reasons any were dropped.
+- `generate(provider, facts, purpose, *, max_tokens, record=None, sections=SECTIONS) -> GenerationResult`: one call for the output whose generated sections are `sections` (`NEWSLETTER_SECTIONS` in `regwatch.newsletter` for a newsletter, which has no obligations section); `record` receives the provider, the model, the token counts, the duration and the outcome. Raises `GenerationError`.
+- `parse_passages(text, facts, provider="", model="", sections=SECTIONS) -> GenerationResult`: the passages that cite only the given facts, by section, with the reasons any were dropped. A passage for a section not in `sections`, or for a section other than the opening that cites no fact of that section, is dropped.
 - `GenerationResult`: `passages` by section, `dropped`, `provider`, `model`, `section(name)` and `count`.
 - `LLM_KEYS`: the fixed key variable of each provider; `KEY_IDS`: the ids `regwatch keys` uses for them.
 

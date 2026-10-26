@@ -48,6 +48,7 @@ __all__ = [
     "EMAIL_WIDTH",
     "LOGO_CID",
     "MAX_IMPACTS",
+    "NEWSLETTER_SECTIONS",
     "NewsletterContent",
     "build_newsletter",
     "email_bytes",
@@ -56,6 +57,8 @@ __all__ = [
     "render_email_text",
 ]
 
+NEWSLETTER_SECTIONS = ("opening", "changes", "candidates", "impacts")
+"""The generated copy sections a newsletter shows; it has no obligations section."""
 EMAIL_WIDTH = 600
 LOGO_CID = "logo@regwatch"
 MAX_IMPACTS = 10

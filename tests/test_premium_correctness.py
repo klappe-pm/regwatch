@@ -17,6 +17,7 @@ from conftest import NOW, TODAY, FakeSystem
 from test_llm import FACTS, KEY, FakePoster, FakeProvider, answer
 from test_newsletter import FakePoster as NewsletterPoster
 
+from regwatch.cli import main
 from regwatch.config import load_config
 from regwatch.llm import (
     MAX_CITES,
@@ -29,7 +30,7 @@ from regwatch.llm import (
     generate,
     parse_passages,
 )
-from regwatch.newsletter import newsletter_content
+from regwatch.newsletter import NEWSLETTER_SECTIONS, newsletter_content
 from regwatch.register import load_register
 from regwatch.settings import set_llm, set_premium
 from regwatch.webapi import Api
@@ -152,3 +153,73 @@ def test_a_passage_citing_exactly_the_limit_keeps_every_fact() -> None:
     text = json.dumps({"passages": [{"section": "changes", "text": "Many moved.", "cites": ids}]})
     kept = parse_passages(text, MANY).section("changes")[0]
     assert len(kept.cites) == len(kept.facts) == MAX_CITES == 20
+
+
+# --- C8: passages only for shown sections, each from its own section's facts --------
+
+
+def passages(*items: tuple[str, list[str]]) -> str:
+    return json.dumps(
+        {"passages": [{"section": s, "text": "It moved.", "cites": c} for s, c in items]}
+    )
+
+
+def test_a_passage_for_a_section_the_output_does_not_show_is_dropped() -> None:
+    text = passages(("obligations", ["change:us-fda-news"]), ("opening", ["change:us-fda-news"]))
+    result = parse_passages(text, FACTS, sections=NEWSLETTER_SECTIONS)
+    assert result.section("obligations") == [] and result.count == 1
+    assert result.dropped == ["passage 1: this output has no obligations section"]
+    assert NEWSLETTER_SECTIONS == ("opening", "changes", "candidates", "impacts")
+
+
+def test_a_section_summary_must_cite_a_fact_of_its_own_section() -> None:
+    text = passages(
+        ("changes", ["impact:bar/us-sodium"]),
+        ("impacts", ["impact:bar/us-sodium", "change:us-fda-news"]),
+        ("opening", ["impact:bar/us-sodium"]),
+    )
+    result = parse_passages(text, FACTS)
+    assert result.dropped == ["passage 1: it cites no fact of the changes section it summarises"]
+    assert result.section("changes") == [] and result.count == 2
+
+
+def test_the_prompt_names_only_the_shown_sections() -> None:
+    provider = FakeProvider(passages(("obligations", ["change:us-fda-news"])))
+    result = generate(provider, FACTS, "x", max_tokens=10, sections=NEWSLETTER_SECTIONS)
+    prompt = provider.prompts[0][1]
+    assert "only for these sections: opening, changes, candidates, impacts." in prompt
+    assert result.count == 0 and "no obligations section" in result.dropped[0]
+
+
+def test_the_newsletter_drops_a_passage_for_its_missing_section(project: Path) -> None:
+    set_premium(project, True)
+    set_llm(project, enabled=True)
+    fake = FakeSystem("linux")
+    fake.environ["REGWATCH_KEY_ANTHROPIC"] = KEY
+    poster = NewsletterPoster(
+        [{"section": "obligations", "text": "Due soon.", "cites": ["change:nl-notices"]}]
+    )
+    api = Api(project, lambda: TODAY, system=fake.system(), clock=lambda: NOW, poster=poster)
+    data = api.handle("POST", "/api/newsletter/generate", {}, {"since": 7})[1]
+    assert data["generated"] is False
+    assert data["dropped"] == ["passage 1: this output has no obligations section"]
+
+
+def test_the_newsletter_command_drops_a_passage_for_its_missing_section(
+    project: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    set_premium(project, True)
+    set_llm(project, enabled=True)
+    fake = FakeSystem("linux")
+    fake.environ["REGWATCH_KEY_ANTHROPIC"] = KEY
+    poster = NewsletterPoster(
+        [{"section": "obligations", "text": "Due soon.", "cites": ["change:nl-notices"]}]
+    )
+    args = ["--config", str(project), "newsletter", "--generate", "--out", str(tmp_path / "n")]
+    code = main(args, today=TODAY, now=NOW, system=fake.system(), poster=poster)
+    captured = capsys.readouterr()
+    assert code == 0 and "no obligations section" in captured.err
+    assert "fixed sentences" in captured.out
+    assert "only for these sections: opening, changes, candidates, impacts" in json.dumps(
+        poster.payloads[0]
+    )

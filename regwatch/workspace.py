@@ -479,12 +479,14 @@ def generated_copy(
     key_for: Callable[[str], str | None],
     poster: Poster | None = None,
     now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.UTC),
+    sections: Sequence[str] = SECTIONS,
 ) -> GenerationResult:
     """Ask the configured provider for copy written from ``facts``, and record the call.
 
-    Raises WorkspaceError when generated copy is off, and GenerationError when it
-    cannot be written. The call is recorded in ``llm-calls.jsonl`` in the state
-    directory with the provider, the model, the tokens and the duration only.
+    ``sections`` are the sections the output shows; a passage for any other is
+    dropped. Raises WorkspaceError when generated copy is off, and GenerationError
+    when it cannot be written. The call is recorded in ``llm-calls.jsonl`` in the
+    state directory with the provider, the model, the tokens and the duration only.
     """
     if not config.llm.enabled:
         raise WorkspaceError("generated copy is off; turn it on with 'regwatch llm on'")
@@ -496,7 +498,13 @@ def generated_copy(
         append_call_record(config.llm_calls_path, entry, protected)
 
     return generate(
-        provider, facts, purpose, max_tokens=config.llm.max_tokens, record=record, now=now
+        provider,
+        facts,
+        purpose,
+        max_tokens=config.llm.max_tokens,
+        record=record,
+        now=now,
+        sections=sections,
     )
 
 

@@ -81,6 +81,7 @@ from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.ingest import IngestError, build_query_url, candidates_document, parse_candidates
 from regwatch.keys import KeyStore, KeyStoreError
 from regwatch.llm import LLM_KEYS, GenerationError, Poster
+from regwatch.newsletter import NEWSLETTER_SECTIONS
 from regwatch.onboarding import (
     SCAFFOLD_NAMES,
     InitPlan,
@@ -1810,6 +1811,7 @@ def _cmd_newsletter(ctx: _Context, args: argparse.Namespace) -> int:
             ctx.key_for,
             ctx.poster,
             ctx.clock,
+            sections=NEWSLETTER_SECTIONS,
         )
     files = newsletter_files(config, register, content, ctx.now, generated)
     stem = _output_stem(args.out, f"regwatch-newsletter-{ctx.today.isoformat()}")
