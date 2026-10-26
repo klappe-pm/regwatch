@@ -197,13 +197,72 @@ export interface Keys {
   keys: KeyRow[];
 }
 
+export interface DesignSettings {
+  available: true;
+  title_format: string;
+  organisation: string;
+  primary_color: string;
+  accent_color: string;
+  font: string;
+  logo: string;
+  header: string;
+  footer: string;
+  page_size: string;
+  newsletter_footer: string;
+  fonts: string[];
+  page_sizes: string[];
+}
+
+export interface ProviderKey {
+  id: string;
+  provider: string;
+  key_env: string;
+  present: boolean;
+  where: string;
+  signup_url: string;
+}
+
+export interface LlmSettings {
+  available: true;
+  enabled: boolean;
+  provider: string;
+  model: string;
+  providers: string[];
+  default_models: Record<string, string>;
+  allow_private_hosts: boolean;
+  keys: ProviderKey[];
+}
+
 export interface Settings {
   focus_areas: string[];
   custom_terms: string[];
   focus_catalogue: { id: string; label: string; description: string }[];
   premium: boolean;
-  design: Unavailable;
-  llm: Unavailable;
+  design: DesignSettings;
+  llm: LlmSettings;
+}
+
+export interface Newsletter {
+  available: true;
+  since: number;
+  periods: number[];
+  subject: string;
+  html: string;
+  text: string;
+  generated: boolean;
+  dropped: string[];
+}
+
+export interface DesignedDocument {
+  available: true;
+  kind: string;
+  tier: string;
+  kinds: string[];
+  formats: string[];
+  title: string;
+  html: string;
+  generated: boolean;
+  dropped: string[];
 }
 
 export interface SearchResults {

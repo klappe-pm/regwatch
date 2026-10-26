@@ -14,12 +14,17 @@ a background thread, one at a time.
 
 No route returns the value of a key. The key routes accept a key once and answer
 only whether one is available and where it comes from.
+
+The newsletter, document and design and language model settings routes are
+premium features: with premium off they answer 403 with a message that names
+``regwatch premium on``. Generated copy is written only on a POST to a generate
+route, which reaches the configured provider through the fetch client; the result
+is kept in memory so the preview and the downloads show the same text.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-import json
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -30,32 +35,59 @@ from regwatch import __version__
 from regwatch.briefing import TIERS, build_briefing
 from regwatch.catalogue import CATEGORIES, CatalogueEntry, CatalogueError, filter_entries, rank
 from regwatch.check import SourceResult, check_sources
-from regwatch.config import Config, load_config
+from regwatch.config import (
+    DEFAULT_MODELS,
+    FONTS,
+    LLM_PROVIDERS,
+    PAGE_SIZES,
+    Config,
+    load_config,
+)
+from regwatch.design import DesignError
 from regwatch.document import Document
 from regwatch.fetch import Fetcher
 from regwatch.focus import FocusProfile, build_profile, load_catalogue
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
-from regwatch.keys import KeyStore, KeyStoreError
+from regwatch.keys import PROVIDER_KEYS, KeyStore, KeyStoreError
+from regwatch.llm import GenerationError, GenerationResult, Poster
 from regwatch.register import Register, load_register
 from regwatch.render import docx_bytes, render_markdown, render_newsletter_html
 from regwatch.sanitize import clean_text, safe_https_url
-from regwatch.settings import set_focus_areas, set_premium
-from regwatch.state import MAX_STATE_BYTES, load_seen
+from regwatch.settings import (
+    SettingsError,
+    set_design,
+    set_focus_areas,
+    set_llm,
+    set_newsletter_footer,
+    set_premium,
+)
+from regwatch.state import load_seen
 from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
 from regwatch.system import System
 from regwatch.workspace import (
+    DOCUMENT_FORMATS,
+    DOCUMENT_KINDS,
+    MAX_SINCE_DAYS,
     WorkspaceError,
     add_sources,
     chosen_ids,
+    document_bytes,
+    document_plan,
     fetcher_for,
     find_entries,
+    generated_copy,
     key_lookup,
     keyed_source,
     keyed_sources,
+    newsletter_files,
+    newsletter_plan,
+    premium_refusal,
+    read_candidates,
     read_run_records,
     run_once,
     schedule_state,
     source_catalogue,
+    with_summary,
 )
 
 __all__ = ["SUPPLY_CATEGORIES", "Api", "ApiError", "Download"]
@@ -74,6 +106,12 @@ EXPORT_FORMATS = {
         "docx",
     ),
 }
+NEWSLETTER_FORMATS = {
+    "eml": ("message/rfc822", "eml"),
+    "html": ("text/html; charset=utf-8", "html"),
+    "txt": ("text/plain; charset=utf-8", "txt"),
+}
+NEWSLETTER_PERIODS = (7, 14, 30, 90)
 KEY_SOURCE_LABELS = {
     "environment": "Set in the environment",
     "keychain": "Stored in the keychain",
@@ -204,8 +242,13 @@ class Api:
         system: System | None = None,
         fetcher: Fetcher | None = None,
         clock: Callable[[], dt.datetime] | None = None,
+        poster: Poster | None = None,
     ) -> None:
         self.config_path = config_path
+        self.poster = poster
+        # Generated copy by what it was written for, so a preview and its downloads match.
+        self._generated: dict[tuple[str, ...], GenerationResult] = {}
+        self._generate_lock = threading.Lock()
         self.today = today
         self.system = system or System()
         self.fetcher = fetcher
@@ -231,6 +274,14 @@ class Api:
             ("GET", "/api/settings"): self.settings,
             ("POST", "/api/settings/premium"): self.settings_premium,
             ("POST", "/api/settings/focus"): self.settings_focus,
+            ("POST", "/api/settings/design"): self.settings_design,
+            ("POST", "/api/settings/llm"): self.settings_llm,
+            ("GET", "/api/newsletter"): self.newsletter,
+            ("POST", "/api/newsletter/generate"): self.newsletter_generate,
+            ("GET", "/api/newsletter/export"): self.newsletter_export,
+            ("GET", "/api/document"): self.document,
+            ("POST", "/api/document/generate"): self.document_generate,
+            ("GET", "/api/document/export"): self.document_export,
             ("GET", "/api/search"): self.search,
         }
 
@@ -263,17 +314,7 @@ class Api:
 
     def _raw_candidates(self, config: Config) -> list[JsonObject]:
         """The candidates file as the command line reads it; a briefing cleans each field."""
-        path = config.candidates_path
-        if not path.is_file():
-            return []
-        try:
-            if path.stat().st_size > MAX_STATE_BYTES:
-                return []
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, RecursionError):
-            return []
-        items = data.get("candidates", []) if isinstance(data, dict) else []
-        return [item for item in items if isinstance(item, dict)]
+        return read_candidates(config)
 
     def _candidates(self, config: Config) -> list[JsonObject]:
         return [_candidate(item) for item in self._raw_candidates(config)]
@@ -639,6 +680,31 @@ class Api:
     def settings(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
         config = self._config()
         catalogue = load_catalogue(config.profile.catalogue)
+        design = config.document
+        store = self._store()
+        keys = []
+        for key_id, (key_env, signup) in PROVIDER_KEYS.items():
+            try:
+                where = store.status(key_env).source
+            except KeyStoreError:
+                where = "unavailable"
+            keys.append(
+                {
+                    "id": key_id,
+                    "provider": key_id.removeprefix("llm-"),
+                    "key_env": key_env,
+                    "present": where in ("environment", "keychain"),
+                    "where": KEY_SOURCE_LABELS.get(where, "Not set"),
+                    "signup_url": safe_https_url(signup),
+                }
+            )
+        logo = ""
+        if design.logo is not None:
+            logo = (
+                design.logo.relative_to(config.base_dir).as_posix()
+                if design.logo.is_relative_to(config.base_dir)
+                else str(design.logo)
+            )
         return {
             "focus_areas": list(config.profile.focus_areas),
             "custom_terms": list(config.profile.custom_terms),
@@ -647,8 +713,31 @@ class Api:
                 for a in catalogue
             ],
             "premium": config.premium.enabled,
-            "design": {"available": False, "command": "regwatch documents design"},
-            "llm": {"available": False, "command": "regwatch generate"},
+            "design": {
+                "available": True,
+                "title_format": design.title_format,
+                "organisation": design.organisation,
+                "primary_color": design.primary_color,
+                "accent_color": design.accent_color,
+                "font": design.font,
+                "logo": logo,
+                "header": design.header,
+                "footer": design.footer,
+                "page_size": design.page_size,
+                "newsletter_footer": config.newsletter.footer,
+                "fonts": list(FONTS),
+                "page_sizes": list(PAGE_SIZES),
+            },
+            "llm": {
+                "available": True,
+                "enabled": config.llm.enabled,
+                "provider": config.llm.provider,
+                "model": config.llm.model,
+                "providers": list(LLM_PROVIDERS),
+                "default_models": dict(DEFAULT_MODELS),
+                "allow_private_hosts": config.fetch.allow_private_hosts,
+                "keys": keys,
+            },
         }
 
     def settings_premium(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
@@ -666,6 +755,209 @@ class Api:
         known = [a.focus_id for a in load_catalogue(config.profile.catalogue)]
         set_focus_areas(self.config_path, areas, known)
         return {"focus_areas": list(self._config().profile.focus_areas)}
+
+    def settings_design(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """Save the design specification, checked as ``regwatch.toml`` is checked."""
+        self._premium("Document design")
+        values = body.get("design")
+        if not isinstance(values, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in values.items()
+        ):
+            raise ApiError(400, "'design' must be an object of text values")
+        footer = values.pop("newsletter_footer", None)
+        try:
+            set_design(self.config_path, values)
+            if isinstance(footer, str):
+                set_newsletter_footer(self.config_path, footer)
+        except SettingsError as exc:
+            # The message names the rule that was broken, never file contents.
+            raise ApiError(400, str(exc)[:300]) from exc
+        return self.settings(query, {})
+
+    def settings_llm(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """Save the generated copy settings: on or off, the provider and the model."""
+        self._premium("Generated copy")
+        enabled, provider, model = body.get("enabled"), body.get("provider"), body.get("model")
+        if enabled is not None and not isinstance(enabled, bool):
+            raise ApiError(400, "'enabled' must be true or false")
+        if provider is not None and provider not in LLM_PROVIDERS:
+            raise ApiError(400, f"'provider' must be one of {', '.join(LLM_PROVIDERS)}")
+        if model is not None and not isinstance(model, str):
+            raise ApiError(400, "'model' must be text")
+        try:
+            set_llm(self.config_path, enabled=enabled, provider=provider, model=model)
+        except SettingsError as exc:
+            raise ApiError(400, str(exc)[:300]) from exc
+        return self.settings(query, {})
+
+    # --- newsletters and documents ----------------------------------------------
+
+    def _premium(self, feature: str) -> Config:
+        config = self._config()
+        if not config.premium.enabled:
+            raise ApiError(403, premium_refusal(feature))
+        return config
+
+    def _since(self, value: object) -> int:
+        text = str(value) if value is not None else "7"
+        if not text.isdigit() or not 1 <= int(text) <= MAX_SINCE_DAYS:
+            raise ApiError(400, f"'since' must be a number of days from 1 to {MAX_SINCE_DAYS}")
+        return int(text)
+
+    def _generate(
+        self, config: Config, cache: tuple[str, ...], facts: Any, purpose: str
+    ) -> GenerationResult:
+        if not config.llm.enabled:
+            raise ApiError(409, "generated copy is off; turn it on in Settings")
+        if not self._generate_lock.acquire(blocking=False):
+            raise ApiError(409, "generated copy is already being written")
+        try:
+            result = generated_copy(
+                config, facts, purpose, key_lookup(self._store()), self.poster, self.clock
+            )
+        except GenerationError as exc:
+            # The message holds the provider's status with the key removed, never a prompt.
+            raise ApiError(502, str(exc)[:300]) from exc
+        finally:
+            self._generate_lock.release()
+        self._generated[cache] = result
+        return result
+
+    def _newsletter(self, since: int, generated: bool, *, generate: bool = False) -> Any:
+        config = self._premium("Newsletters")
+        today = self.today()
+        cache = ("newsletter", str(since), today.isoformat())
+        register, content = newsletter_plan(config, today, since)
+        result: GenerationResult | None = None
+        if generate:
+            result = self._generate(
+                config,
+                cache,
+                content.facts(),
+                f"the newsletter for {content.start.isoformat()} to {content.end.isoformat()}",
+            )
+        elif generated:
+            result = self._generated.get(cache)
+            if result is None:
+                raise ApiError(
+                    409, "press Generate first; no generated copy is kept for this period"
+                )
+        try:
+            return newsletter_files(config, register, content, self.clock(), result)
+        except DesignError as exc:
+            raise ApiError(422, f"the logo cannot be used: {exc}"[:300]) from exc
+
+    def _newsletter_payload(self, since: int, files: Any) -> JsonObject:
+        return {
+            "available": True,
+            "since": since,
+            "periods": list(NEWSLETTER_PERIODS),
+            "subject": files.subject,
+            "html": files.html,
+            "text": files.text,
+            "generated": files.generated,
+            "dropped": list(files.dropped),
+        }
+
+    def newsletter(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """The newsletter for ``since`` days; ``generated=1`` shows the kept generated copy."""
+        since = self._since(query.get("since"))
+        files = self._newsletter(since, query.get("generated") == "1")
+        return self._newsletter_payload(since, files)
+
+    def newsletter_generate(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """Write the newsletter's opening and summaries with the language model."""
+        since = self._since(body.get("since"))
+        return self._newsletter_payload(since, self._newsletter(since, False, generate=True))
+
+    def newsletter_export(self, query: Mapping[str, str], body: JsonObject) -> Download:
+        fmt = query.get("format", "eml")
+        if fmt not in NEWSLETTER_FORMATS:
+            raise ApiError(400, f"format must be one of {', '.join(NEWSLETTER_FORMATS)}")
+        since = self._since(query.get("since"))
+        files = self._newsletter(since, query.get("generated") == "1")
+        content_type, suffix = NEWSLETTER_FORMATS[fmt]
+        data = {
+            "eml": files.eml,
+            "html": files.html.encode("utf-8"),
+            "txt": files.text.encode("utf-8"),
+        }[fmt]
+        name = f"regwatch-newsletter-{self.today().isoformat()}.{suffix}"
+        return Download(name, content_type, data)
+
+    def _document_args(self, values: Mapping[str, Any]) -> tuple[str, str]:
+        kind = str(values.get("kind") or "briefing")
+        tier = str(values.get("tier") or "v2")
+        if kind not in DOCUMENT_KINDS:
+            raise ApiError(400, f"kind must be one of {', '.join(DOCUMENT_KINDS)}")
+        if tier not in TIERS:
+            raise ApiError(400, f"tier must be one of {', '.join(TIERS)}")
+        return kind, tier
+
+    def _designed(
+        self, kind: str, tier: str, generated: bool, *, generate: bool = False
+    ) -> tuple[Config, Document, list[str]]:
+        config = self._premium("Documents")
+        today = self.today()
+        cache = ("document", kind, tier, today.isoformat())
+        doc, facts = document_plan(config, today, kind, tier)
+        result: GenerationResult | None = None
+        if generate:
+            result = self._generate(
+                config, cache, facts, f"the summary that opens a regulatory {kind}"
+            )
+        elif generated:
+            result = self._generated.get(cache)
+            if result is None:
+                raise ApiError(
+                    409, "press Generate first; no generated copy is kept for this document"
+                )
+        if result is not None:
+            doc = with_summary(doc, result)
+        return config, doc, list(result.dropped) if result is not None else []
+
+    def _document_payload(
+        self, kind: str, tier: str, generated: bool, generate: bool = False
+    ) -> JsonObject:
+        config, doc, dropped = self._designed(kind, tier, generated, generate=generate)
+        try:
+            page = document_bytes(config, doc, "html").decode("utf-8")
+        except DesignError as exc:
+            raise ApiError(422, f"the logo cannot be used: {exc}"[:300]) from exc
+        return {
+            "available": True,
+            "kind": kind,
+            "tier": tier,
+            "kinds": list(DOCUMENT_KINDS),
+            "formats": list(DOCUMENT_FORMATS),
+            "title": doc.title,
+            "html": page,
+            "generated": any(section.generated for section in doc.sections),
+            "dropped": dropped,
+        }
+
+    def document(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """A preview of the document in the design; ``generated=1`` adds the kept summary."""
+        kind, tier = self._document_args(query)
+        return self._document_payload(kind, tier, query.get("generated") == "1")
+
+    def document_generate(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
+        """Write the document's opening summary with the language model."""
+        kind, tier = self._document_args(body)
+        return self._document_payload(kind, tier, False, generate=True)
+
+    def document_export(self, query: Mapping[str, str], body: JsonObject) -> Download:
+        kind, tier = self._document_args(query)
+        fmt = query.get("format", "html")
+        if fmt not in DOCUMENT_FORMATS:
+            raise ApiError(400, f"format must be one of {', '.join(DOCUMENT_FORMATS)}")
+        config, doc, _dropped = self._designed(kind, tier, query.get("generated") == "1")
+        try:
+            data = document_bytes(config, doc, fmt)
+        except DesignError as exc:
+            raise ApiError(422, f"the logo cannot be used: {exc}"[:300]) from exc
+        content_type, suffix = DOCUMENT_FORMATS[fmt]
+        return Download(f"regwatch-{kind}-{self.today().isoformat()}.{suffix}", content_type, data)
 
     # --- search --------------------------------------------------------------
 

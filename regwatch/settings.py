@@ -15,18 +15,28 @@ import copy
 import json
 import re
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from regwatch.config import FOCUS_ID_RE, LLM_PROVIDERS, MODEL_RE, load_config
+from regwatch.config import (
+    FOCUS_ID_RE,
+    LLM_PROVIDERS,
+    MODEL_RE,
+    ConfigError,
+    load_config,
+    parse_document_table,
+)
+from regwatch.design import DesignError, load_logo
 from regwatch.state import safe_write_text
 
 __all__ = [
     "SettingsError",
     "edit_setting",
+    "set_design",
     "set_focus_areas",
     "set_llm",
+    "set_newsletter_footer",
     "set_premium",
     "set_setting",
 ]
@@ -169,3 +179,42 @@ def set_llm(
         set_setting(config_path, "llm", "model", model)
     if enabled is not None:
         set_setting(config_path, "llm", "enabled", enabled)
+
+
+def set_design(config_path: Path, values: Mapping[str, str]) -> None:
+    """Change keys of the ``[document]`` design specification.
+
+    Every value is checked before anything is written, exactly as ``load_config``
+    checks it: colours must meet AA against white, the font must be on the list and a
+    logo must be a PNG or SVG that passes every logo check. Only keys whose value
+    changes are written.
+    """
+    config = load_config(config_path)
+    try:
+        current = tomllib.loads(config_path.read_text(encoding="utf-8")).get("document", {})
+    except tomllib.TOMLDecodeError as exc:  # pragma: no cover (load_config parsed it)
+        raise SettingsError("the configuration file is not valid TOML") from exc
+    if not isinstance(current, dict):
+        raise SettingsError("[document] is not a table; change it by hand")
+    if not all(isinstance(value, str) for value in values.values()):
+        raise SettingsError("every design value must be text")
+    merged = {**current, **values}
+    try:
+        design = parse_document_table(merged, config.base_dir)
+    except ConfigError as exc:
+        raise SettingsError(str(exc)) from exc
+    if design.logo is not None:
+        try:
+            load_logo(design.logo, [config.base_dir, *config.fetch.allowed_file_roots])
+        except DesignError as exc:
+            raise SettingsError(str(exc)) from exc
+    for key, value in values.items():
+        if current.get(key) != value:
+            set_setting(config_path, "document", key, value)
+
+
+def set_newsletter_footer(config_path: Path, footer: str) -> None:
+    """Set ``[newsletter] footer``, the reply or unsubscribe line, after checking it."""
+    if len(footer) > 300 or any(ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F for ch in footer):
+        raise SettingsError("the closing line is at most 300 characters without control characters")
+    set_setting(config_path, "newsletter", "footer", footer)

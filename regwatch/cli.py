@@ -1702,6 +1702,7 @@ def _cmd_ui(ctx: _Context, args: argparse.Namespace) -> int:
         system=ctx.system,
         fetcher=ctx.fetcher,
         clock=ctx.clock,
+        poster=ctx.poster,
     )
     server = LocalServer(api, web_root(), args.port)
     _say(f"regwatch ui: serving {ctx.config.base_dir} at {server.url}")

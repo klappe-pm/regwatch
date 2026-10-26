@@ -362,7 +362,7 @@ regwatch newsletter --since 30 --out issue-42
 
 ## `ui`
 
-Starts the local web app and opens it in the browser. The server is the standard library's `ThreadingHTTPServer`, bound to `127.0.0.1` only, and runs until Ctrl+C. It reads the project named by `--config` the same way the other commands do, and checks the configuration before it starts. Only Run now on the Automations page reaches the network: it does what `regwatch run` does, so it fetches every source. Every other page reads and writes local files only. See [use the web app](../how-to-guides/use-the-web-app.md) and the [security model](../explanation/security-model.md#the-local-server).
+Starts the local web app and opens it in the browser. The server is the standard library's `ThreadingHTTPServer`, bound to `127.0.0.1` only, and runs until Ctrl+C. It reads the project named by `--config` the same way the other commands do, and checks the configuration before it starts. Two buttons reach the network. Run now on the Automations page does what `regwatch run` does, so it fetches every source. Generate on the Newsletters and Documents pages sends structured facts to the language model provider set in `[llm]`, as `--generate` does, and only when premium and generated copy are both on. Every other page reads and writes local files only. See [use the web app](../how-to-guides/use-the-web-app.md) and the [security model](../explanation/security-model.md#the-local-server).
 
 | option | meaning |
 | --- | --- |
@@ -391,14 +391,22 @@ The JSON interface the pages use is under `/api/`. Every route needs the session
 | `/api/automations` | GET | whether premium is on, the installed schedule (launchd or cron, its cadence and next run), the run records newest first, and whether a run is in progress |
 | `/api/automations/run` | POST | starts the code `regwatch run` runs in a background thread and answers at once; 409 while a run is in progress |
 | `/api/keys` | GET | for each keyed source you watch, its id, its environment variable, whether a key is available and where from (environment or keychain), and its sign-up page; never a key |
-| `/api/keys/set` | POST | stores `key` for `source_id` through the code `keys set` runs; answers only whether one is stored |
+| `/api/keys/set` | POST | stores `key` for `source_id` through the code `keys set` runs; answers only whether one is stored; `source_id` may also be a provider key id, `llm-anthropic` or `llm-openai` |
 | `/api/keys/remove` | POST | removes the stored key for `source_id` through the code `keys remove` runs, and says whether the environment still supplies one |
-| `/api/settings` | GET | the focus areas, the focus catalogue and whether premium is on |
+| `/api/settings` | GET | the focus areas, the focus catalogue, whether premium is on, the design specification with the safe fonts and page sizes, and the `[llm]` settings with, for each provider key, its id, its environment variable, whether one is available and where from, and its sign-up page; never a key |
 | `/api/settings/focus` | POST | sets `[profile] focus_areas` to `focus_areas`, ids from the catalogue |
 | `/api/settings/premium` | POST | sets `[premium] enabled` to `enabled`, true or false |
+| `/api/settings/design` | POST | premium only; sets the `[document]` keys in `design`, an object of text values, and `[newsletter] footer` from its `newsletter_footer`, after checking them as `regwatch.toml` is checked, logo included |
+| `/api/settings/llm` | POST | premium only; sets `[llm]` `enabled`, `provider` and `model`, each optional |
+| `/api/newsletter` | GET | premium only; the newsletter for the last `since` days, 1 to 366, as its subject, HTML and text; `generated=1` shows the copy kept from the last Generate for that period |
+| `/api/newsletter/generate` | POST | premium only; writes the newsletter's generated copy for `since` days and keeps it for the preview and downloads |
+| `/api/newsletter/export` | GET | premium only; the same newsletter as a download in `format` `eml`, `html` or `txt` |
+| `/api/document` | GET | premium only; a preview in the design of `kind` (`briefing`, `digest` or `report`) at `tier`, with `generated=1` as for newsletters |
+| `/api/document/generate` | POST | premium only; writes the summary that opens the document for `kind` and `tier` |
+| `/api/document/export` | GET | premium only; the same document as a download in `format` `html`, `docx` or `md` |
 | `/api/search` | GET | up to 8 sources, changes and obligations each that match `q` |
 
-Only a run started from the Automations page reaches the network, and only one runs at a time. An error is a JSON object with one short `error` message that never holds file contents: 400 for a bad request, 403 for a refused host, origin or token, 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, a source id already used by a different source, a key with no keychain tool, or a run already in progress, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register, and 500 otherwise. A connection that sends nothing for 30 seconds is closed, and when 32 connections are already being handled a new one is closed without an answer.
+Only a run started from the Automations page and a Generate reach the network; one run and one Generate go at a time. An error is a JSON object with one short `error` message that never holds file contents or a prompt: 400 for a bad request, 403 for a refused host, origin or token, or for a premium route while premium is off (the message names `regwatch premium on`), 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, a source id already used by a different source, a key with no keychain tool, a run already in progress, generated copy that is off, already being written or not yet generated, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register or a logo that cannot be used, 502 when the language model provider fails or answers with something unreadable, and 500 otherwise. A connection that sends nothing for 30 seconds is closed, and when 32 connections are already being handled a new one is closed without an answer.
 
 ## `premium`
 

@@ -504,7 +504,10 @@ def test_every_response_carries_the_security_headers(server: LocalServer) -> Non
         policy = reply.headers["Content-Security-Policy"]
         assert "default-src 'none'" in policy
         assert "http" not in policy
-        assert "unsafe" not in policy
+        # Inline styles only, for the sandboxed previews; never an inline or eval script.
+        assert "script-src 'self'" in policy and "unsafe-eval" not in policy
+        assert "style-src 'self' 'unsafe-inline'" in policy
+        assert policy.count("unsafe") == 1
         assert "frame-ancestors 'none'" in policy
 
 

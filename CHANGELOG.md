@@ -54,6 +54,8 @@ All notable changes to this project are documented in this file. The format foll
 ### Changed
 
 - Every Word file now has a styles part, and its paragraphs use named styles (Title, Heading 1 to 3 and others) instead of direct formatting, so a word processor's navigation and table of contents see the headings.
+- The web app's Newsletters and Documents pages, locked while premium is off, now work with premium on. Newsletters previews the issue for a 7, 14, 30 or 90 day period in a frame that cannot run scripts, copies its HTML or text, and downloads the `.eml`, `.html` and `.txt` files; Documents previews a briefing, register digest or change and due report in your design and downloads HTML, Word or Markdown. Generate on both pages writes the generated copy when it is on, labelled Generated with the facts beside it. Settings gains a design form with a live swatch and a contrast warning, and a generated copy form with the provider, the model and Set and Remove for each provider key. New routes: `/api/settings/design`, `/api/settings/llm`, `/api/newsletter` with `generate` and `export`, and `/api/document` with `generate` and `export`; each answers 403 while premium is off.
+- The web app's content security policy allows inline styles, which the sandboxed newsletter and document previews need; scripts, images, fonts and connections are still limited to the server itself.
 
 ### Security
 

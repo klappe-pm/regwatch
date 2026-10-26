@@ -47,7 +47,8 @@ def test_every_literal_heading_is_title_case(path: Path) -> None:
 def test_the_ui_reference_says_run_now_fetches() -> None:
     text = " ".join((ROOT / "docs" / "reference" / "cli.md").read_text("utf-8").split())
     assert "fetches nothing" not in text
-    assert "Only Run now on the Automations page reaches the network" in text
+    assert "Run now on the Automations page does what `regwatch run` does" in text
+    assert "Generate on the Newsletters and Documents pages sends structured facts" in text
 
 
 def test_the_catalogue_reference_does_not_call_the_web_search_planned() -> None:

@@ -85,13 +85,20 @@ def web_root() -> Path:
 
 
 def content_security_policy(script_hashes: list[str]) -> str:
-    """The policy for every response: this origin only, and the page's own inline scripts."""
+    """The policy for every response: this origin only, and the page's own inline scripts.
+
+    Styles may be inline, because the sandboxed previews of a newsletter and a
+    document carry their styles inline, as a mail client needs, and a ``srcdoc``
+    frame inherits this policy. A style cannot run a script, and with images, fonts
+    and connections limited to this origin and ``data:`` it cannot load or send
+    anything elsewhere either.
+    """
     scripts = " ".join(["'self'", *(f"'sha256-{h}'" for h in script_hashes)])
     return "; ".join(
         [
             "default-src 'none'",
             f"script-src {scripts}",
-            "style-src 'self'",
+            "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data:",
             "font-src 'self'",
             "connect-src 'self'",

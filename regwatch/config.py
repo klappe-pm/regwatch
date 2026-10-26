@@ -19,6 +19,7 @@ __all__ = [
     "AA_CONTRAST",
     "DEFAULT_CONFIG_NAME",
     "DEFAULT_MODELS",
+    "DOCUMENT_KEYS",
     "FONTS",
     "LLM_PROVIDERS",
     "PAGE_SIZES",
@@ -38,6 +39,7 @@ __all__ = [
     "contrast_with_white",
     "file_root_is_too_broad",
     "load_config",
+    "parse_document_table",
 ]
 
 DEFAULT_CONFIG_NAME = "regwatch.toml"
@@ -535,6 +537,30 @@ def _parse_document(table: dict[str, Any], base: Path) -> DocumentDesign:
     )
 
 
+DOCUMENT_KEYS = (
+    "title_format",
+    "organisation",
+    "primary_color",
+    "accent_color",
+    "font",
+    "logo",
+    "header",
+    "footer",
+    "page_size",
+)
+
+
+def parse_document_table(table: dict[str, Any], base: Path) -> DocumentDesign:
+    """Check a ``[document]`` table as ``load_config`` does and return the design.
+
+    Raises ConfigError for an unknown key or a value that ``load_config`` would refuse.
+    """
+    unknown = sorted(set(table) - set(DOCUMENT_KEYS))
+    if unknown:
+        raise ConfigError(f"[document] has unknown keys: {', '.join(unknown)}")
+    return _parse_document(table, base)
+
+
 def _parse_newsletter(table: dict[str, Any]) -> NewsletterSettings:
     footer = _short_text(table, "footer", "newsletter", 300, DEFAULT_NEWSLETTER_FOOTER)
     return NewsletterSettings(footer=footer.strip() or DEFAULT_NEWSLETTER_FOOTER)
@@ -642,21 +668,7 @@ def load_config(path: Path) -> Config:
             _table(data, "llm", ("enabled", "provider", "model", "max_tokens", "timeout_seconds"))
         ),
         document=_parse_document(
-            _table(
-                data,
-                "document",
-                (
-                    "title_format",
-                    "organisation",
-                    "primary_color",
-                    "accent_color",
-                    "font",
-                    "logo",
-                    "header",
-                    "footer",
-                    "page_size",
-                ),
-            ),
+            _table(data, "document", DOCUMENT_KEYS),
             base,
         ),
         newsletter=_parse_newsletter(_table(data, "newsletter", ("footer",))),
