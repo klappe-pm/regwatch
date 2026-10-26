@@ -199,7 +199,7 @@ Generated copy. See [the language model stage](../explanation/security-model.md#
 - `llm_fetcher(config: Config) -> SafeFetcher`: the fetch client for a call, with the `[llm]` deadline.
 - `generate(provider, facts, purpose, *, max_tokens, record=None, sections=SECTIONS) -> GenerationResult`: one call for the output whose generated sections are `sections` (`NEWSLETTER_SECTIONS` in `regwatch.newsletter` for a newsletter, which has no obligations section); `record` receives the provider, the model, the token counts, the duration and the outcome. Raises `GenerationError`; when the request failed, its message ends with the provider's own reason from `provider_message`, if the error body gave one.
 - `parse_passages(text, facts, provider="", model="", sections=SECTIONS) -> GenerationResult`: the passages that cite only the given facts, by section, with the reasons any were dropped. A passage for a section not in `sections`, or for a section other than the opening that cites no fact of that section, is dropped.
-- `GenerationResult`: `passages` by section, `dropped`, `provider`, `model`, `section(name)` and `count`.
+- `GenerationResult`: `passages` by section, `dropped`, `provider`, `model`, `notice` (why no request was sent, when none was), `section(name)` and `count`.
 - `LLM_KEYS`: the fixed key variable of each provider; `KEY_IDS`: the ids `regwatch keys` uses for them.
 
 ## `synthesis`
@@ -309,10 +309,10 @@ The operations `regwatch sources`, `keys` and `run` share with the web app. Noth
 - `schedule_state(config: Config, system: System, now: datetime) -> ScheduleState`: the installed schedule, read without changing anything. `ScheduleState` has `via` (`launchd` or `cron`), `installed`, `every`, `next_run` (exact for cron; for launchd the last run plus the interval) and `note`.
 - `premium_refusal(feature: str) -> str`: the message for a premium feature used while premium is off; it names `regwatch premium on`.
 - `read_candidates(config: Config) -> list[dict]`: the ingest candidates as stored, or none when the file is missing or unreadable.
-- `generated_copy(config, facts, purpose, key_for, poster=None, now=...) -> GenerationResult`: one generated copy call with the configured provider, recorded in `llm-calls.jsonl`. Raises `WorkspaceError` when `[llm]` is off.
+- `generated_copy(config, facts, purpose, key_for, poster=None, now=..., sections=SECTIONS) -> GenerationResult`: one generated copy call with the configured provider, recorded in `llm-calls.jsonl`. With no facts no request is sent and nothing is recorded: the result is empty, with `NO_FACTS_NOTICE` as its `notice`, so the fixed sentences stand. Raises `WorkspaceError` when `[llm]` is off.
 - `logo_for(config: Config) -> Logo | None`: the checked logo, under the project folder or an allowed file root.
 - `newsletter_plan(config, today, since_days) -> tuple[Register, NewsletterContent]`: the register and the period's items, with sources checked against their snapshots. The period is 1 to 366 days.
-- `newsletter_files(config, register, content, now, generated=None) -> NewsletterFiles`: the newsletter as `subject`, `html` (with the logo inline), `text` and `eml` bytes, with `generated` and the `dropped` reasons.
+- `newsletter_files(config, register, content, now, generated=None) -> NewsletterFiles`: the newsletter as `subject`, `html` (with the logo inline), `text` and `eml` bytes, with `generated`, the `dropped` reasons and the `notice` of the generation result.
 - `document_plan(config, today, kind, tier="v2") -> tuple[Document, list[Fact]]`: the `briefing`, `digest` or `report` with the design's title format, and the facts generated copy may use.
 - `with_summary(doc, generated) -> Document`: the document opened by a Summary section of every kept passage.
 - `document_bytes(config, doc, fmt) -> bytes`: the document as `html`, `docx` or `md`, in the design with its logo.

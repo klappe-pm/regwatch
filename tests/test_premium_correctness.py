@@ -20,6 +20,8 @@ from test_fetch import make, web
 from test_llm import FACTS, KEY, FakePoster, FakeProvider, answer
 from test_newsletter import FakePoster as NewsletterPoster
 
+import regwatch.cli
+import regwatch.webapi
 from regwatch.cli import main
 from regwatch.config import DocumentDesign, load_config
 from regwatch.document import Document, Section
@@ -40,11 +42,12 @@ from regwatch.llm import (
     parse_passages,
     provider_message,
 )
-from regwatch.newsletter import NEWSLETTER_SECTIONS, newsletter_content
+from regwatch.newsletter import NEWSLETTER_SECTIONS, NewsletterContent, newsletter_content
 from regwatch.register import load_register
 from regwatch.render import docx_bytes
 from regwatch.settings import set_llm, set_premium
-from regwatch.webapi import Api
+from regwatch.webapi import Api, ApiError
+from regwatch.workspace import NO_FACTS_NOTICE, document_plan
 
 # --- C3: an answer cut off at max_tokens is a clear error -----------------------------
 
@@ -370,6 +373,83 @@ def test_a_refusal_is_still_recorded_as_refused() -> None:
 def kind_provider(kind: Any, body: str) -> Any:
     poster = FakePoster(body)
     return kind(poster, "m") if kind is OllamaProvider else kind(poster, KEY, "m")
+
+
+# --- C12: Generate on an empty period falls back to the fixed sentences --------------
+
+
+class RefusingPoster(NewsletterPoster):
+    """Fails the test if any request is sent."""
+
+    def post_json(self, url: str, payload: Any, **kwargs: Any) -> str:
+        raise AssertionError("no request may be sent for an empty period")
+
+
+def generating(project: Path) -> FakeSystem:
+    set_premium(project, True)
+    set_llm(project, enabled=True)
+    fake = FakeSystem("linux")
+    fake.environ["REGWATCH_KEY_ANTHROPIC"] = KEY
+    return fake
+
+
+def no_facts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every period empty: no newsletter item and no document fact."""
+    monkeypatch.setattr(NewsletterContent, "facts", lambda self: [])
+
+    def plan(*args: Any) -> Any:
+        return document_plan(*args)[0], []
+
+    monkeypatch.setattr(regwatch.webapi, "document_plan", plan)
+    monkeypatch.setattr(regwatch.cli, "document_plan", plan)
+
+
+def test_generate_on_an_empty_period_uses_the_fixed_sentences_in_the_web_app(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = generating(project)
+    no_facts(monkeypatch)
+    api = Api(
+        project, lambda: TODAY, system=fake.system(), clock=lambda: NOW, poster=RefusingPoster([])
+    )
+    status, data = api.handle("POST", "/api/newsletter/generate", {}, {"since": 7})
+    assert status == 200 and data["generated"] is False and data["notice"] == NO_FACTS_NOTICE
+    assert "html" in data and data["dropped"] == []
+    status, data = api.handle("POST", "/api/document/generate", {}, {"kind": "briefing"})
+    assert status == 200 and data["notice"] == NO_FACTS_NOTICE and data["generated"] is False
+
+
+def test_generate_on_an_empty_period_uses_the_fixed_sentences_in_the_commands(
+    project: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fake = generating(project)
+    no_facts(monkeypatch)
+    for command in (["newsletter"], ["document", "--format", "md"]):
+        out = str(tmp_path / command[0])
+        args = ["--config", str(project), *command, "--generate", "--out", out]
+        code = main(args, today=TODAY, now=NOW, system=fake.system(), poster=RefusingPoster([]))
+        captured = capsys.readouterr()
+        assert code == 0, captured.err
+        assert NO_FACTS_NOTICE in captured.out
+    assert not load_config(project).llm_calls_path.exists()
+
+
+def test_a_failed_generate_is_a_409_not_a_server_error(project: Path) -> None:
+    fake = generating(project)
+    failure = FetchError("HTTP status 400", status=400)
+    api = Api(
+        project, lambda: TODAY, system=fake.system(), clock=lambda: NOW, poster=FakePoster(failure)
+    )
+    for path, body in (
+        ("/api/newsletter/generate", {"since": 7}),
+        ("/api/document/generate", {"kind": "briefing"}),
+    ):
+        with pytest.raises(ApiError) as caught:
+            api.handle("POST", path, {}, body)
+        assert caught.value.status == 409 and "request failed" in str(caught.value)
 
 
 # --- C11: Word prints the design footer once, in the page footer -----------------------

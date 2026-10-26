@@ -103,7 +103,7 @@ def test_generated_newsletter_copy_is_written_once_and_reused(premium: Path) -> 
     assert get(api, "/api/newsletter", since="30")["generated"] is False
 
 
-def test_a_failed_generation_is_502_without_the_key(premium: Path) -> None:
+def test_a_failed_generation_is_409_without_the_key(premium: Path) -> None:
     from regwatch.fetch import FetchError
 
     class Failing(FakePoster):
@@ -115,7 +115,7 @@ def test_a_failed_generation_is_502_without_the_key(premium: Path) -> None:
     api = make(premium, fake, poster=Failing([]))
     post(api, "/api/settings/llm", {"enabled": True})
     error = refused(api, "POST", "/api/newsletter/generate", {"since": 7})
-    assert error.status == 502 and "HTTP status 401" in error.message and KEY not in error.message
+    assert error.status == 409 and "HTTP status 401" in error.message and KEY not in error.message
 
 
 def test_the_document_preview_and_downloads(premium: Path) -> None:

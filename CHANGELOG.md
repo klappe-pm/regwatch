@@ -85,6 +85,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- `--generate` on a period with nothing to write from failed, and Generate in the web app answered 502. No request is sent now: the newsletter or document keeps its fixed sentences, and the command and the page say so. A Generate that the provider fails answers 409 with the reason instead of 502.
 - A Word document printed the design footer twice: once in the page footer and once as a paragraph before the disclaimer. It is now written only in the page footer.
 - A provider answer that was not a JSON object (an HTML error page, for example) was recorded in `llm-calls.jsonl` as `refused`, as if the model had declined. It is now recorded as `unreadable`; `refused` is kept for a model that declined.
 - Anthropic: the server side fallback option and its `anthropic-beta` header were sent for every model, so a model without the fallback (such as Claude Haiku 5.5) refused every request. They are now sent only for `claude-fable-5-1`, `claude-opus-5-5`, `claude-opus-5` and `claude-sonnet-5-5`. A request answered with status 429, 500 to 599 or 529 is sent once more after two seconds, and a failed request now ends with the provider's own reason from its error body, cleaned and cut to 200 characters, instead of the status alone.

@@ -523,12 +523,17 @@ def build_prompt(purpose: str, facts: Sequence[Fact], sections: Sequence[str] = 
 
 @dataclass
 class GenerationResult:
-    """The passages that were kept, by section, and why any were dropped."""
+    """The passages that were kept, by section, and why any were dropped.
+
+    ``notice`` says why no request was sent, when none was: the fixed sentences
+    stand in for the generated copy.
+    """
 
     passages: dict[str, list[GeneratedPassage]] = field(default_factory=dict)
     dropped: list[str] = field(default_factory=list)
     provider: str = ""
     model: str = ""
+    notice: str = ""
 
     def section(self, name: str) -> list[GeneratedPassage]:
         """The passages for section ``name``; an empty list when there are none."""

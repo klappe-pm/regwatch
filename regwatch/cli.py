@@ -1771,6 +1771,7 @@ def _cmd_document(ctx: _Context, args: argparse.Namespace) -> int:
         raise CommandError("generated copy is off; turn it on with 'regwatch llm on'")
     doc, facts = document_plan(config, ctx.today, args.kind, args.tier)
     dropped: list[str] = []
+    notice = ""
     if args.generate:
         generated = generated_copy(
             config,
@@ -1782,12 +1783,15 @@ def _cmd_document(ctx: _Context, args: argparse.Namespace) -> int:
         )
         doc = with_summary(doc, generated)
         dropped = generated.dropped
+        notice = generated.notice
     data = document_bytes(config, doc, args.format)
     stem = _output_stem(args.out, f"regwatch-{args.kind}-{ctx.today.isoformat()}")
     path = stem.with_name(f"{stem.name}.{args.format}")
     ctx.write_bytes(path, data)
     _say(f"wrote {path}")
     _say_dropped("document", dropped)
+    if notice:
+        _say(f"regwatch document: {notice}")
     _say(f"regwatch document: {doc.title}")
     if args.format == "html":
         _say("Open it in a browser and print it to save a PDF.")
@@ -1822,6 +1826,8 @@ def _cmd_newsletter(ctx: _Context, args: argparse.Namespace) -> int:
     for path in written:
         _say(f"wrote {path}")
     _say_dropped("newsletter", files.dropped)
+    if files.notice:
+        _say(f"regwatch newsletter: {files.notice}")
     copy = "generated" if files.generated else "fixed sentences"
     _say(f"regwatch newsletter: {files.subject}; opening and summaries: {copy}")
     _say("Regwatch does not send email. Review the newsletter, then send it from your mail tool.")

@@ -876,7 +876,8 @@ class Api:
             )
         except GenerationError as exc:
             # The message holds the provider's status with the key removed, never a prompt.
-            raise ApiError(502, str(exc)[:300]) from exc
+            # 409, not a 5xx: the app itself worked, and the page shows the reason.
+            raise ApiError(409, str(exc)[:300]) from exc
         finally:
             self._generate_lock.release()
         self._keep(cache, result)
@@ -919,6 +920,7 @@ class Api:
             "text": files.text,
             "generated": files.generated,
             "dropped": list(files.dropped),
+            "notice": files.notice,
         }
 
     def newsletter(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
@@ -963,7 +965,7 @@ class Api:
 
     def _designed(
         self, kind: str, tier: str, generated: bool, *, generate: bool = False
-    ) -> tuple[Config, Document, list[str]]:
+    ) -> tuple[Config, Document, GenerationResult]:
         config = self._premium("Documents")
         today = self.today()
         doc, facts = document_plan(config, today, kind, tier)
@@ -981,12 +983,12 @@ class Api:
                 )
         if result is not None:
             doc = with_summary(doc, result)
-        return config, doc, list(result.dropped) if result is not None else []
+        return config, doc, result or GenerationResult()
 
     def _document_payload(
         self, kind: str, tier: str, generated: bool, generate: bool = False
     ) -> JsonObject:
-        config, doc, dropped = self._designed(kind, tier, generated, generate=generate)
+        config, doc, result = self._designed(kind, tier, generated, generate=generate)
         try:
             page = document_bytes(config, doc, "html").decode("utf-8")
         except DesignError as exc:
@@ -1000,7 +1002,8 @@ class Api:
             "title": doc.title,
             "html": page,
             "generated": any(section.generated for section in doc.sections),
-            "dropped": dropped,
+            "dropped": list(result.dropped),
+            "notice": result.notice,
         }
 
     def document(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
@@ -1018,7 +1021,7 @@ class Api:
         fmt = query.get("format", "html")
         if fmt not in DOCUMENT_FORMATS:
             raise ApiError(400, f"format must be one of {', '.join(DOCUMENT_FORMATS)}")
-        config, doc, _dropped = self._designed(kind, tier, query.get("generated") == "1")
+        config, doc, _result = self._designed(kind, tier, query.get("generated") == "1")
         try:
             data = document_bytes(config, doc, fmt)
         except DesignError as exc:
@@ -1029,7 +1032,7 @@ class Api:
     def document_preview(self, query: Mapping[str, str], body: JsonObject) -> Preview:
         """The document's HTML for the page's sandboxed frame, under the preview policy."""
         kind, tier = self._document_args(query)
-        config, doc, _dropped = self._designed(kind, tier, query.get("generated") == "1")
+        config, doc, _result = self._designed(kind, tier, query.get("generated") == "1")
         try:
             return Preview(document_bytes(config, doc, "html").decode("utf-8"))
         except DesignError as exc:

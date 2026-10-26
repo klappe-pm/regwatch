@@ -48,6 +48,8 @@ regwatch --config ~/my-register/regwatch.toml llm on
 
 `regwatch llm status` prints whether generated copy is on, the provider, the model and where the key comes from. Then add `--generate` to `regwatch newsletter` or `regwatch document`, or press Generate on the Newsletters or Documents page of `regwatch ui`. The Settings page of the web app holds the same settings.
 
+When nothing in the period gives the model anything to write from, no request is sent: the newsletter or document keeps its fixed sentences, and the command and the page say so.
+
 ## Read What It Cost
 
 Each call adds one line to `llm-calls.jsonl` in the state directory with the provider, the model, the input and output token counts, the duration and the outcome. The prompt, the answer and the key are never written there.

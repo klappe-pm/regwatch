@@ -18,6 +18,7 @@ import {
   Tag,
 } from "@/components/ui";
 import { postJson, useApi } from "@/lib/api";
+import { generateNotice } from "@/lib/generate-notice";
 import { premiumView, viewQuery } from "@/lib/premium-view";
 import type { Newsletter, Settings } from "@/lib/types";
 
@@ -50,11 +51,7 @@ function NewsletterView({ llmOn }: { llmOn: boolean }) {
       const result = await postJson<Newsletter>("/api/newsletter/generate", { since: Number(since) });
       setGenerated(true);
       setRound((value) => value + 1);
-      setNotice(
-        result.dropped.length
-          ? `Generated. ${result.dropped.length} passage(s) were left out because they cited facts they were not given.`
-          : "Generated. Check each passage against the facts listed under it.",
-      );
+      setNotice(generateNotice(result));
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : "The copy could not be generated.");
     } finally {

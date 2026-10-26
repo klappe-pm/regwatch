@@ -250,6 +250,7 @@ export interface Newsletter {
   text: string;
   generated: boolean;
   dropped: string[];
+  notice: string;
 }
 
 export interface DesignedDocument {
@@ -262,6 +263,7 @@ export interface DesignedDocument {
   html: string;
   generated: boolean;
   dropped: string[];
+  notice: string;
 }
 
 export interface SearchResults {

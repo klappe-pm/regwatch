@@ -75,6 +75,7 @@ from regwatch.system import System
 __all__ = [
     "DOCUMENT_FORMATS",
     "DOCUMENT_KINDS",
+    "NO_FACTS_NOTICE",
     "RUN_CHANGES",
     "RUN_OK",
     "RUN_UNVERIFIED",
@@ -447,6 +448,10 @@ def schedule_state(config: Config, system: System, now: dt.datetime) -> Schedule
 
 PREMIUM_HINT = "turn it on with 'regwatch premium on'"
 MAX_SINCE_DAYS = 366
+NO_FACTS_NOTICE = (
+    "Nothing in this period gives the language model anything to write from, so no "
+    "request was sent and the fixed sentences are used."
+)
 
 
 def premium_refusal(feature: str) -> str:
@@ -484,12 +489,16 @@ def generated_copy(
     """Ask the configured provider for copy written from ``facts``, and record the call.
 
     ``sections`` are the sections the output shows; a passage for any other is
-    dropped. Raises WorkspaceError when generated copy is off, and GenerationError
-    when it cannot be written. The call is recorded in ``llm-calls.jsonl`` in the
-    state directory with the provider, the model, the tokens and the duration only.
+    dropped. With no facts no request is sent: the result is empty and its notice
+    says the fixed sentences are used. Raises WorkspaceError when generated copy is
+    off, and GenerationError when it cannot be written. The call is recorded in
+    ``llm-calls.jsonl`` in the state directory with the provider, the model, the
+    tokens and the duration only.
     """
     if not config.llm.enabled:
         raise WorkspaceError("generated copy is off; turn it on with 'regwatch llm on'")
+    if not facts:
+        return GenerationResult(notice=NO_FACTS_NOTICE)
     provider = provider_for(config.llm, poster or llm_fetcher(config), key_for)
     protected = config.register.all_paths()
 
@@ -541,6 +550,7 @@ class NewsletterFiles:
     eml: bytes
     generated: bool
     dropped: tuple[str, ...] = ()
+    notice: str = ""
 
 
 def newsletter_files(
@@ -571,6 +581,7 @@ def newsletter_files(
         eml=email_bytes(doc.title, text, mail, now, logo),
         generated=generated is not None and generated.count > 0,
         dropped=tuple(generated.dropped) if generated is not None else (),
+        notice=generated.notice if generated is not None else "",
     )
 
 
