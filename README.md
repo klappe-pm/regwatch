@@ -156,6 +156,9 @@ Regwatch flags candidates for human review. A qualified person must confirm each
 | `regwatch export` | Writes one flat record per obligation as CSV and JSON. |
 | `regwatch ui` | Opens the local web app in your browser, over the same files. |
 | `regwatch premium` | Turns the premium features on or off, or shows whether they are on. |
+| `regwatch newsletter` | Premium: writes a send-ready newsletter for a period as `.eml`, `.html` and `.txt`; it never sends. |
+| `regwatch document` | Premium: writes a briefing, digest or report in your design as HTML, Word or Markdown. |
+| `regwatch llm` | Premium: turns generated copy on or off and chooses the language model provider. |
 
 Every command accepts `--help`. The [CLI reference](https://github.com/klappe-pm/regwatch/blob/main/docs/reference/cli.md) covers every option, what each command reads and writes, and the exit statuses.
 

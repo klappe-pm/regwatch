@@ -47,6 +47,10 @@ Commands read the register. Only `sources add` and `sources remove` write it, an
 | `run` | snapshots, and one run record in `runs/` in the state directory |
 | `schedule --install`, `schedule --remove` | on macOS `~/Library/LaunchAgents/io.github.klappe-pm.regwatch.plist`; elsewhere your crontab, between regwatch's marker lines only |
 | `premium on`, `premium off` | one line in `regwatch.toml`: `[premium] enabled` |
+| `llm on`, `llm off`, `llm use` | lines in the `[llm]` table of `regwatch.toml` |
+| `newsletter` | `<stem>.eml`, `<stem>.html` and `<stem>.txt` at the stem you name, or in the current folder |
+| `document` | `<stem>.<format>` at the stem you name, or in the current folder |
+| any command that writes generated copy | one line per language model call in `llm-calls.jsonl` in the state directory |
 | `ui` | through its Settings page only, one line in `regwatch.toml`: `[profile] focus_areas` or `[premium] enabled` |
 
 `keys set` and `keys remove` change the system keychain, never a file.
@@ -145,7 +149,7 @@ Keeps the keys that keyed sources need in the system keychain: the macOS login k
 | `list` | each keyed source with `stored`, `set in the environment`, `missing` or `missing (no keychain tool)`; with a configuration the keyed sources of your sources file, without one the keyed catalogue sources |
 | `remove SOURCE_ID` | delete the stored key; says so when the environment variable still supplies one |
 
-`SOURCE_ID` is a keyed source in your sources file or in the catalogue. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, a key too long for the line `security` reads on macOS (3,906 to 4,006 characters depending on the key name), or a machine with neither keychain tool exits 2; the last two name the environment variable to use instead.
+`SOURCE_ID` is a keyed source in your sources file or in the catalogue, or `llm-anthropic` or `llm-openai` for the key of a language model provider, kept under the fixed variable `REGWATCH_KEY_ANTHROPIC` or `REGWATCH_KEY_OPENAI`; a provider key is stored only while premium features are on, and otherwise exits 2 naming `regwatch premium on`. A source that needs no key, a key with a space, quote, backslash or non-ASCII character, a key too long for the line `security` reads on macOS (3,906 to 4,006 characters depending on the key name), or a machine with neither keychain tool exits 2; the last two name the environment variable to use instead.
 
 ## `run`
 
@@ -322,9 +326,43 @@ Writes one flat record per obligation, joined with its detail record when there 
 
 Every CSV field is quoted. A cell, or any part of a cell after a `;`, a `,`, a tab or a line break, that begins with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed (also after leading whitespace, and in the fullwidth forms) gets a leading apostrophe in the CSV so a spreadsheet does not run it as a formula; the JSON is unchanged. The columns are `obligation_id`, `jurisdiction`, `status`, `effective_date`, `topics`, `summary`, `impacts`, `implications`, `action`, `source_url` and `citations`.
 
+## `document`
+
+Writes a briefing, a digest or a report that follows the `[document]` design specification. Documents are a premium feature: with premium off it exits 2 with a message that names `regwatch premium on`. See [build documents in your design](../how-to-guides/build-documents-in-your-design.md).
+
+| option | meaning |
+| --- | --- |
+| `--kind KIND` | `briefing` (the tiered briefing, the default), `digest` (the register by jurisdiction) or `report` (the change and due alert); digests and reports look a year ahead |
+| `--tier TIER` | with `briefing`, `v1`, `v2` (the default) or `v3` |
+| `--format FORMAT` | `html` (the default), `docx` or `md` |
+| `--generate` | open the document with a Summary section the language model writes; needs `regwatch llm on` and exits 2 otherwise; with nothing to write from the document is written without it, no request is sent and the command says so |
+| `--out PATH` | the file stem; the format's suffix is added, and a known suffix you give is replaced. Default `regwatch-<kind>-<date>` in the current folder |
+
+The title follows `title_format`. HTML is one standalone page with the design's colours, font, header, footer and logo (PNG or SVG, inline), and a print stylesheet with the page size, so printing it from a browser saves a PDF. Word has a styles part with the font and colours, a header and a footer part when the design has them, the page size, and a PNG logo; an SVG logo is left out of Word. Markdown takes the title format only. Sources are checked against their snapshots and never fetched. With `--generate` every kept passage is labelled Generated and followed by the facts it cites, and each dropped passage is reported on standard error. A logo that is refused exits 2 and nothing is written.
+
+```text
+regwatch document --kind report --format docx --out weekly-report
+```
+
+## `newsletter`
+
+Writes a send-ready newsletter for the last `--since` days as three files: an `.eml` file, a standalone `.html` file and a `.txt` file. Regwatch never sends email; open the `.eml` in a mail program (it carries `X-Unsent: 1`, which some open as a draft) or paste the HTML into your mail tool, and send it yourself. Newsletters are a premium feature: with premium off it exits 2 with a message that names `regwatch premium on`. See [send a newsletter](../how-to-guides/send-a-newsletter.md).
+
+| option | meaning |
+| --- | --- |
+| `--since DAYS` | the period, 1 to 366 days ending today and including today; default 7 (13 to 19 October when run on 19 October) |
+| `--generate` | have the language model write the opening and the section summaries; needs `regwatch llm on` and exits 2 otherwise; a period with nothing to write from keeps the fixed sentences, sends no request and says so |
+| `--out PATH` | the file stem; a `.eml`, `.html` or `.txt` suffix is dropped. Default `regwatch-newsletter-<date>` in the current folder |
+
+It covers the sources whose stored snapshot changed or could not be read, the change log events and ingest candidates dated in the period, and up to 10 candidate impacts of act now or high severity, those in your focus areas first. Sources are checked against their snapshots and never fetched. The HTML is a table at most 600 pixels wide, narrower on a small screen so it never scrolls sideways, with inline styles only, in the colours, font and logo of the `[document]` design, and ends with the `[newsletter] footer` line and the disclaimer. The `.eml` is `multipart/alternative` with the text and the HTML, a PNG logo as an inline related image (in a `multipart/related` part with `type="text/html"`, so mail programs show it in the message rather than as an attachment), a subject and no recipient. Without `--generate` the opening and each summary are fixed sentences built from the data. With it, they are generated passages labelled Generated and followed by the facts they cite; a section whose passage was dropped keeps its fixed sentence, and each dropped passage is reported on standard error. A logo that is refused exits 2 and nothing is written.
+
+```text
+regwatch newsletter --since 30 --out issue-42
+```
+
 ## `ui`
 
-Starts the local web app and opens it in the browser. The server is the standard library's `ThreadingHTTPServer`, bound to `127.0.0.1` only, and runs until Ctrl+C. It reads the project named by `--config` the same way the other commands do, and checks the configuration before it starts. Only Run now on the Automations page reaches the network: it does what `regwatch run` does, so it fetches every source. Every other page reads and writes local files only. See [use the web app](../how-to-guides/use-the-web-app.md) and the [security model](../explanation/security-model.md#the-local-server).
+Starts the local web app and opens it in the browser. The server is the standard library's `ThreadingHTTPServer`, bound to `127.0.0.1` only, and runs until Ctrl+C. It reads the project named by `--config` the same way the other commands do, and checks the configuration before it starts. Two buttons reach the network. Run now on the Automations page does what `regwatch run` does, so it fetches every source. Generate on the Newsletters and Documents pages sends structured facts to the language model provider set in `[llm]`, as `--generate` does, and only when premium and generated copy are both on. Every other page reads and writes local files only. See [use the web app](../how-to-guides/use-the-web-app.md) and the [security model](../explanation/security-model.md#the-local-server).
 
 | option | meaning |
 | --- | --- |
@@ -353,14 +391,24 @@ The JSON interface the pages use is under `/api/`. Every route needs the session
 | `/api/automations` | GET | whether premium is on, the installed schedule (launchd or cron, its cadence and next run), the run records newest first, and whether a run is in progress |
 | `/api/automations/run` | POST | starts the code `regwatch run` runs in a background thread and answers at once; 409 while a run is in progress |
 | `/api/keys` | GET | for each keyed source you watch, its id, its environment variable, whether a key is available and where from (environment or keychain), and its sign-up page; never a key |
-| `/api/keys/set` | POST | stores `key` for `source_id` through the code `keys set` runs; answers only whether one is stored |
+| `/api/keys/set` | POST | stores `key` for `source_id` through the code `keys set` runs; answers only whether one is stored; `source_id` may also be a provider key id, `llm-anthropic` or `llm-openai`, which answers 403 while premium is off |
 | `/api/keys/remove` | POST | removes the stored key for `source_id` through the code `keys remove` runs, and says whether the environment still supplies one |
-| `/api/settings` | GET | the focus areas, the focus catalogue and whether premium is on |
+| `/api/settings` | GET | the focus areas, the focus catalogue, whether premium is on, the design specification with the safe fonts and page sizes, and the `[llm]` settings with, for each provider key, its id, its environment variable, whether one is available and where from, and its sign-up page; never a key |
 | `/api/settings/focus` | POST | sets `[profile] focus_areas` to `focus_areas`, ids from the catalogue |
 | `/api/settings/premium` | POST | sets `[premium] enabled` to `enabled`, true or false |
+| `/api/settings/design` | POST | premium only; sets the `[document]` keys in `design`, an object of text values, and `[newsletter] footer` from its `newsletter_footer`, after checking them as `regwatch.toml` is checked, logo included |
+| `/api/settings/llm` | POST | premium only; sets `[llm]` `enabled`, `provider` and `model`, each optional |
+| `/api/newsletter` | GET | premium only; the newsletter for the last `since` days, 1 to 366, as its subject, HTML and text, with `logo_note` saying when an SVG logo leaves the email without one; `generated=1` shows the copy kept from the last Generate for that period, and answers 409 when the facts it would be built from, the provider or the model have changed since |
+| `/api/newsletter/generate` | POST | premium only; writes the newsletter's generated copy for `since` days and keeps it for the preview and downloads |
+| `/api/newsletter/export` | GET | premium only; the same newsletter as a download in `format` `eml`, `html` or `txt` |
+| `/api/newsletter/preview` | GET | premium only; the same newsletter's HTML as `text/html` for the page's sandboxed frame, with the preview policy and `X-Frame-Options: SAMEORIGIN` |
+| `/api/document` | GET | premium only; the title of the document of `kind` (`briefing`, `digest` or `report`) at `tier` in the design, its HTML and whether it holds generated copy, with `generated=1` as for newsletters |
+| `/api/document/generate` | POST | premium only; writes the summary that opens the document for `kind` and `tier` |
+| `/api/document/export` | GET | premium only; the same document as a download in `format` `html`, `docx` or `md` |
+| `/api/document/preview` | GET | premium only; the same document's HTML as `text/html` for the page's sandboxed frame, with the preview policy and `X-Frame-Options: SAMEORIGIN` |
 | `/api/search` | GET | up to 8 sources, changes and obligations each that match `q` |
 
-Only a run started from the Automations page reaches the network, and only one runs at a time. An error is a JSON object with one short `error` message that never holds file contents: 400 for a bad request, 403 for a refused host, origin or token, 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, a source id already used by a different source, a key with no keychain tool, or a run already in progress, 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register, and 500 otherwise. A connection that sends nothing for 30 seconds is closed, and when 32 connections are already being handled a new one is closed without an answer.
+Only a run started from the Automations page and a Generate reach the network; one run and one Generate go at a time. An error is a JSON object with one short `error` message that never holds file contents or a prompt: 400 for a bad request, 403 for a refused host, origin or token, or for a premium route while premium is off (the message names `regwatch premium on`), 404 for an unknown route or file, 405 for a wrong method, 409 for a setting that cannot be saved, a source id already used by a different source, a key with no keychain tool, a run already in progress, generated copy that is off, already being written or not yet generated, or a language model provider that fails or answers with something unreadable (the message gives the reason), 413 for a body over 65,536 bytes, 415 for a body that is not JSON, 422 for an invalid register or a logo that cannot be used, and 500 otherwise. A Generate for a period with nothing to write from sends no request and answers 200 with the fixed sentences and a `notice` that says so. A connection that sends nothing for 30 seconds is closed, and when 32 connections are already being handled a new one is closed without an answer.
 
 ## `premium`
 
@@ -376,4 +424,23 @@ Each prints `regwatch premium: on` or `regwatch premium: off`, and while off, th
 
 ```text
 regwatch premium on
+```
+
+## `llm`
+
+Shows or changes the language model behind generated copy, the `[llm]` table in `regwatch.toml`. Generated copy is a premium feature: with premium off, `on`, `off` and `use` exit 2 with a message that names `regwatch premium on`, and `status` still works. See [turn on generated copy](../how-to-guides/turn-on-generated-copy.md).
+
+| argument | meaning |
+| --- | --- |
+| `status` | change nothing |
+| `on`, `off` | set `[llm] enabled` |
+| `use PROVIDER` | set `[llm] provider` to `anthropic`, `openai` or `ollama`, and `[llm] model` to `--model`, or to empty for the provider's default |
+| `--model NAME` | with `use` only, the model name; with `status`, `on` or `off` it exits 2 rather than drop the name |
+
+Each prints `regwatch llm: <on or off>, <provider>, <model>`, then where the provider's key comes from (`environment`, `keychain`, `missing` or `unavailable`) with the `keys set` command that stores one, or, when no keychain tool was found (`unavailable`), the environment variable to set instead, or for Ollama the address it runs at, which needs no key and no `allow_private_hosts`. The provider keys are kept with `keys set llm-anthropic` and `keys set llm-openai`.
+
+```text
+regwatch llm use anthropic
+regwatch keys set llm-anthropic
+regwatch llm on
 ```

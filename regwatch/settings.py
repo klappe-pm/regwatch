@@ -15,16 +15,33 @@ import copy
 import json
 import re
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from regwatch.config import FOCUS_ID_RE, load_config
+from regwatch.config import (
+    FOCUS_ID_RE,
+    LLM_PROVIDERS,
+    MODEL_RE,
+    ConfigError,
+    load_config,
+    parse_document_table,
+)
+from regwatch.design import DesignError, load_logo
 from regwatch.state import safe_write_text
 
-__all__ = ["SettingsError", "edit_setting", "set_focus_areas", "set_premium", "set_setting"]
+__all__ = [
+    "SettingsError",
+    "edit_setting",
+    "set_design",
+    "set_focus_areas",
+    "set_llm",
+    "set_newsletter_footer",
+    "set_premium",
+    "set_setting",
+]
 
-SettingValue = bool | list[str]
+SettingValue = bool | int | str | list[str]
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -35,6 +52,11 @@ class SettingsError(ValueError):
 def _literal(value: SettingValue) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        # A JSON string is a valid TOML basic string, with ASCII escapes for the rest.
+        return json.dumps(value)
     # JSON strings are valid TOML basic strings: both escape quotes, backslashes and controls.
     return "[" + ", ".join(json.dumps(item) for item in value) + "]"
 
@@ -131,3 +153,68 @@ def set_focus_areas(config_path: Path, focus_areas: Iterable[str], known: Iterab
     if bad:
         raise SettingsError("unknown focus areas: " + ", ".join(sorted(bad))[:200])
     set_setting(config_path, "profile", "focus_areas", chosen)
+
+
+def set_llm(
+    config_path: Path,
+    *,
+    enabled: bool | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+) -> None:
+    """Change ``[llm] enabled``, ``provider`` and ``model``; each one left as None is kept.
+
+    A provider must be one regwatch knows and a model a plain model name (empty means
+    the provider's default). Each setting is changed and checked on its own.
+    """
+    if provider is not None and provider not in LLM_PROVIDERS:
+        raise SettingsError(f"the provider must be one of {', '.join(LLM_PROVIDERS)}")
+    if model is not None and model and not MODEL_RE.fullmatch(model):
+        raise SettingsError(
+            "a model name holds letters, digits and . _ : / - only, at most 100 characters"
+        )
+    if provider is not None:
+        set_setting(config_path, "llm", "provider", provider)
+    if model is not None:
+        set_setting(config_path, "llm", "model", model)
+    if enabled is not None:
+        set_setting(config_path, "llm", "enabled", enabled)
+
+
+def set_design(config_path: Path, values: Mapping[str, str]) -> None:
+    """Change keys of the ``[document]`` design specification.
+
+    Every value is checked before anything is written, exactly as ``load_config``
+    checks it: colours must meet AA against white, the font must be on the list and a
+    logo must be a PNG or SVG that passes every logo check. Only keys whose value
+    changes are written.
+    """
+    config = load_config(config_path)
+    try:
+        current = tomllib.loads(config_path.read_text(encoding="utf-8")).get("document", {})
+    except tomllib.TOMLDecodeError as exc:  # pragma: no cover (load_config parsed it)
+        raise SettingsError("the configuration file is not valid TOML") from exc
+    if not isinstance(current, dict):
+        raise SettingsError("[document] is not a table; change it by hand")
+    if not all(isinstance(value, str) for value in values.values()):
+        raise SettingsError("every design value must be text")
+    merged = {**current, **values}
+    try:
+        design = parse_document_table(merged, config.base_dir)
+    except ConfigError as exc:
+        raise SettingsError(str(exc)) from exc
+    if design.logo is not None:
+        try:
+            load_logo(design.logo, [config.base_dir, *config.fetch.allowed_file_roots])
+        except DesignError as exc:
+            raise SettingsError(str(exc)) from exc
+    for key, value in values.items():
+        if current.get(key) != value:
+            set_setting(config_path, "document", key, value)
+
+
+def set_newsletter_footer(config_path: Path, footer: str) -> None:
+    """Set ``[newsletter] footer``, the reply or unsubscribe line, after checking it."""
+    if len(footer) > 300 or any(ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F for ch in footer):
+        raise SettingsError("the closing line is at most 300 characters without control characters")
+    set_setting(config_path, "newsletter", "footer", footer)

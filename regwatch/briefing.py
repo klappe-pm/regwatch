@@ -27,6 +27,7 @@ from regwatch.impact import Impact
 from regwatch.register import ChangeEvent, Citation, Obligation, Register, parse_date
 from regwatch.sanitize import clean_text, safe_https_url
 from regwatch.synthesis import upcoming_obligations
+from regwatch.wording import count
 
 __all__ = ["TIERS", "build_briefing"]
 
@@ -299,9 +300,10 @@ def build_briefing(
             Section(
                 "Newly Detected, Unconfirmed",
                 paragraphs=[
-                    f"{len(candidate_list)} item(s) from the ingest feed, "
-                    "flagged for confirmation by a person "
-                    "before they are added to the curated change log."
+                    f"{count(len(candidate_list), 'item').capitalize()} from the ingest feed, "
+                    "flagged for confirmation by a person before "
+                    f"{'it is' if len(candidate_list) == 1 else 'they are'} added to the "
+                    "curated change log."
                 ],
             )
         )
@@ -311,8 +313,9 @@ def build_briefing(
                 Section(
                     "Newly Detected Outside Your Focus Areas, Unconfirmed",
                     paragraphs=[
-                        f"{len(other)} item(s) from the ingest feed mention none of "
-                        "your focus areas."
+                        f"{count(len(other), 'item').capitalize()} from the ingest feed "
+                        f"{'mentions' if len(other) == 1 else 'mention'} none of your focus "
+                        "areas."
                     ],
                 )
             )
@@ -341,8 +344,10 @@ def build_briefing(
                 Section(
                     "Outside Your Focus Areas",
                     paragraphs=[
-                        f"{len(other_items)} obligation(s) mention none of your focus areas. They "
-                        "are listed after the ones that do, so nothing is left out."
+                        f"{count(len(other_items), 'obligation').capitalize()} "
+                        f"{'mentions' if len(other_items) == 1 else 'mention'} none of your "
+                        f"focus areas. {'It is' if len(other_items) == 1 else 'They are'} "
+                        "listed after the ones that do, so nothing is left out."
                     ],
                 )
             )

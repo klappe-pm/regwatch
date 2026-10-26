@@ -4,7 +4,9 @@
 app's JSON interface answers in JSON, but both do the same work through these
 functions: read the source catalogue, add catalogue sources to the sources file,
 find the sources that need a key, run a capture and a check with a run record,
-and read the state of the schedule. Nothing here prints or asks a question.
+read the state of the schedule, write generated copy, and build a newsletter or a
+designed document.
+Nothing here prints or asks a question.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from regwatch.briefing import TIERS, build_briefing
 from regwatch.catalogue import (
     CatalogueEntry,
     MergeResult,
@@ -25,39 +28,84 @@ from regwatch.catalogue import (
 )
 from regwatch.check import CaptureResult, SourceResult, capture_sources, check_sources
 from regwatch.config import Config, FetchSettings
+from regwatch.design import Logo, load_logo
+from regwatch.document import Document, Section
 from regwatch.fetch import Fetcher, SafeFetcher
-from regwatch.focus import load_catalogue
-from regwatch.keys import KeyStore, KeyStoreError
+from regwatch.focus import build_profile, load_catalogue
+from regwatch.impact import assess_impacts
+from regwatch.keys import PROVIDER_KEYS, KeyStore, KeyStoreError
+from regwatch.llm import (
+    SECTIONS,
+    Fact,
+    GenerationResult,
+    Poster,
+    candidate_facts,
+    change_facts,
+    event_facts,
+    generate,
+    impact_facts,
+    llm_fetcher,
+    obligation_facts,
+    provider_for,
+)
+from regwatch.newsletter import (
+    LOGO_CID,
+    NewsletterContent,
+    build_newsletter,
+    email_bytes,
+    newsletter_content,
+    render_email_html,
+    render_email_text,
+)
 from regwatch.register import Register, load_register, read_json_list
+from regwatch.render import docx_bytes, render_document_html, render_markdown
 from regwatch.schedule import CRON_TIMES, INTERVAL_SECONDS, installed_block, plist_path
 from regwatch.state import (
     MAX_STATE_BYTES,
+    append_call_record,
     list_run_records,
     load_seen,
+    make_state_dir,
     update_register_file,
     write_run_record,
 )
+from regwatch.synthesis import digest_document, report_document, upcoming_obligations
 from regwatch.system import System
 
 __all__ = [
+    "DOCUMENT_FORMATS",
+    "DOCUMENT_KINDS",
+    "NO_FACTS_NOTICE",
     "RUN_CHANGES",
     "RUN_OK",
     "RUN_UNVERIFIED",
+    "SVG_LOGO_NOTE",
     "KeyedSource",
+    "NewsletterFiles",
     "RunOutcome",
     "ScheduleState",
     "WorkspaceError",
     "add_sources",
+    "check_key_allowed",
     "chosen_ids",
+    "document_bytes",
+    "document_plan",
     "fetcher_for",
     "find_entries",
+    "generated_copy",
     "key_lookup",
     "keyed_source",
     "keyed_sources",
+    "logo_for",
+    "newsletter_files",
+    "newsletter_plan",
+    "premium_refusal",
+    "read_candidates",
     "read_run_records",
     "run_once",
     "schedule_state",
     "source_catalogue",
+    "with_summary",
 ]
 
 RUN_OK = 0
@@ -177,7 +225,21 @@ def keyed_source(
     for entry in catalogue:
         if entry.source_id == source_id and entry.key_env is not None:
             return KeyedSource(entry.source_id, entry.key_env, entry.signup_url)
+    if source_id in PROVIDER_KEYS:
+        key_env, signup = PROVIDER_KEYS[source_id]
+        return KeyedSource(source_id, key_env, signup)
     raise WorkspaceError(f"'{source_id}' is not a source that needs a key")
+
+
+def check_key_allowed(config: Config | None, source_id: str) -> None:
+    """Refuse to store a language model provider key while premium is off.
+
+    Generated copy is a premium feature, so its provider keys (``llm-anthropic`` and
+    ``llm-openai``) can be stored only with premium on; a key for a source can
+    always be stored. Removing a key is never refused.
+    """
+    if source_id in PROVIDER_KEYS and (config is None or not config.premium.enabled):
+        raise WorkspaceError(premium_refusal("Generated copy"))
 
 
 def key_lookup(store: KeyStore) -> Callable[[str], str | None]:
@@ -381,3 +443,234 @@ def schedule_state(config: Config, system: System, now: dt.datetime) -> Schedule
     )
     next_run = _iso(_next_cron(every, now)) if every else None
     return ScheduleState("cron", True, every, next_run)
+
+
+# --- premium content -------------------------------------------------------------
+
+PREMIUM_HINT = "turn it on with 'regwatch premium on'"
+MAX_SINCE_DAYS = 366
+NO_FACTS_NOTICE = (
+    "Nothing in this period gives the language model anything to write from, so no "
+    "request was sent and the fixed sentences are used."
+)
+SVG_LOGO_NOTE = (
+    "The logo is an SVG, which common mail programs do not show, so the email has no logo. "
+    "Use a PNG logo to show it."
+)
+
+
+def premium_refusal(feature: str) -> str:
+    """The message for a premium feature used while premium is off."""
+    return f"{feature} is a premium feature; {PREMIUM_HINT}"
+
+
+def read_candidates(config: Config) -> list[dict[str, Any]]:
+    """The ingest candidates as stored, or none when the file is missing or unreadable.
+
+    The file is untrusted; every builder cleans each field it uses.
+    """
+    path = config.candidates_path
+    if not path.is_file():
+        return []
+    try:
+        if path.stat().st_size > MAX_STATE_BYTES:
+            return []
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError):
+        return []
+    items = data.get("candidates", []) if isinstance(data, dict) else []
+    return [item for item in items if isinstance(item, dict)]
+
+
+def generated_copy(
+    config: Config,
+    facts: Sequence[Fact],
+    purpose: str,
+    key_for: Callable[[str], str | None],
+    poster: Poster | None = None,
+    now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.UTC),
+    sections: Sequence[str] = SECTIONS,
+) -> GenerationResult:
+    """Ask the configured provider for copy written from ``facts``, and record the call.
+
+    ``sections`` are the sections the output shows; a passage for any other is
+    dropped. With no facts no request is sent: the result is empty and its notice
+    says the fixed sentences are used. Raises WorkspaceError when generated copy is
+    off, and GenerationError when it cannot be written. The call is recorded in
+    ``llm-calls.jsonl`` in the state directory with the provider, the model, the
+    tokens and the duration only.
+    """
+    if not config.llm.enabled:
+        raise WorkspaceError("generated copy is off; turn it on with 'regwatch llm on'")
+    if not facts:
+        return GenerationResult(notice=NO_FACTS_NOTICE)
+    provider = provider_for(config.llm, poster or llm_fetcher(config), key_for)
+    protected = config.register.all_paths()
+
+    def record(entry: dict[str, object]) -> None:
+        make_state_dir(config.state_dir)
+        append_call_record(config.llm_calls_path, entry, protected)
+
+    return generate(
+        provider,
+        facts,
+        purpose,
+        max_tokens=config.llm.max_tokens,
+        record=record,
+        now=now,
+        sections=sections,
+    )
+
+
+def logo_for(config: Config) -> Logo | None:
+    """The checked logo of the design specification, under the project folder or a file root."""
+    return load_logo(config.document.logo, [config.base_dir, *config.fetch.allowed_file_roots])
+
+
+def newsletter_plan(
+    config: Config, today: dt.date, since_days: int
+) -> tuple[Register, NewsletterContent]:
+    """The register and the items of the newsletter for the last ``since_days`` days.
+
+    Sources are checked against their stored snapshots, never fetched.
+    """
+    if not 1 <= since_days <= MAX_SINCE_DAYS:
+        raise WorkspaceError(f"the period must be 1 to {MAX_SINCE_DAYS} days")
+    register = load_register(config)
+    impacts = assess_impacts(register, today, build_profile(config.profile))
+    results = check_sources(register.sources, load_seen(config.seen_path), config.snapshots_dir)
+    content = newsletter_content(
+        register, results, impacts, read_candidates(config), today, since_days
+    )
+    return register, content
+
+
+@dataclass(frozen=True)
+class NewsletterFiles:
+    """One newsletter in every form: the subject, the standalone HTML, the text and the .eml."""
+
+    subject: str
+    html: str
+    text: str
+    eml: bytes
+    generated: bool
+    dropped: tuple[str, ...] = ()
+    notice: str = ""
+    logo_note: str = ""
+
+
+def newsletter_files(
+    config: Config,
+    register: Register,
+    content: NewsletterContent,
+    now: dt.datetime,
+    generated: GenerationResult | None = None,
+) -> NewsletterFiles:
+    """Render the newsletter with the design specification and the closing line.
+
+    The standalone HTML carries a PNG logo as a ``data:`` address and the ``.eml``
+    as a related image part. Raises DesignError when the logo cannot be used.
+    """
+    design = config.document
+    footer = config.newsletter.footer
+    logo = logo_for(config)
+    doc = build_newsletter(register, content, design, generated)
+    text = render_email_text(doc, design, footer)
+    page = render_email_html(
+        doc, design, footer, logo=logo, logo_src=logo.data_uri if logo is not None else ""
+    )
+    mail = render_email_html(doc, design, footer, logo=logo, logo_src=f"cid:{LOGO_CID}")
+    return NewsletterFiles(
+        subject=doc.title,
+        html=page,
+        text=text,
+        eml=email_bytes(doc.title, text, mail, now, logo),
+        generated=generated is not None and generated.count > 0,
+        dropped=tuple(generated.dropped) if generated is not None else (),
+        notice=generated.notice if generated is not None else "",
+        logo_note=SVG_LOGO_NOTE if logo is not None and logo.kind == "svg" else "",
+    )
+
+
+# --- documents -------------------------------------------------------------------------
+
+DOCUMENT_KINDS = ("briefing", "digest", "report")
+DOCUMENT_FORMATS = {
+    "html": ("text/html; charset=utf-8", "html"),
+    "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
+    "md": ("text/markdown; charset=utf-8", "md"),
+}
+DOCUMENT_WINDOW_DAYS = 365
+DOCUMENT_FACT_LIMIT = 40
+
+
+def document_plan(
+    config: Config, today: dt.date, kind: str, tier: str = "v2"
+) -> tuple[Document, list[Fact]]:
+    """The document of ``kind`` with the design's title format, and the facts behind it.
+
+    ``briefing`` is the tiered briefing at ``tier``, ``digest`` the register digest
+    and ``report`` the change and due alert, each over a year. Sources are checked
+    against their stored snapshots and never fetched.
+    """
+    if kind not in DOCUMENT_KINDS:
+        raise WorkspaceError(f"the kind must be one of {', '.join(DOCUMENT_KINDS)}")
+    if tier not in TIERS:
+        raise WorkspaceError(f"the tier must be one of {', '.join(TIERS)}")
+    register = load_register(config)
+    upcoming = upcoming_obligations(register.obligations, DOCUMENT_WINDOW_DAYS, today)
+    places = {j.jurisdiction_id: j.name for j in register.jurisdictions}
+    limit = DOCUMENT_FACT_LIMIT
+    if kind == "briefing":
+        focus = build_profile(config.profile)
+        impacts = assess_impacts(register, today, focus)
+        candidates = read_candidates(config)
+        doc = build_briefing(
+            register, impacts, today, tier=tier, candidates=candidates, focus=focus
+        )
+        events = sorted(register.changelog, key=lambda e: e.date, reverse=True)[:8]
+        urgent = [i for i in impacts if i.severity in ("act-now", "high")][:10]
+        facts = [
+            *event_facts(events, places),
+            *candidate_facts(candidates[:8]),
+            *impact_facts(urgent, places),
+            *obligation_facts(upcoming[:10], places),
+        ]
+    elif kind == "digest":
+        doc = digest_document(register, today, DOCUMENT_WINDOW_DAYS)
+        facts = obligation_facts(upcoming[:limit], places)
+    else:
+        results = check_sources(register.sources, load_seen(config.seen_path), config.snapshots_dir)
+        names = {s.source_id: s.name for s in register.sources}
+        doc = report_document(register, results, today, DOCUMENT_WINDOW_DAYS)
+        facts = [*change_facts(results, names)[:limit], *obligation_facts(upcoming[:limit], places)]
+    doc.title = config.document.title(doc.title, doc.generated)
+    return doc, facts
+
+
+def with_summary(doc: Document, generated: GenerationResult) -> Document:
+    """``doc`` opened by a Summary section that holds every kept generated passage.
+
+    The passages come in the order of their sections, the opening first. With no
+    kept passage the document is returned as it was.
+    """
+    passages = [passage for name in SECTIONS for passage in generated.section(name)]
+    if passages:
+        doc.sections.insert(0, Section("Summary", generated=passages))
+    return doc
+
+
+def document_bytes(config: Config, doc: Document, fmt: str) -> bytes:
+    """``doc`` in ``fmt`` (``html``, ``docx`` or ``md``) with the design and its logo.
+
+    Raises WorkspaceError for an unknown format and DesignError when the logo cannot
+    be used.
+    """
+    if fmt not in DOCUMENT_FORMATS:
+        raise WorkspaceError(f"the format must be one of {', '.join(DOCUMENT_FORMATS)}")
+    if fmt == "md":
+        return render_markdown(doc).encode("utf-8")
+    logo = logo_for(config)
+    if fmt == "html":
+        return render_document_html(doc, config.document, logo).encode("utf-8")
+    return docx_bytes(doc, config.document, logo)

@@ -8,6 +8,16 @@ export type PremiumView = "loading" | "error" | "locked" | "open";
  * "loading", so the page cannot wait forever; a status that did arrive wins
  * over a later failed refresh.
  */
+/**
+ * The query a newsletter or document page loads its data and its preview with.
+ * ``round`` counts the successful Generate presses: it is part of the query once copy
+ * is generated, so a second Generate loads the new copy and the preview frame again
+ * even though the rest of the query has not changed.
+ */
+export function viewQuery(base: string, generated: boolean, round: number): string {
+  return generated ? `${base}&generated=1&round=${round}` : base;
+}
+
 export function premiumView(
   status: { premium: boolean } | null,
   error: string | null,

@@ -16,6 +16,7 @@ const names = [
   "check_circle",
   "chevron_right",
   "close",
+  "content_copy",
   "dashboard",
   "database",
   "delete",

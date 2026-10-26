@@ -89,6 +89,42 @@ export function Locked({ feature, onSettings = false }: { feature: string; onSet
   );
 }
 
+/** A quiet label, such as "Generated" beside text a language model wrote. */
+export function Tag({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-block border border-control px-1 text-xs font-medium leading-4 text-muted">
+      {children}
+    </span>
+  );
+}
+
+/**
+ * A preview of a newsletter or a document. The frame loads the preview route, which
+ * answers with its own policy (inline styles and data: images only), and is sandboxed
+ * without scripts, forms or access to this page, so nothing in it can run and this
+ * page keeps inline styles out.
+ */
+export function Preview({ src, title }: { src: string; title: string }) {
+  return (
+    <iframe
+      title={title}
+      sandbox=""
+      referrerPolicy="no-referrer"
+      src={src}
+      className="block h-[70vh] min-h-[480px] w-full border border-line bg-white"
+    />
+  );
+}
+
+/** A short status line after an action, read out by screen readers. */
+export function Notice({ message }: { message: string | null }) {
+  return message ? (
+    <p role="status" className="mb-4 text-sm">
+      {message}
+    </p>
+  ) : null;
+}
+
 export function ErrorNote({ message }: { message: string }) {
   return (
     <div role="alert" className="flex items-start gap-2 border border-accent bg-accent-soft px-4 py-2">

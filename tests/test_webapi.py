@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from conftest import NOW, TODAY, FakeSystem
 
-from regwatch import webapi
+from regwatch import workspace
 from regwatch.config import load_config
 from regwatch.webapi import Api, ApiError, Download
 
@@ -105,7 +105,7 @@ def test_an_oversized_candidates_file_is_ignored(
     state = project.parent / "state"
     state.mkdir()
     (state / "ingest-candidates.json").write_text('{"candidates": [{}]}', encoding="utf-8")
-    monkeypatch.setattr(webapi, "MAX_STATE_BYTES", 5)
+    monkeypatch.setattr(workspace, "MAX_STATE_BYTES", 5)
     assert get(api, "/api/changes")["candidates"] == []
 
 
@@ -180,8 +180,11 @@ def test_settings_list_the_focus_catalogue_and_premium(api: Api) -> None:
     assert settings["focus_areas"] == []
     assert {"id", "label", "description"} == set(settings["focus_catalogue"][0])
     assert settings["premium"] is False
-    assert settings["design"]["available"] is False
-    assert settings["llm"]["available"] is False
+    # The design and provider settings are listed whether premium is on or off;
+    # saving them, like every premium route, is refused while it is off.
+    assert settings["design"]["available"] is True
+    assert settings["llm"]["enabled"] is False
+    assert all(not key["present"] or key["where"] for key in settings["llm"]["keys"])
 
 
 def test_focus_areas_are_saved_and_read_back(api: Api, project: Path) -> None:

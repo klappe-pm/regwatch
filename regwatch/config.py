@@ -16,17 +16,30 @@ from pathlib import Path
 from typing import Any
 
 __all__ = [
+    "AA_CONTRAST",
     "DEFAULT_CONFIG_NAME",
+    "DEFAULT_MODELS",
+    "DOCUMENT_KEYS",
+    "FONTS",
+    "LLM_PROVIDERS",
+    "PAGE_SIZES",
     "CatalogueSettings",
     "Config",
     "ConfigError",
+    "DocumentDesign",
     "FetchSettings",
     "IngestSettings",
+    "LlmSettings",
+    "NewsletterSettings",
     "PremiumSettings",
     "ProfileSettings",
     "RegisterPaths",
+    "check_color",
+    "check_title_format",
+    "contrast_with_white",
     "file_root_is_too_broad",
     "load_config",
+    "parse_document_table",
 ]
 
 DEFAULT_CONFIG_NAME = "regwatch.toml"
@@ -132,6 +145,158 @@ class PremiumSettings:
     enabled: bool = False
 
 
+LLM_PROVIDERS = ("anthropic", "openai", "ollama")
+DEFAULT_MODELS = {"anthropic": "claude-opus-5-5", "openai": "gpt-5-mini", "ollama": "llama3.2"}
+MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$")
+
+
+@dataclass(frozen=True)
+class LlmSettings:
+    """The generated copy stage, ``[llm]``. Off unless the file turns it on.
+
+    ``model`` is empty for the provider's default. ``max_tokens`` caps one answer and
+    ``timeout_seconds`` is the whole deadline of one call.
+    """
+
+    enabled: bool = False
+    provider: str = "anthropic"
+    model: str = ""
+    max_tokens: int = 4000
+    timeout_seconds: float = 180.0
+
+    @property
+    def effective_model(self) -> str:
+        """The model a call names: the configured one, or the provider's default."""
+        return self.model or DEFAULT_MODELS[self.provider]
+
+
+PAGE_SIZES = ("a4", "letter")
+FONTS = {
+    "system": "-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    "Arial": "Arial, Helvetica, sans-serif",
+    "Helvetica": "Helvetica, Arial, sans-serif",
+    "Verdana": "Verdana, Geneva, sans-serif",
+    "Tahoma": "Tahoma, Verdana, sans-serif",
+    "Trebuchet MS": "'Trebuchet MS', Helvetica, sans-serif",
+    "Georgia": "Georgia, 'Times New Roman', serif",
+    "Times New Roman": "'Times New Roman', Times, serif",
+    "Garamond": "Garamond, Georgia, serif",
+    "Courier New": "'Courier New', Courier, monospace",
+}
+"""The fonts a design may name, each with the CSS stack it renders with."""
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+TITLE_FIELDS = ("title", "date", "organisation")
+AA_CONTRAST = 4.5
+
+
+def contrast_with_white(color: str) -> float:
+    """The WCAG 2.2 contrast ratio of ``#rrggbb`` against white, from 1 to 21."""
+
+    def channel(value: int) -> float:
+        c = value / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    red, green, blue = (int(color[i : i + 2], 16) for i in (1, 3, 5))
+    luminance = 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue)
+    return 1.05 / (luminance + 0.05)
+
+
+def check_color(value: object, key: str) -> str:
+    """``value`` as a lower case ``#rrggbb`` colour that meets AA against white, or ConfigError."""
+    if not isinstance(value, str) or not HEX_COLOR_RE.fullmatch(value):
+        raise ConfigError(f"[document] {key} must be a colour written #rrggbb")
+    ratio = contrast_with_white(value)
+    if ratio < AA_CONTRAST:
+        raise ConfigError(
+            f"[document] {key} {value} has a contrast of {ratio:.2f}:1 against white; "
+            f"text needs at least {AA_CONTRAST}:1 (WCAG 2.2 AA), so choose a darker colour"
+        )
+    return value.lower()
+
+
+def check_title_format(value: object) -> str:
+    """A title format that uses only ``{title}``, ``{date}`` and ``{organisation}``."""
+    if not isinstance(value, str) or not value.strip() or len(value) > 200:
+        raise ConfigError("[document] title_format must be a string of 1 to 200 characters")
+    for field_name in re.findall(r"\{([^{}]*)\}", value):
+        if field_name not in TITLE_FIELDS:
+            raise ConfigError(
+                "[document] title_format may use only {title}, {date} and {organisation}"
+            )
+    rest = re.sub(r"\{(?:title|date|organisation)\}", "", value)
+    if "{" in rest or "}" in rest:
+        raise ConfigError("[document] title_format has an unmatched brace")
+    return value
+
+
+@dataclass(frozen=True)
+class DocumentDesign:
+    """The design specification documents and newsletters follow, ``[document]``.
+
+    Colours are ``#rrggbb`` that meet WCAG 2.2 AA against white, the font is one of
+    ``FONTS``, and ``logo`` is a PNG or SVG file under the project folder or an
+    allowed file root, read and checked only when a document is built.
+    """
+
+    title_format: str = "{title}"
+    organisation: str = ""
+    primary_color: str = "#1d5a92"
+    accent_color: str = "#a8481a"
+    font: str = "system"
+    logo: Path | None = None
+    header: str = ""
+    footer: str = ""
+    page_size: str = "a4"
+
+    @property
+    def font_stack(self) -> str:
+        """The CSS font stack for ``font``."""
+        return FONTS[self.font]
+
+    def title(self, title: str, date: str) -> str:
+        """``title_format`` filled in with the document's title, its date and the organisation.
+
+        A document's own title starts with the portfolio name, which is often the
+        organisation, so when the format names ``{organisation}`` a leading
+        organisation name is taken off the title first and the rest starts with a
+        capital: "Pantry Co: Regulatory newsletter", not "Pantry Co: Pantry Co
+        regulatory newsletter".
+        """
+        organisation = self.organisation.strip()
+        if organisation and "{organisation}" in self.title_format:
+            title = _without_leading(title, organisation)
+        return (
+            self.title_format.replace("{title}", title)
+            .replace("{date}", date)
+            .replace("{organisation}", self.organisation)
+            .strip()
+            or title
+        )
+
+
+def _without_leading(title: str, name: str) -> str:
+    """``title`` without a leading ``name`` (any case, as a whole word), capitalised."""
+    if not title.casefold().startswith(name.casefold()):
+        return title
+    rest = title[len(name) :]
+    if rest[:1].isalnum():
+        return title
+    rest = rest.lstrip(" .,:;")
+    return rest[:1].upper() + rest[1:] if rest else title
+
+
+DEFAULT_NEWSLETTER_FOOTER = (
+    "You receive this newsletter because you asked for it. Reply to this message to stop."
+)
+
+
+@dataclass(frozen=True)
+class NewsletterSettings:
+    """The newsletter's closing line, ``[newsletter] footer``: how to reply or unsubscribe."""
+
+    footer: str = DEFAULT_NEWSLETTER_FOOTER
+
+
 @dataclass(frozen=True)
 class Config:
     """The parsed configuration, with every path made absolute."""
@@ -146,6 +311,14 @@ class Config:
     profile: ProfileSettings = ProfileSettings()
     catalogue: CatalogueSettings = CatalogueSettings()
     premium: PremiumSettings = PremiumSettings()
+    llm: LlmSettings = LlmSettings()
+    document: DocumentDesign = DocumentDesign()
+    newsletter: NewsletterSettings = NewsletterSettings()
+
+    @property
+    def llm_calls_path(self) -> Path:
+        """File that records each generated copy call: provider, model, tokens and duration."""
+        return self.state_dir / "llm-calls.jsonl"
 
     def protected_paths(self) -> list[Path]:
         """Files that a user-named output path must never overwrite.
@@ -325,6 +498,95 @@ def _parse_premium(table: dict[str, Any]) -> PremiumSettings:
     return PremiumSettings(enabled=enabled)
 
 
+def _parse_llm(table: dict[str, Any]) -> LlmSettings:
+    enabled = table.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("[llm] enabled must be true or false")
+    provider = table.get("provider", "anthropic")
+    if provider not in LLM_PROVIDERS:
+        raise ConfigError(f"[llm] provider must be one of {', '.join(LLM_PROVIDERS)}")
+    model = table.get("model", "")
+    if not isinstance(model, str) or (model and not MODEL_RE.fullmatch(model)):
+        raise ConfigError(
+            "[llm] model must be a model name of letters, digits and . _ : / - "
+            "(at most 100 characters), or empty for the provider's default"
+        )
+    timeout = table.get("timeout_seconds", LlmSettings.timeout_seconds)
+    if isinstance(timeout, bool) or not isinstance(timeout, int | float) or not 0 < timeout <= 600:
+        raise ConfigError("[llm] timeout_seconds must be a number above 0 and at most 600")
+    return LlmSettings(
+        enabled=enabled,
+        provider=provider,
+        model=model,
+        max_tokens=_integer(table, "max_tokens", "llm", LlmSettings.max_tokens, 256, 32000),
+        timeout_seconds=float(timeout),
+    )
+
+
+def _short_text(table: dict[str, Any], key: str, section: str, limit: int, default: str) -> str:
+    value = table.get(key, default)
+    if not isinstance(value, str) or len(value) > limit:
+        raise ConfigError(f"[{section}] {key} must be a string of at most {limit} characters")
+    if any(ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F for ch in value):
+        raise ConfigError(f"[{section}] {key} must not hold control characters")
+    return value
+
+
+def _parse_document(table: dict[str, Any], base: Path) -> DocumentDesign:
+    default = DocumentDesign()
+    font = table.get("font", default.font)
+    if font not in FONTS:
+        raise ConfigError(f"[document] font must be one of {', '.join(FONTS)}")
+    page_size = table.get("page_size", default.page_size)
+    if page_size not in PAGE_SIZES:
+        raise ConfigError(f"[document] page_size must be one of {', '.join(PAGE_SIZES)}")
+    logo = table.get("logo", "")
+    if not isinstance(logo, str):
+        raise ConfigError("[document] logo must be a path")
+    return DocumentDesign(
+        title_format=check_title_format(table.get("title_format", default.title_format)),
+        organisation=_short_text(table, "organisation", "document", 120, ""),
+        primary_color=check_color(
+            table.get("primary_color", default.primary_color), "primary_color"
+        ),
+        accent_color=check_color(table.get("accent_color", default.accent_color), "accent_color"),
+        font=font,
+        logo=_resolve(base, logo) if logo.strip() else None,
+        header=_short_text(table, "header", "document", 200, ""),
+        footer=_short_text(table, "footer", "document", 300, ""),
+        page_size=page_size,
+    )
+
+
+DOCUMENT_KEYS = (
+    "title_format",
+    "organisation",
+    "primary_color",
+    "accent_color",
+    "font",
+    "logo",
+    "header",
+    "footer",
+    "page_size",
+)
+
+
+def parse_document_table(table: dict[str, Any], base: Path) -> DocumentDesign:
+    """Check a ``[document]`` table as ``load_config`` does and return the design.
+
+    Raises ConfigError for an unknown key or a value that ``load_config`` would refuse.
+    """
+    unknown = sorted(set(table) - set(DOCUMENT_KEYS))
+    if unknown:
+        raise ConfigError(f"[document] has unknown keys: {', '.join(unknown)}")
+    return _parse_document(table, base)
+
+
+def _parse_newsletter(table: dict[str, Any]) -> NewsletterSettings:
+    footer = _short_text(table, "footer", "newsletter", 300, DEFAULT_NEWSLETTER_FOOTER)
+    return NewsletterSettings(footer=footer.strip() or DEFAULT_NEWSLETTER_FOOTER)
+
+
 def load_config(path: Path) -> Config:
     """Read and validate the configuration file at ``path``.
 
@@ -343,7 +605,19 @@ def load_config(path: Path) -> Config:
         raise ConfigError(f"cannot parse configuration file {path}: {exc}") from exc
 
     unknown_tables = sorted(
-        set(data) - {"register", "state", "fetch", "ingest", "profile", "catalogue", "premium"}
+        set(data)
+        - {
+            "register",
+            "state",
+            "fetch",
+            "ingest",
+            "profile",
+            "catalogue",
+            "premium",
+            "llm",
+            "document",
+            "newsletter",
+        }
     )
     if unknown_tables:
         raise ConfigError(f"unknown configuration tables: {', '.join(unknown_tables)}")
@@ -411,6 +685,14 @@ def load_config(path: Path) -> Config:
             _table(data, "profile", ("focus_areas", "custom_terms", "catalogue")), base
         ),
         premium=_parse_premium(_table(data, "premium", ("enabled",))),
+        llm=_parse_llm(
+            _table(data, "llm", ("enabled", "provider", "model", "max_tokens", "timeout_seconds"))
+        ),
+        document=_parse_document(
+            _table(data, "document", DOCUMENT_KEYS),
+            base,
+        ),
+        newsletter=_parse_newsletter(_table(data, "newsletter", ("footer",))),
         ingest=_parse_ingest(
             _table(
                 data,

@@ -15,7 +15,7 @@ Reads `regwatch.toml`. See [configuration](configuration.md) for the keys.
 - `DEFAULT_CONFIG_NAME: str`: `"regwatch.toml"`.
 - `load_config(path: Path) -> Config`: parse and validate a configuration file. Raises `ConfigError`.
 - `ConfigError`: the configuration file is missing, unreadable or invalid.
-- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path`, `profile`, `catalogue` and `premium`, plus the properties `seen_path` and `candidates_path`. `protected_paths()` returns the register files, the configuration file, the two state files, and the focus catalogue and the extra source catalogue when they are configured, which a user-named output must never overwrite.
+- `Config`: frozen dataclass with `base_dir`, `register`, `state_dir`, `snapshots_dir`, `fetch`, `ingest`, `config_path`, `profile`, `catalogue`, `premium` and `llm`, plus the properties `seen_path`, `candidates_path` and `llm_calls_path`. `LlmSettings` holds `enabled`, `provider`, `model`, `max_tokens` and `timeout_seconds`, and `effective_model` is the model a call names. `protected_paths()` returns the register files, the configuration file, the two state files, and the focus catalogue and the extra source catalogue when they are configured, which a user-named output must never overwrite.
 - `CatalogueSettings`: frozen dataclass with `extra`, the `[catalogue]` table.
 - `ProfileSettings`: frozen dataclass with `focus_areas`, `custom_terms` and `catalogue`, the `[profile]` table.
 - `PremiumSettings`: frozen dataclass with `enabled`, the `[premium]` table; false unless the file turns it on.
@@ -31,10 +31,10 @@ The one network client. See the [security model](../explanation/security-model.m
 - `MAX_REDIRECTS: int`: 5. `CHUNK_BYTES: int`: 16384, the largest single read.
 - `check_url(url: str) -> str`: return the lower-cased scheme, or raise `FetchError` for a scheme that is not allowed, a URL that contains a space or a control character, carries credentials or has an invalid port, an `https` URL with no host, or a `file` URL that names a remote host.
 - `is_public_address(address: str) -> bool`: true for a globally routable unicast IP address; false for loopback, link-local, private, unique local, shared, reserved, multicast and unspecified addresses, for the IPv4-mapped form of any of them, for an IPv6 address that embeds one (NAT64 `/96`, 6to4, Teredo and ISATAP addresses are judged by the IPv4 address inside, and every embedded address must be public when there is more than one), for the ranges `::/8`, `fec0::/10` and `64:ff9b::/32` apart from its `/96`, and for text that is not an address.
-- `FetchError(message="", redact=None)`: a fetch was refused or failed. The message is cleaned when the error is created, with control characters and invisible format characters removed and a length of at most 1,000 characters, so it is safe to show. `redact`, a function such as `Credential.redact`, removes a secret before the message is cleaned and cut and again after cleaning. `raw` holds the message before it was cut, for rebuilding the error with a `redact` function; it is never shown.
+- `FetchError(message="", redact=None, *, status=None, body="")`: a fetch was refused or failed. The message is cleaned when the error is created, with control characters and invisible format characters removed and a length of at most 1,000 characters, so it is safe to show. `redact`, a function such as `Credential.redact`, removes a secret before the message is cleaned and cut and again after cleaning, and from `body`. `raw` holds the message before it was cut, for rebuilding the error with a `redact` function; it is never shown. `status` is the HTTP status of an answer that was not a success, and `body` the first 16,384 bytes of the error body a POST received; `body` is not cleaned and is never shown as it is.
 - `Fetcher`: a protocol with one method, `fetch(url: str, *, credential: Credential | None = None) -> str`. Implement it to supply a fake client in tests. `credential` is given only for a source that needs a key.
-- `Credential(placement, name, value)`: frozen dataclass for a key and where it goes, `query` or `header`; the value is hidden from `repr`, and an unsafe value or a reserved header name raises `ValueError` without repeating the value. `Credential.from_auth(auth, value)` builds one from a sources file `auth` value such as `query:api_key`, and `redact(text)` replaces the key in `text` with `[key]`, as written, percent-encoded, HTML-escaped and JSON-escaped.
-- `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url, *, credential=None)` returns the body decoded as UTF-8 with undecodable bytes replaced. With a credential the URL must be `https`, the key goes only to the host and port of the URL it was given for, a redirect to another host or port drops it, every `FetchError` is cleaned of it with its cause dropped, and the returned body has the key replaced with `[key]` wherever the server echoed it. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network.
+- `Credential(placement, name, value, scheme="")`: frozen dataclass for a key and where it goes, `query` or `header`; `scheme` is a word of letters sent before a header key, such as `Bearer`, and `header_value` is what the header carries; the value is hidden from `repr`, and an unsafe value or a reserved header name raises `ValueError` without repeating the value. `Credential.from_auth(auth, value)` builds one from a sources file `auth` value such as `query:api_key`, and `redact(text)` replaces the key in `text` with `[key]`, as written, percent-encoded, HTML-escaped and JSON-escaped.
+- `SafeFetcher(timeout_seconds, max_bytes, user_agent, *, total_timeout_seconds=60.0, allow_private_hosts=False, allowed_file_roots=(), loopback_post_url=None, resolver=None, connector=None, wrapper=None)`: the real client. `fetch(url, *, credential=None)` returns the body decoded as UTF-8 with undecodable bytes replaced. With a credential the URL must be `https`, the key goes only to the host and port of the URL it was given for, a redirect to another host or port drops it, every `FetchError` is cleaned of it with its cause dropped, and the returned body has the key replaced with `[key]` wherever the server echoed it. It vets every address a host resolves to, connects to the vetted address, verifies certificates, follows at most 5 redirects only to `https`, enforces a per-operation timeout and a total deadline, reads `file` URLs only from regular files under `allowed_file_roots`, and raises `FetchError` on any failure or when the body exceeds `max_bytes`. The resolver, connector and wrapper arguments replace name resolution, the TCP connection and the TLS handshake, so tests can run without a network. `post_json(url, payload, *, credential=None, headers=None)` sends a JSON body with the same checks and limits, follows no redirect, and allows plain `http` only to a loopback IP literal with no key, and only with `allow_private_hosts` set or to exactly `loopback_post_url`, a plain `http` loopback address (anything else raises `ValueError`) that this one client may POST to without opening private addresses to every fetch.
 
 ## `extract`
 
@@ -167,9 +167,50 @@ The document model shared by every briefing and renderer.
 
 - `DISCLAIMER: str`: the standard statement that nothing produced is legal advice.
 - `make_disclaimer(extra: str = "") -> str`: the standard disclaimer followed by `extra`.
-- `Section(heading, level=2, paragraphs=[], bullets=[])`: a heading with paragraphs and bullets. Level 2 is a section, 3 and 4 are subsections.
-- `Document(title, generated, subtitle="", sections=[], disclaimer=DISCLAIMER)`: a titled, dated list of sections. `to_dict()` returns a JSON-serialisable form. `Document.from_dict(data)` builds one from parsed JSON, checks every field, and always restores the disclaimer. Raises `DocumentError`.
+- `Section(heading, level=2, paragraphs=[], bullets=[], generated=[])`: a heading with paragraphs, bullets and generated passages. Level 2 is a section, 3 and 4 are subsections.
+- `GeneratedPassage(text, cites=[], facts=[], provider="", model="")`: text a language model wrote, the ids it cites, the text of the facts behind them in the same order, and what wrote it. HTML, plain text and Word show the facts' text only; Markdown puts each fact's id in a code span before its text. A section's `generated` key is present in `to_dict()` only when it holds a passage.
+- `Document(title, generated, subtitle="", sections=[], disclaimer=DISCLAIMER)`: a titled, dated list of sections. `date_line` is "Prepared 15 November 2026." for the renderers, or empty when the title or the subtitle already says the date. `to_dict()` returns a JSON-serialisable form. `Document.from_dict(data)` builds one from parsed JSON, checks every field, and always restores the disclaimer. Raises `DocumentError`.
 - `DocumentError`: a document model is malformed.
+
+## `wording`
+
+Plain wording for the sentences regwatch builds.
+
+- `count(n, one, many=None) -> str`: `n` with the noun in the right number, zero to nine in words: "one source", "four sources", "12 sources". `number(n)` is the number alone.
+- `join_clauses(clauses) -> str`: the non-empty clauses joined with commas and a final "and". Every summary sentence is built from its non-zero clauses only.
+- `long_date(day)`, `prose_date(value)` and `date_range(start, end)`: "15 November 2026", and a period as "20 to 26 October" or "28 September to 4 October", with the years when it crosses one.
+- `status_phrase(status, detail="")`: what a source check found in words: "first snapshot taken", "content changed", "no snapshot yet", "could not be read (detail)", "looks wrong (detail)".
+- `severity_label(severity)` ("act now" for `act-now`) and `provider_name(provider)` (Anthropic, OpenAI, Ollama).
+
+## `design`
+
+The logo of the design specification; the rest of `[document]` is checked in `config` (`DocumentDesign`, `check_color`, `contrast_with_white`, `check_title_format`, `FONTS`).
+
+- `load_logo(path: Path | None, roots) -> Logo | None`: the checked logo, or None when none is set. Raises `DesignError` for a logo outside `roots`, a link, a file that is not regular or larger than 300,000 bytes, a bad PNG, or an SVG that is not plain drawing.
+- `clean_svg(text: str) -> bytes`: the SVG written out again from its parsed tree, or `DesignError` naming the element or attribute that is refused.
+- `Logo(kind, data, width=0, height=0)`: `kind` is `png` or `svg`; `media_type` and `data_uri` give it as an image.
+
+## `newsletter`
+
+- `newsletter_content(register, results, impacts, candidates, today, since_days) -> NewsletterContent`: the period's changed sources, change log events, candidates and act now or high severity impacts, with the source names (`names`) and the jurisdiction names (`places`); `facts()` gives them as facts for generated copy.
+- `build_newsletter(register, content, design, generated=None) -> Document`: the newsletter as a document, with generated passages in place of the fixed sentences they cover.
+- `render_email_html(doc, design, footer, *, logo=None, logo_src="") -> str`, `render_email_text(doc, design, footer) -> str` and `email_bytes(subject, text, html_body, now, logo=None) -> bytes`: the HTML email, the text part and the `.eml` file.
+
+## `llm`
+
+Generated copy. See [the language model stage](../explanation/security-model.md#the-language-model-stage).
+
+- `Fact(fact_id, section, text)`: one structured fact with its id; `line` is `id: text`.
+- `change_facts(results, names)`, `event_facts(events, places=None)`, `candidate_facts(candidates)`, `impact_facts(impacts, places=None)`, `obligation_facts(obligations, places=None) -> list[Fact]`: facts from check results, change log events, ingest candidates, impacts and obligations, each cleaned and cut to 400 characters. They read as plain sentences: a source by its name and what was found ("FDA news: content changed"), dates in prose, a jurisdiction by its name from `places` (jurisdiction names by id), a severity by its label, and no separator left behind by an empty field.
+- `Provider`: a protocol with `name`, `model` and `complete(system, prompt, max_tokens) -> Completion`. `AnthropicProvider(poster, key, model)`, `OpenAIProvider(poster, key, model)` and `OllamaProvider(poster, model)` implement it over any `Poster`, an object with `post_json`. An answer the provider cut off at `max_tokens` (Anthropic `stop_reason` `max_tokens`, OpenAI `finish_reason` `length`, Ollama `done_reason` `length`) raises `GenerationError` naming `[llm] max_tokens`. Ollama is asked for `format` `json` with `num_predict` set to `max_tokens` and `num_ctx` 16384. `AnthropicProvider(poster, key, model, sleep=time.sleep)` sends `fallbacks` `default` and the `anthropic-beta` header `ANTHROPIC_FALLBACK_BETA` only for a model in `ANTHROPIC_FALLBACK_MODELS` (`claude-fable-5-1`, `claude-opus-5-5`, `claude-opus-5` and `claude-sonnet-5-5`), and sends a request answered with status 429, 500 to 599 or 529 once more after `RETRY_DELAY_SECONDS` (2 seconds).
+- `provider_message(body: str) -> str`: the provider's own reason in an error body (`{"error": {"message": ...}}` or `{"error": "..."}`), cleaned and cut to 200 characters, or an empty string.
+- `GenerationError(message, outcome="refused")`: generated copy could not be written; `outcome` is what the call record says (`refused`, `cut off`, `unreadable` or `error`).
+- `provider_for(settings: LlmSettings, poster, key_for) -> Provider`: the provider `[llm]` names, with its key from `key_for(key_env)`. Raises `GenerationError` when a key is missing.
+- `llm_fetcher(config: Config) -> SafeFetcher`: the fetch client for a call, with the `[llm]` deadline.
+- `generate(provider, facts, purpose, *, max_tokens, record=None, sections=SECTIONS) -> GenerationResult`: one call for the output whose generated sections are `sections` (`NEWSLETTER_SECTIONS` in `regwatch.newsletter` for a newsletter, which has no obligations section); `record` receives the provider, the model, the token counts, the duration and the outcome. Raises `GenerationError`; when the request failed, its message ends with the provider's own reason from `provider_message`, if the error body gave one.
+- `parse_passages(text, facts, provider="", model="", sections=SECTIONS) -> GenerationResult`: the passages that cite only the given facts, by section, with the reasons any were dropped. A passage for a section not in `sections`, or for a section other than the opening that cites no fact of that section, is dropped.
+- `GenerationResult`: `passages` by section, `dropped`, `provider`, `model`, `notice` (why no request was sent, when none was), `section(name)` and `count`.
+- `LLM_KEYS`: the fixed key variable of each provider; `KEY_IDS`: the ids `regwatch keys` uses for them.
 
 ## `synthesis`
 
@@ -178,6 +219,8 @@ Deterministic briefings. They call no external service.
 - `daily_brief(register, results, impacts, today) -> Document`: what changed, what is effective within 30 days, and the act-now and high candidates. Candidates with `in_focus` false are listed under `Flagged Outside Your Focus Areas`.
 - `weekly_synthesis(register, impacts, findings, today) -> Document`: the full analysis of the register against the portfolio. Candidates with `in_focus` false are listed under `Candidate Impact Outside Your Focus Areas`.
 - `upcoming_obligations(obligations, days, today) -> list[Obligation]`: obligations effective from today to `days` days ahead, soonest first.
+- `digest_document(register, today, window) -> Document`: the register digest that `regwatch digest` prints.
+- `report_document(register, results, today, window) -> Document`: the change and due alert that `regwatch report` prints.
 
 ## `briefing`
 
@@ -204,8 +247,11 @@ Delivery formats. HTML and Word output escape all text.
 - `render_webpost(doc: Document, tags: Sequence[str]) -> str`: Markdown with YAML front matter and `draft: true`. Raises `ValueError` for an invalid tag.
 - `render_newsletter_html(doc: Document) -> str`: a self-contained HTML email.
 - `render_newsletter_text(doc: Document) -> str`: the plain text alternative.
-- `render_document_xml(doc: Document) -> str`: the `word/document.xml` part.
-- `docx_bytes(doc: Document) -> bytes`: the bytes of a `.docx` file.
+- `passage_html(passage, tag_color="#4b5866") -> str`: one generated passage with inline styles, for email.
+- `render_document_html(doc, design=None, logo=None) -> str`: a standalone HTML page in the design, with a print stylesheet that sets the page size, and the logo inline.
+- `render_styles_xml(design=None) -> str`: the `word/styles.xml` part with the design's font and colours.
+- `render_document_xml(doc, design=None, logo=None) -> str`: the `word/document.xml` part, with paragraphs in named styles, the page size, header and footer references and a PNG logo.
+- `docx_bytes(doc, design=None, logo=None) -> bytes`: the bytes of a `.docx` file with its styles part, and a header, a footer and a PNG logo when the design has them.
 
 ## `export`
 
@@ -248,9 +294,10 @@ What `regwatch init` writes and the checks on its answers. Nothing here prints o
 
 Changes one setting in `regwatch.toml` and keeps the rest of the file.
 
-- `edit_setting(text: str, table: str, key: str, value: bool | list[str]) -> str`: the text with `[table] key` set, replacing its line (or every line of a value that spans several) or adding it. Raises `SettingsError` unless the result parses to the old settings with exactly that value changed.
-- `set_setting(config_path: Path, table: str, key: str, value: bool | list[str]) -> None`: load and validate the configuration, edit it and write it atomically through `state.safe_write_text`, with the register files protected.
+- `edit_setting(text: str, table: str, key: str, value: bool | int | str | list[str]) -> str`: the text with `[table] key` set, replacing its line (or every line of a value that spans several) or adding it. Raises `SettingsError` unless the result parses to the old settings with exactly that value changed.
+- `set_setting(config_path: Path, table: str, key: str, value: bool | int | str | list[str]) -> None`: load and validate the configuration, edit it and write it atomically through `state.safe_write_text`, with the register files protected.
 - `set_premium(config_path: Path, enabled: bool) -> None`: set `[premium] enabled`.
+- `set_llm(config_path: Path, *, enabled=None, provider=None, model=None) -> None`: set `[llm] enabled`, `provider` and `model`; each one left as None is kept. A provider must be `anthropic`, `openai` or `ollama`.
 - `set_focus_areas(config_path: Path, focus_areas, known) -> None`: set `[profile] focus_areas` to ids that are in `known`, without repeats. Raises `SettingsError` for any other id.
 - `SettingsError`: the setting could not be changed and the file was left as it was. It is a `ValueError`.
 
@@ -270,6 +317,15 @@ The operations `regwatch sources`, `keys` and `run` share with the web app. Noth
 - `run_once(config, fetcher, key_for, clock, register=None) -> RunOutcome`: `regwatch run`: captures, checks and writes a run record. `RunOutcome` holds the captures, the results, the failed captures, the counts, the code (0, 3 or 4), the record and its path. `RUN_OK`, `RUN_CHANGES` and `RUN_UNVERIFIED` name the codes.
 - `read_run_records(config: Config, limit: int = 50) -> list[dict]`: the newest run records first, with only their known fields; an unreadable record is skipped.
 - `schedule_state(config: Config, system: System, now: datetime) -> ScheduleState`: the installed schedule, read without changing anything. `ScheduleState` has `via` (`launchd` or `cron`), `installed`, `every`, `next_run` (exact for cron; for launchd the last run plus the interval) and `note`.
+- `premium_refusal(feature: str) -> str`: the message for a premium feature used while premium is off; it names `regwatch premium on`.
+- `read_candidates(config: Config) -> list[dict]`: the ingest candidates as stored, or none when the file is missing or unreadable.
+- `generated_copy(config, facts, purpose, key_for, poster=None, now=..., sections=SECTIONS) -> GenerationResult`: one generated copy call with the configured provider, recorded in `llm-calls.jsonl`. With no facts no request is sent and nothing is recorded: the result is empty, with `NO_FACTS_NOTICE` as its `notice`, so the fixed sentences stand. Raises `WorkspaceError` when `[llm]` is off.
+- `logo_for(config: Config) -> Logo | None`: the checked logo, under the project folder or an allowed file root.
+- `newsletter_plan(config, today, since_days) -> tuple[Register, NewsletterContent]`: the register and the period's items, with sources checked against their snapshots. The period is 1 to 366 days.
+- `newsletter_files(config, register, content, now, generated=None) -> NewsletterFiles`: the newsletter as `subject`, `html` (with the logo inline), `text` and `eml` bytes, with `generated`, the `dropped` reasons and the `notice` of the generation result, and `logo_note`, which is `SVG_LOGO_NOTE` when the logo is an SVG and so is left out of the email.
+- `document_plan(config, today, kind, tier="v2") -> tuple[Document, list[Fact]]`: the `briefing`, `digest` or `report` with the design's title format, and the facts generated copy may use.
+- `with_summary(doc, generated) -> Document`: the document opened by a Summary section of every kept passage.
+- `document_bytes(config, doc, fmt) -> bytes`: the document as `html`, `docx` or `md`, in the design with its logo.
 - `WorkspaceError`: a request the user can fix. It is a `ValueError`.
 
 ## `webapi`

@@ -30,6 +30,7 @@ __all__ = [
     "KEY_ENV_RE",
     "KEY_ENV_RULE",
     "MAX_KEY_LENGTH",
+    "PROVIDER_KEYS",
     "SECURITY_LINE_BYTES",
     "SERVICE",
     "KeyStatus",
@@ -51,6 +52,12 @@ _REFUSED = frozenset("\"'\\")
 # line of more than 4095 bytes, its line feed included, is split and its tail is
 # read as a second command. The whole line must fit.
 SECURITY_LINE_BYTES = 4095
+# The keys of the language model providers behind generated copy, by the id that
+# `regwatch keys` and the web app use for them: the fixed variable and the sign-up page.
+PROVIDER_KEYS = {
+    "llm-anthropic": ("REGWATCH_KEY_ANTHROPIC", "https://console.anthropic.com/settings/keys"),
+    "llm-openai": ("REGWATCH_KEY_OPENAI", "https://platform.openai.com/api-keys"),
+}
 
 
 def _security_command(key_env: str, value: str) -> str:

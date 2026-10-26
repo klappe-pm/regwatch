@@ -42,7 +42,8 @@ def test_formats() -> None:
 def test_markdown() -> None:
     text = render_markdown(sample())
     assert text.startswith(
-        "# Weekly \\<brief\\>\n\n_Candidates \\& notes_\n\nGenerated 2026-10-19.\n\n## Changes\n\n"
+        "# Weekly \\<brief\\>\n\n_Candidates \\& notes_\n\nPrepared 19 October 2026.\n\n"
+        "## Changes\n\n"
     )
     assert "One paragraph.\n\n- first\n- second\n\n### Detail\n\nDeeper.\n" in text
     assert text.endswith(f"---\n\n> {DISCLAIMER}\n")
@@ -101,7 +102,7 @@ def test_newsletter_text() -> None:
     assert text.splitlines()[:3] == [
         "Weekly <brief>",
         "Candidates & notes",
-        "Generated 2026-10-19.",
+        "Prepared 19 October 2026.",
     ]
     assert "CHANGES\n\nOne paragraph.\n\n  * first\n  * second\n" in text
     assert text.rstrip().endswith(DISCLAIMER)
@@ -133,7 +134,9 @@ def test_docx_is_a_valid_package() -> None:
         assert sorted(archive.namelist()) == [
             "[Content_Types].xml",
             "_rels/.rels",
+            "word/_rels/document.xml.rels",
             "word/document.xml",
+            "word/styles.xml",
         ]
         for name in archive.namelist():
             ET.fromstring(archive.read(name))

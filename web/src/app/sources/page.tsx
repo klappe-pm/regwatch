@@ -179,7 +179,7 @@ function CatalogueSection({ onAdded }: { onAdded: () => void }) {
       actions={
         data ? (
           <p className="numeric text-sm text-muted" aria-live="polite">
-            {entries.length} of {data.total} sources
+            {entries.length} of {data.total} {data.total === 1 ? "source" : "sources"}
           </p>
         ) : null
       }

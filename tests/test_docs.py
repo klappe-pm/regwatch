@@ -31,6 +31,7 @@ GITHUB_FILES = {
     ".github/ISSUE_TEMPLATE/question.yml",
     ".github/PULL_REQUEST_TEMPLATE.md",
     f".github/{PACKAGE}-banner.svg",
+    f".github/{PACKAGE}-social.png",
     ".github/workflows/release.yml",
 }
 # Pages that quote attribution lines on purpose, because the page is about them.

@@ -161,3 +161,4 @@ regwatch writes these itself, in the state directory. You do not edit them.
 | `snapshots/<source_id>.txt` | the raw content stored by `capture`; the body only, never the request URL or a key |
 | `runs/run-<start>-<sequence>-<random>.json` | one record per `regwatch run`: `started`, `ended`, `sources`, `captured`, `capture_failed`, `counts` by status and `exit_code`. `<start>` is the start time to the microsecond and `<sequence>` counts records with the same start, so records sort in the order they were written. The newest 500 are kept. |
 | `schedule.log` | the output of scheduled runs, appended by launchd or cron |
+| `llm-calls.jsonl` | one JSON line per generated copy call: `time`, `provider`, `model`, `input_tokens`, `output_tokens`, `duration_ms`, `outcome` (`ok`, `error`, `refused` or `unreadable`), `kept` and `dropped`. Never the prompt, the answer or a key. The newest 1,000 lines are kept. |

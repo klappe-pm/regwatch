@@ -32,7 +32,7 @@ The modules form layers, and each imports only from the ones below it.
 1. `config`, `sanitize`, `extract`, `fetch`, `system`, `schedule`: no dependency on the rest of the package, except that `fetch` uses `sanitize` to clean its error messages. These are the modules that touch the outside world, and they are small on purpose.
 2. `register`, `focus`, `catalogue`, `keys`, `state`: the data model, the focus catalogue and profile, the source catalogue with its one search ranking, and the one write path.
 3. `check`, `ingest`, `impact`: the engine's analysis. They take loaded data and return values. `impact` ranks by the focus profile it is given and never drops a candidate.
-4. `document`, `synthesis`, `briefing`, `render`, `export`: turning analysis into output. `synthesis` and `briefing` build a `Document`; `render` turns a `Document` into text or bytes.
+4. `document`, `synthesis`, `briefing`, `render`, `export`, `llm`: turning analysis into output. `synthesis` and `briefing` build a `Document`; `render` turns a `Document` into text or bytes; `llm` turns structured facts into generated passages through a provider, and reaches the network only through `fetch`.
 5. `onboarding`, `settings`: the files `regwatch init` writes and the checks on its answers, and the change of one setting in `regwatch.toml`. The questions and the printing stay in `cli`.
 6. `workspace`: the operations that `cli` and `webapi` share: the source catalogue, adding sources, keyed sources, a run with its record, and the schedule's state. Nothing in it prints.
 7. `webapi`, `server`: the JSON interface over the same loaded data and the same operations, and the local server that carries it and the built pages to the browser.

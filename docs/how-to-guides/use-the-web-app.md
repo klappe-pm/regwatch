@@ -46,6 +46,8 @@ The Settings page writes to `regwatch.toml` and nothing else. It changes one lin
 
 - Focus areas: tick the areas that match your business and choose Save Focus Areas. This writes `[profile] focus_areas`, the same setting `regwatch init` writes. See [set your focus areas](set-your-focus-areas.md).
 - Premium features: the switch writes `[premium] enabled`.
+- Document design (premium): the title format, organisation, primary and accent colours, typeface, logo path, header, footer and page size, plus the line at the foot of each newsletter. A swatch beside the form shows the colours and typeface as you type, and a colour lighter than 4.5:1 against white gets a warning and cannot be saved. Save Design writes `[document]` and `[newsletter] footer` after the same checks `regwatch.toml` gets, so a logo outside the project folder, too large or not a PNG or a safe SVG is refused with the reason. See [build documents in your design](build-documents-in-your-design.md).
+- Generated copy (premium): the switch, the provider (Anthropic, OpenAI or Ollama) and the model; leave the model empty for the provider's default. Save Provider writes `[llm]`. Beside it each provider key shows whether it is set and where from, with Set and Remove that store the key in the keychain as `regwatch keys set llm-anthropic` does; the page never shows a key. See [turn on generated copy](turn-on-generated-copy.md).
 
 The web app never changes your register files. To add an obligation or a source, edit the register as before.
 
@@ -58,6 +60,12 @@ regwatch --config ~/my-project/regwatch.toml premium on
 ```
 
 `regwatch premium status` shows whether it is on, and `regwatch premium off` turns it off. Regwatch is MIT licensed, so the toggle is a product boundary, not a lock: anyone can turn it on.
+
+With premium on:
+
+- Newsletters: choose a period of 7, 14, 30 or 90 days. The page shows the newsletter as your readers will see it, in a frame that cannot run scripts. Copy HTML and Copy Text put either part on the clipboard for pasting into your mail tool, and the downloads give the `.eml`, `.html` and `.txt` files `regwatch newsletter` writes. Regwatch never sends it. See [send a newsletter](send-a-newsletter.md).
+- Documents: choose a briefing, a register digest or a change and due report, and for a briefing its detail. The preview is the HTML in your design, and the downloads give HTML, Word or Markdown. To save a PDF, open the HTML download and print it.
+- Generate: on both pages, when generated copy is on, Generate sends structured facts to your provider and writes the opening and summaries. Generated text is labelled Generated and followed by the facts it was written from; check it against them before you use it. The downloads then carry the same copy. Without Generate, the same places hold fixed sentences built from your data.
 
 ## If It Does Not Open
 

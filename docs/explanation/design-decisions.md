@@ -12,6 +12,8 @@ If a pluggable stage is added later, it must be off by default, it must read a k
 
 The [workspace](workspace.md) plan adds that stage as a premium feature under these conditions, with one change: the key is read from the operating system keychain, and the environment variable remains as an override.
 
+The stage now exists, in `regwatch/llm.py`, and keeps those conditions. It is off unless premium features are on and `[llm] enabled` is set, and it runs only when a newsletter or a document is asked for with `--generate`. The key is read under a fixed name per provider, `REGWATCH_KEY_ANTHROPIC` or `REGWATCH_KEY_OPENAI`, so no setting can point it at another variable. The model is given only structured facts with ids and must cite them; a passage that cites anything else is dropped and reported. Kept text is escaped like everything else, labelled Generated in every format, and shown next to the facts it cites, so the position that every statement traces to a register file or a fixed sentence becomes: every statement traces to a register file, a fixed sentence, or a labelled passage with its facts beside it. Without `--generate` the same newsletters and documents use fixed sentences built from the data. The alternative, letting the model write freely from the whole briefing, was rejected because nothing could then be checked against a source. The cost is copy that reads more stiffly than a free summary would, and a call that is spent when the model cites a fact it was not given. The call goes through the fetch client's new POST, which follows no redirect and allows plain http only to a loopback IP literal; that exception exists so a local Ollama model can be used without sending the facts anywhere.
+
 ## Domain-Neutral Vocabulary
 
 The source engine spoke in terms of one industry: ingredient functions, a company's product lines, two countries and their retail channels. The general engine uses neutral terms. An ingredient function became a category, a named ingredient became a term, a channel became a market, and the hard-coded jurisdiction logic became a tree built from the `parent` field. The alternative was to keep the food vocabulary. The neutral terms cost a little clarity in the food case and make the engine usable for any regulated attribute. The matching rules and the severity scoring are unchanged in substance.
@@ -67,13 +69,25 @@ In the source engine the tiered briefing produced Markdown directly while the da
 - `scan`, `capture` and the `--live` flag became `check`, `capture` and `--fetch`, with the snapshot behaviour above.
 - `briefing` and `brief` became one `brief` command with a `--kind` option.
 - The Word, newsletter and web post renderers became the separate `render` command, which works from a saved model.
-- The `newsletter` command, which wrote a running index of records that linked to sibling report files by name, was not ported. It depended on a rollout directory layout specific to one project. `digest`, `report` and `export` cover the general cases.
+- The source engine's `newsletter` command, which wrote a running index of records that linked to sibling report files by name, was not ported. It depended on a rollout directory layout specific to one project. The `regwatch newsletter` command that exists now is a different, premium feature: one send-ready issue for a period, described below.
 - Scheduled workflows were not ported. There is no CI in this repository, and scheduling is left to the user. The how-to guide on [adding a source](../how-to-guides/add-a-source.md) shows the commands to schedule.
 - A fixed set of industry lenses became the themes file. A fixed file of one agency's warning letter themes became the enforcement file.
 
 ## Detail Records Are Optional
 
 The source engine required a detail record for every obligation and failed validation without one. regwatch allows an obligation to have none, and the tiered briefing shows a placeholder that says detail is pending. A required record forces a new user to write prose before they can run anything. The cost is that a register can quietly lack detail; `export` shows which obligations have none, since their summary column is empty.
+
+## Newsletters Are Files, Not Sends
+
+`regwatch newsletter` writes an `.eml` with no recipients beside the `.html` and `.txt` parts, and the web app offers the same files and a copy button. It never sends. Sending would need mail credentials, a recipient list and bounce handling, and it would turn an unreviewed mistake into one that reached every reader. A person opens the file in their own mail tool, reads it and sends it. The cost is one more step for each issue.
+
+## Word Files Without a Library
+
+The Word renderer writes the package with `zipfile` and hand-built XML, including a styles part, a header, a footer and the logo, rather than depending on a document library. regwatch has no runtime dependencies, and the parts it needs are few and stable. The cost is that every new Word feature is written by hand and checked by opening the result in a word processor.
+
+## Previews on Their Own Routes
+
+The newsletter and document previews are HTML whose styles must be inline, because that is how an email client reads them. A frame built from `srcdoc` inherits the page's content security policy, so showing them that way meant allowing inline styles across the whole app. Instead each preview is served from its own route, `/api/newsletter/preview` and `/api/document/preview`, with a policy of its own that allows inline styles and `data:` images and nothing else, adds the `sandbox` directive, and lets only the server's own pages frame it. The app's pages keep `style-src 'self'`. The cost is two routes that return HTML built from untrusted text at a fixed address; they are behind the same host, session and premium checks as every route, every value in them is escaped, and the policy and the empty `sandbox` attribute on the frame mean nothing in them can run or load anything.
 
 ## One GitHub Actions Workflow
 

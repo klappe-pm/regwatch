@@ -24,6 +24,9 @@ Each subcommand is one stage of the engine:
     schedule  install, show or remove a recurring run with launchd or cron
     ui        open the local web app in the browser
     premium   turn the premium features on or off, or show whether they are on
+    llm       show or change the language model that writes generated copy
+    newsletter build a send-ready newsletter from a period's changes (premium)
+    document  write a briefing, digest or report in your design (premium)
 
 Exit status: 0 success, 1 the register is invalid or nothing could be captured,
 2 a usage, configuration, network or file error, 3 changes were detected and
@@ -63,18 +66,22 @@ from regwatch.catalogue import (
 from regwatch.check import SourceResult, accept_results, capture_sources, check_sources
 from regwatch.config import (
     DEFAULT_CONFIG_NAME,
+    LLM_PROVIDERS,
     Config,
     ConfigError,
     FetchSettings,
     load_config,
 )
-from regwatch.document import DISCLAIMER, Document, DocumentError, Section, make_disclaimer
+from regwatch.design import DesignError
+from regwatch.document import DISCLAIMER, Document, DocumentError
 from regwatch.export import build_records, records_csv
 from regwatch.fetch import Credential, Fetcher, FetchError
 from regwatch.focus import FocusError, FocusProfile, build_profile, load_catalogue
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.ingest import IngestError, build_query_url, candidates_document, parse_candidates
 from regwatch.keys import KeyStore, KeyStoreError
+from regwatch.llm import LLM_KEYS, GenerationError, Poster
+from regwatch.newsletter import NEWSLETTER_SECTIONS
 from regwatch.onboarding import (
     SCAFFOLD_NAMES,
     InitPlan,
@@ -122,7 +129,7 @@ from regwatch.schedule import (
     schedule_cadence,
 )
 from regwatch.server import LocalServer, ServerError, web_root
-from regwatch.settings import set_premium
+from regwatch.settings import set_llm, set_premium
 from regwatch.state import (
     MAX_STATE_BYTES,
     AlreadyExistsError,
@@ -136,21 +143,40 @@ from regwatch.state import (
     update_register_file,
     write_tree,
 )
-from regwatch.synthesis import daily_brief, upcoming_obligations, weekly_synthesis
+from regwatch.synthesis import (
+    daily_brief,
+    digest_document,
+    report_document,
+    upcoming_obligations,
+    weekly_synthesis,
+)
 from regwatch.system import System
 from regwatch.webapi import Api
+from regwatch.wording import count, provider_name
 from regwatch.workspace import (
+    DOCUMENT_FORMATS,
+    DOCUMENT_KINDS,
+    MAX_SINCE_DAYS,
     KeyedSource,
+    WorkspaceError,
     add_sources,
+    check_key_allowed,
     chosen_ids,
+    document_bytes,
+    document_plan,
     fetcher_for,
     find_entries,
     focus_area_ids,
+    generated_copy,
     key_lookup,
     keyed_source,
     keyed_sources,
+    newsletter_files,
+    newsletter_plan,
+    premium_refusal,
     run_once,
     source_catalogue,
+    with_summary,
 )
 
 __all__ = ["main"]
@@ -188,6 +214,7 @@ class _Context:
     now: dt.datetime
     system: System = field(default_factory=System)
     clock: Callable[[], dt.datetime] = field(default=lambda: dt.datetime.now(dt.UTC))
+    poster: Poster | None = None
     _config: Config | None = field(default=None, init=False)
 
     def keystore(self) -> KeyStore:
@@ -586,35 +613,7 @@ def _cmd_render(ctx: _Context, args: argparse.Namespace) -> int:
 
 
 def _cmd_digest(ctx: _Context, args: argparse.Namespace) -> int:
-    register = ctx.register()
-    upcoming = upcoming_obligations(register.obligations, args.window, ctx.today)
-    names = {j.jurisdiction_id: j.name for j in register.jurisdictions}
-    sections = [
-        Section(
-            f"Effective Within {args.window} Days",
-            paragraphs=[] if upcoming else ["None."],
-            bullets=[
-                f"{o.effective_date}, {o.jurisdiction}: {o.title} ({o.status})" for o in upcoming
-            ],
-        )
-    ]
-    by_jurisdiction: dict[str, list[Any]] = {}
-    for o in register.obligations:
-        by_jurisdiction.setdefault(o.jurisdiction, []).append(o)
-    sections.append(Section("Register By Jurisdiction"))
-    for jid in sorted(by_jurisdiction):
-        bullets = [
-            f"{o.title}: {o.status}, {o.effective_date or 'no date'}"
-            for o in sorted(by_jurisdiction[jid], key=lambda o: o.title)
-        ]
-        sections.append(Section(names.get(jid, jid), level=3, bullets=bullets))
-    doc = Document(
-        "regwatch digest",
-        ctx.today.isoformat(),
-        "Register digest for analyst review",
-        sections,
-        make_disclaimer(register.portfolio.disclaimer),
-    )
+    doc = digest_document(ctx.register(), ctx.today, args.window)
     _emit(ctx, render_markdown(doc), args.out, "digest")
     return EXIT_OK
 
@@ -634,29 +633,7 @@ def _cmd_report(ctx: _Context, args: argparse.Namespace) -> int:
     missing = [r for r in results if r.status == "MISSING"]
     errors = [r for r in results if r.status == "ERROR"]
     upcoming = upcoming_obligations(register.obligations, args.window, ctx.today)
-
-    changes = Section("Source Changes To Review")
-    if flagged:
-        changes.bullets = [f"{r.status}: {r.source_id} ({r.origin})" for r in flagged]
-    else:
-        changes.paragraphs.append("No source changes since the last accepted state.")
-    if missing:
-        changes.paragraphs.append(
-            f"{len(missing)} source(s) have no snapshot; capture one or use --fetch."
-        )
-    changes.bullets += [f"ERROR: {r.source_id} ({r.detail})" for r in errors]
-    due = Section(
-        f"Obligations Effective Within {args.window} Days",
-        paragraphs=[] if upcoming else ["None."],
-        bullets=[f"{o.effective_date}, {o.jurisdiction}: {o.title} ({o.status})" for o in upcoming],
-    )
-    doc = Document(
-        "regwatch report",
-        ctx.today.isoformat(),
-        "Change and due alert",
-        [changes, due],
-        make_disclaimer(register.portfolio.disclaimer),
-    )
+    doc = report_document(register, results, ctx.today, args.window)
     _emit(ctx, render_markdown(doc), args.out, "report")
     if args.json:
         payload = {
@@ -691,7 +668,8 @@ def _cmd_report(ctx: _Context, args: argparse.Namespace) -> int:
         _say(f"regwatch report: wrote {args.json}")
     if flagged:
         _say(
-            f"regwatch report: {len(flagged)} source change(s) flagged for review", file=sys.stderr
+            f"regwatch report: {count(len(flagged), 'source change')} flagged for review",
+            file=sys.stderr,
         )
     return EXIT_OK
 
@@ -1273,6 +1251,12 @@ def _cmd_config(ctx: _Context, args: argparse.Namespace) -> int:
     )
     _say("[premium]")
     row("enabled", config.premium.enabled)
+    _say("[llm]")
+    row("enabled", config.llm.enabled)
+    row("provider", config.llm.provider)
+    row("model", config.llm.effective_model)
+    row("max_tokens", config.llm.max_tokens)
+    row("timeout_seconds", config.llm.timeout_seconds)
     for area in focus.areas:
         _say(f"# focus area {area.focus_id}: {area.label}, {len(area.terms)} terms")
     if not focus.active:
@@ -1473,6 +1457,10 @@ def _keyed_source(ctx: _Context, source_id: str) -> KeyedSource:
 
 def _cmd_keys_set(ctx: _Context, args: argparse.Namespace) -> int:
     item = _keyed_source(ctx, args.source_id)
+    try:
+        check_key_allowed(ctx.config if ctx.config_path.exists() else None, args.source_id)
+    except WorkspaceError as exc:
+        raise CommandError(str(exc)) from exc
     store = ctx.keystore()
     if store.backend is None:
         raise CommandError(
@@ -1725,6 +1713,7 @@ def _cmd_ui(ctx: _Context, args: argparse.Namespace) -> int:
         system=ctx.system,
         fetcher=ctx.fetcher,
         clock=ctx.clock,
+        poster=ctx.poster,
     )
     server = LocalServer(api, web_root(), args.port)
     _say(f"regwatch ui: serving {ctx.config.base_dir} at {server.url}")
@@ -1751,6 +1740,137 @@ def _cmd_premium(ctx: _Context, args: argparse.Namespace) -> int:
     _say(f"regwatch premium: {'on' if enabled else 'off'}")
     if not enabled:
         _say("Newsletters, documents, generated copy and runs more often than daily are locked.")
+    return EXIT_OK
+
+
+PREMIUM_HINT = "turn it on with 'regwatch premium on'"
+
+
+def _require_premium(ctx: _Context, feature: str) -> None:
+    """Refuse a premium feature while premium is off, naming the command that turns it on."""
+    if not ctx.config.premium.enabled:
+        raise CommandError(premium_refusal(feature))
+
+
+OUTPUT_SUFFIXES = (".eml", ".html", ".txt", ".md", ".docx")
+
+
+def _output_stem(out: str | None, default: str) -> Path:
+    """The path ``--out`` names without a known suffix, or ``default`` in the current folder."""
+    if not out:
+        return Path(default)
+    path = Path(out)
+    return path.with_suffix("") if path.suffix.lower() in OUTPUT_SUFFIXES else path
+
+
+def _say_dropped(label: str, dropped: Sequence[str]) -> None:
+    for reason in dropped:
+        _say(f"regwatch {label}: left out a generated passage: {reason}", file=sys.stderr)
+
+
+def _cmd_document(ctx: _Context, args: argparse.Namespace) -> int:
+    """Write a briefing, digest or report that follows the design specification."""
+    _require_premium(ctx, "Documents")
+    config = ctx.config
+    if args.generate and not config.llm.enabled:
+        raise CommandError("generated copy is off; turn it on with 'regwatch llm on'")
+    doc, facts = document_plan(config, ctx.today, args.kind, args.tier)
+    dropped: list[str] = []
+    notice = ""
+    if args.generate:
+        generated = generated_copy(
+            config,
+            facts,
+            f"the summary that opens a regulatory {args.kind}",
+            ctx.key_for,
+            ctx.poster,
+            ctx.clock,
+        )
+        doc = with_summary(doc, generated)
+        dropped = generated.dropped
+        notice = generated.notice
+    data = document_bytes(config, doc, args.format)
+    stem = _output_stem(args.out, f"regwatch-{args.kind}-{ctx.today.isoformat()}")
+    path = stem.with_name(f"{stem.name}.{args.format}")
+    ctx.write_bytes(path, data)
+    _say(f"wrote {path}")
+    _say_dropped("document", dropped)
+    if notice:
+        _say(f"regwatch document: {notice}")
+    _say(f"regwatch document: {doc.title}")
+    if args.format == "html":
+        _say("Open it in a browser and print it to save a PDF.")
+    _say(NOTICE)
+    return EXIT_OK
+
+
+def _cmd_newsletter(ctx: _Context, args: argparse.Namespace) -> int:
+    """Write a send-ready newsletter as .eml, .html and .txt. Regwatch never sends it."""
+    _require_premium(ctx, "Newsletters")
+    config = ctx.config
+    if args.generate and not config.llm.enabled:
+        raise CommandError("generated copy is off; turn it on with 'regwatch llm on'")
+    register, content = newsletter_plan(config, ctx.today, args.since)
+    generated = None
+    if args.generate:
+        generated = generated_copy(
+            config,
+            content.facts(),
+            f"the newsletter for {content.start.isoformat()} to {content.end.isoformat()}",
+            ctx.key_for,
+            ctx.poster,
+            ctx.clock,
+            sections=NEWSLETTER_SECTIONS,
+        )
+    files = newsletter_files(config, register, content, ctx.now, generated)
+    stem = _output_stem(args.out, f"regwatch-newsletter-{ctx.today.isoformat()}")
+    written = [stem.with_name(stem.name + suffix) for suffix in (".eml", ".html", ".txt")]
+    ctx.write_bytes(written[0], files.eml)
+    ctx.write_text(written[1], files.html)
+    ctx.write_text(written[2], files.text)
+    for path in written:
+        _say(f"wrote {path}")
+    _say_dropped("newsletter", files.dropped)
+    if files.notice:
+        _say(f"regwatch newsletter: {files.notice}")
+    if files.logo_note:
+        _say(f"regwatch newsletter: {files.logo_note}")
+    copy = "generated" if files.generated else "fixed sentences"
+    _say(f"regwatch newsletter: {files.subject}; opening and summaries: {copy}")
+    _say("Regwatch does not send email. Review the newsletter, then send it from your mail tool.")
+    return EXIT_OK
+
+
+def _cmd_llm(ctx: _Context, args: argparse.Namespace) -> int:
+    """Show or change the generated copy settings, ``[llm]`` in regwatch.toml."""
+    if args.model is not None and args.action != "use":
+        # Without use the model would be dropped silently.
+        raise CommandError("--model goes with use: 'regwatch llm use PROVIDER --model NAME'")
+    if args.action != "status":
+        _require_premium(ctx, "Generated copy")
+        if args.action == "use":
+            if args.provider is None:
+                raise CommandError("name a provider: anthropic, openai or ollama")
+            set_llm(ctx.config_path, provider=args.provider, model=args.model or "")
+        else:
+            set_llm(ctx.config_path, enabled=args.action == "on")
+    config = load_config(ctx.config_path)
+    llm = config.llm
+    state = "on" if llm.enabled else "off"
+    _say(f"regwatch llm: {state}, {provider_name(llm.provider)}, {llm.effective_model}")
+    key_env = LLM_KEYS.get(llm.provider)
+    if key_env:
+        where = ctx.keystore().status(key_env).source
+        if where == "unavailable":
+            # No keychain tool, so 'keys set' cannot help: the variable is the only way in.
+            hint = f"; no keychain tool was found, so set the environment variable {key_env}"
+        else:
+            hint = f"; run 'regwatch keys set llm-{llm.provider}'"
+        _say(f"key {key_env}: {where}" + ("" if where in ("environment", "keychain") else hint))
+    else:
+        _say("Ollama runs on this machine at 127.0.0.1:11434 and needs no key.")
+    if not config.premium.enabled:
+        _say(f"Generated copy is a premium feature; {PREMIUM_HINT}.")
     return EXIT_OK
 
 
@@ -1962,6 +2082,55 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, _Handler]]:
 
     p = add("premium", _cmd_premium, "turn the premium features on or off, or show their state")
     p.add_argument("action", choices=["on", "off", "status"])
+
+    p = add(
+        "newsletter",
+        _cmd_newsletter,
+        "write a send-ready newsletter from a period's changes as .eml, .html and .txt",
+    )
+    p.add_argument(
+        "--since",
+        type=int,
+        default=7,
+        metavar="DAYS",
+        help=f"the period in days, today included, 1 to {MAX_SINCE_DAYS} (default: 7)",
+    )
+    p.add_argument("--generate", action="store_true", help="have the language model write the copy")
+    p.add_argument("--out", help="file stem for the three files; default in the current folder")
+
+    p = add("document", _cmd_document, "write a briefing, digest or report in your design")
+    p.add_argument(
+        "--kind",
+        choices=list(DOCUMENT_KINDS),
+        default="briefing",
+        help=(
+            "briefing (the tiered briefing), digest (the register by jurisdiction) or report "
+            "(the change and due alert) (default: briefing)"
+        ),
+    )
+    p.add_argument(
+        "--tier", choices=list(TIERS), default="v2", help="detail level of a briefing (default: v2)"
+    )
+    p.add_argument(
+        "--format",
+        choices=list(DOCUMENT_FORMATS),
+        default="html",
+        help="html (print it to save a PDF), docx (Word) or md (Markdown) (default: html)",
+    )
+    p.add_argument(
+        "--generate", action="store_true", help="open with a summary the language model writes"
+    )
+    p.add_argument("--out", help="file stem; the format's suffix is added")
+
+    p = add("llm", _cmd_llm, "show or change the language model that writes generated copy")
+    p.add_argument("action", choices=["status", "on", "off", "use"])
+    p.add_argument(
+        "provider", nargs="?", choices=list(LLM_PROVIDERS), help="with use: the provider"
+    )
+    p.add_argument(
+        "--model",
+        help="with use only: the model name; default the provider's default",
+    )
     return parser, handlers
 
 
@@ -1979,11 +2148,16 @@ def _add_keys_parser(sub: Any, handlers: dict[str, _Handler]) -> None:
         help="prompt for a key and store it",
         description=(
             "Say where to get a key for a keyed source, prompt for it without echoing it, "
-            "and store it in the system keychain. The key is never printed."
+            "and store it in the system keychain. The key is never printed. llm-anthropic "
+            "and llm-openai store the key of a language model provider for generated copy."
         ),
         epilog=DISCLAIMER,
     )
-    p.add_argument("source_id", metavar="SOURCE_ID", help="a keyed source id")
+    p.add_argument(
+        "source_id",
+        metavar="SOURCE_ID",
+        help="a keyed source id, or llm-anthropic or llm-openai for a language model key",
+    )
     handlers["keys list"] = _cmd_keys_list
     actions.add_parser(
         "list",
@@ -2059,12 +2233,14 @@ def main(
     today: dt.date | None = None,
     now: dt.datetime | None = None,
     system: System | None = None,
+    poster: Poster | None = None,
 ) -> int:
     """Run the command line and return the exit status.
 
-    ``fetcher``, ``today``, ``now`` and ``system`` exist so tests and embedders can
-    supply a fake network client, a fixed clock, and a stand-in for the programs
-    that keep keys and install schedules.
+    ``fetcher``, ``today``, ``now``, ``system`` and ``poster`` exist so tests and
+    embedders can supply a fake network client, a fixed clock, a stand-in for the
+    programs that keep keys and install schedules, and a fake for the language model
+    calls of generated copy.
     """
     parser, handlers = _build_parser()
     args = parser.parse_args(argv)
@@ -2075,6 +2251,7 @@ def main(
         today=today or moment.date(),
         now=moment,
         system=system or System(),
+        poster=poster,
     )
     if now is not None:
         ctx.clock = lambda: moment
@@ -2101,6 +2278,9 @@ def main(
         IngestError,
         ServerError,
         DocumentError,
+        GenerationError,
+        WorkspaceError,
+        DesignError,
         ValueError,
         OSError,
     ) as exc:

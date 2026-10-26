@@ -868,5 +868,6 @@ def load_register(config: Config) -> Register:
     raw = _read_raw(config)
     errors = _validate_raw(raw)
     if errors:
-        raise RegisterError(f"the register has {len(errors)} validation error(s)", errors)
+        noun = "validation error" if len(errors) == 1 else "validation errors"
+        raise RegisterError(f"the register has {len(errors)} {noun}", errors)
     return _build(raw, str(load_schema().get("list_delimiter", ";")))
