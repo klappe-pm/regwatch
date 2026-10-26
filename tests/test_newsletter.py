@@ -266,6 +266,7 @@ def test_the_content_keeps_only_the_period(project: Path) -> None:
     assert [e.date for e in content.events] == ["2026-10-01"]
     assert content.candidates == () and content.changes == () and content.impacts == ()
     doc = build_newsletter(register, content, DocumentDesign())
-    assert doc.subtitle == "2026-09-19 to 2026-10-19"
+    # Thirty days ending today, today included.
+    assert doc.subtitle == "2026-09-20 to 2026-10-19"
     assert "No candidate impact" in doc.sections[-1].paragraphs[0]
     assert change_facts([], {}) == []

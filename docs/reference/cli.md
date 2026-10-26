@@ -350,7 +350,7 @@ Writes a send-ready newsletter for the last `--since` days as three files: an `.
 
 | option | meaning |
 | --- | --- |
-| `--since DAYS` | the period, 1 to 366 days; default 7 |
+| `--since DAYS` | the period, 1 to 366 days ending today and including today; default 7 (13 to 19 October when run on 19 October) |
 | `--generate` | have the language model write the opening and the section summaries; needs `regwatch llm on` and exits 2 otherwise |
 | `--out PATH` | the file stem; a `.eml`, `.html` or `.txt` suffix is dropped. Default `regwatch-newsletter-<date>` in the current folder |
 

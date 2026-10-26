@@ -7,12 +7,16 @@ the keychain a FakeSystem, so nothing leaves the machine.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import TODAY
 from test_llm import FACTS, KEY, FakePoster, FakeProvider, answer
 
+from regwatch.config import load_config
 from regwatch.llm import (
     OLLAMA_CONTEXT,
     AnthropicProvider,
@@ -21,6 +25,8 @@ from regwatch.llm import (
     OpenAIProvider,
     generate,
 )
+from regwatch.newsletter import newsletter_content
+from regwatch.register import load_register
 
 # --- C3: an answer cut off at max_tokens is a clear error -----------------------------
 
@@ -71,3 +77,20 @@ def test_a_complete_answer_is_not_taken_for_a_cut_off_one() -> None:
     for kind, body in done:
         provider(kind, body).complete("S", "P", 10)
     assert answer() == json.dumps({"passages": []})
+
+
+# --- C4: a period of N days is N days, today included --------------------------------
+
+
+@pytest.mark.parametrize(
+    ("since", "first_day"), [(1, "2026-10-19"), (7, "2026-10-13"), (30, "2026-09-20")]
+)
+def test_a_period_holds_exactly_its_days(project: Path, since: int, first_day: str) -> None:
+    register = load_register(load_config(project))
+    first = dt.date.fromisoformat(first_day)
+    days = [(first - dt.timedelta(days=1)).isoformat(), first_day, "2026-10-19", "2026-10-20"]
+    candidates = [{"date": day, "headline": day} for day in days]
+    content = newsletter_content(register, [], [], candidates, TODAY, since)
+    assert content.start == first and content.end == TODAY
+    assert [c["date"] for c in content.candidates] == [first_day, "2026-10-19"]
+    assert (content.end - content.start).days + 1 == since

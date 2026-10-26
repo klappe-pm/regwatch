@@ -98,8 +98,9 @@ def newsletter_content(
 ) -> NewsletterContent:
     """Choose the period's items: sources that changed or need attention, change log
     events and ingest candidates dated in the last ``since_days`` days, and the act now
-    and high severity impacts, those in focus first."""
-    start = today - dt.timedelta(days=since_days)
+    and high severity impacts, those in focus first. The period is ``since_days`` days
+    ending today, today included: 7 days to 19 October start on 13 October."""
+    start = today - dt.timedelta(days=since_days - 1)
 
     def in_period(value: object) -> bool:
         date = parse_date(value) if isinstance(value, str) else None
