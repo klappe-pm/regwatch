@@ -237,7 +237,12 @@ def test_facts_carry_ids_and_clean_text(register: Register) -> None:
 
 def test_the_prompt_holds_only_the_facts_and_the_rules() -> None:
     prompt = build_prompt("a newsletter", FACTS)
-    assert "change:us-fda-news | changes | FDA news is changed" in prompt
+    facts = json.loads(prompt[prompt.index("[") :])
+    assert facts[0] == {
+        "id": "change:us-fda-news",
+        "section": "changes",
+        "text": "FDA news is changed",
+    }
     assert "Use only the facts you are given" in SYSTEM_PROMPT
     assert "cite" in SYSTEM_PROMPT and "legal advice" in SYSTEM_PROMPT
 
