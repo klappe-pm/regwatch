@@ -349,11 +349,15 @@ def email_bytes(
     if logo is not None and logo.kind == "png":
         for part in message.iter_parts():
             if part.get_content_type() == "text/html":
+                # Inline, and a related part naming its root's type, so a mail
+                # program shows the logo in the message instead of as an attachment.
                 part.add_related(
                     logo.data,
                     maintype="image",
                     subtype="png",
                     cid=f"<{LOGO_CID}>",
                     filename="logo.png",
+                    disposition="inline",
                 )
+                part.set_param("type", "text/html")
     return message.as_bytes()

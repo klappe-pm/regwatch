@@ -156,8 +156,11 @@ def test_a_png_logo_is_inline_in_the_page_and_related_in_the_eml(
     )
     related = list(message.iter_parts())[1]
     assert related.get_content_type() == "multipart/related"
+    # RFC 2387: the related part names the type of its root, and the logo is inline.
+    assert related.get_param("type") == "text/html"
     image = list(related.iter_parts())[1]
     assert image["Content-ID"] == f"<{LOGO_CID}>" and image.get_content() == make_png()
+    assert image.get_content_disposition() == "inline" and not image.is_attachment()
     assert f"cid:{LOGO_CID}" in next(iter(related.iter_parts())).get_content()
 
 

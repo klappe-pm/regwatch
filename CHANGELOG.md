@@ -85,6 +85,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- A PNG logo in the newsletter `.eml` file showed as an attachment in some mail programs. The logo part is now `Content-Disposition: inline`, and the `multipart/related` part names its root with `type="text/html"`, as RFC 2387 asks.
 - Pressing Generate a second time on the Newsletters or Documents page left the first copy in the preview, because the page asked for the same address again and kept what it had. Each successful Generate now changes the address the page and its preview load, so the new copy is shown.
 - A newsletter period was a day too long: `--since 7` on 19 October ran from 12 October. It now runs from 13 October, so a period of N days holds exactly N days, today included.
 - An answer the provider cut off at `[llm] max_tokens` (Anthropic `stop_reason` `max_tokens`, OpenAI `finish_reason` `length`, Ollama `done_reason` `length`) was read as an unreadable answer. It is now an error that says the answer was cut off and names `[llm] max_tokens`, recorded as `cut off`. Ollama is asked for JSON (`format` `json`) with a 16,384 token context (`num_ctx`), since its small default cut the facts off.
