@@ -267,7 +267,7 @@ def digest_document(register: Register, today: dt.date, window: int) -> Document
         ]
         sections.append(Section(names.get(jid, jid), level=3, bullets=bullets))
     return Document(
-        "regwatch digest",
+        f"{register.portfolio.name} register digest",
         today.isoformat(),
         "Register digest for analyst review",
         sections,
@@ -300,7 +300,7 @@ def report_document(
         bullets=[_due_line(o) for o in upcoming],
     )
     return Document(
-        "regwatch report",
+        f"{register.portfolio.name} change and due alert",
         today.isoformat(),
         "Change and due alert",
         [changes, due],

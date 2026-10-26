@@ -112,7 +112,11 @@ def test_markdown_takes_the_title_format(run: Runner, project: Path, tmp_path: P
     append(project, '[document]\ntitle_format = "{title}, {date}"\n')
     run("premium", "on")
     run("document", "--kind", "digest", "--format", "md", "--out", str(tmp_path / "d"))
-    assert (tmp_path / "d.md").read_text(encoding="utf-8").startswith("# regwatch digest, 2026")
+    assert (
+        (tmp_path / "d.md")
+        .read_text(encoding="utf-8")
+        .startswith("# Example Pantry Co. register digest, 2026")
+    )
 
 
 def test_a_refused_logo_writes_nothing(run: Runner, project: Path, tmp_path: Path) -> None:
@@ -160,7 +164,8 @@ def test_the_plan_and_the_formats_refuse_unknown_values(project: Path) -> None:
     with pytest.raises(WorkspaceError, match="tier"):
         document_plan(config, TODAY, "briefing", "v9")
     doc, facts = document_plan(config, TODAY, "report")
-    assert doc.title == "regwatch report" and any(f.fact_id.startswith("change:") for f in facts)
+    assert doc.title == "Example Pantry Co. change and due alert"
+    assert any(f.fact_id.startswith("change:") for f in facts)
     with pytest.raises(WorkspaceError, match="format"):
         document_bytes(config, doc, "pdf")
     assert with_summary(doc, GenerationResult()) is doc and doc.sections[0].heading != "Summary"

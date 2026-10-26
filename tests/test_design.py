@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import pytest
+from conftest import TODAY
 from test_newsletter import make_png
 
 from regwatch.config import (
@@ -18,6 +19,8 @@ from regwatch.config import (
     load_config,
 )
 from regwatch.design import MAX_LOGO_BYTES, DesignError, clean_svg, load_logo
+from regwatch.register import load_register
+from regwatch.synthesis import digest_document, report_document
 
 
 def append(project: Path, text: str) -> None:
@@ -77,6 +80,46 @@ def test_a_full_design_is_read(project: Path) -> None:
     assert design.logo == project.parent / "brand" / "logo.svg"
     assert design.title("Digest", "2026-10-19") == "Org | Digest | 2026-10-19"
     assert design.page_size == "letter"
+
+
+@pytest.mark.parametrize(
+    ("title_format", "organisation", "title", "expected"),
+    [
+        (
+            "{organisation}: {title}",
+            "Example Pantry Co.",
+            "Example Pantry Co. regulatory newsletter",
+            "Example Pantry Co.: Regulatory newsletter",
+        ),
+        (
+            "{organisation} | {title}",
+            "example pantry co",
+            "Example Pantry Co. register digest",
+            "example pantry co | Register digest",
+        ),
+        # Not a whole word: "Pantry" is not taken off "Pantryhouse".
+        ("{organisation}: {title}", "Pantry", "Pantryhouse digest", "Pantry: Pantryhouse digest"),
+        # Another organisation, or a format without {organisation}, keeps the title whole.
+        ("{organisation}: {title}", "Other Ltd", "Pantry digest", "Other Ltd: Pantry digest"),
+        ("{title} ({date})", "Pantry", "Pantry digest", "Pantry digest (2026-10-19)"),
+        # A title that is only the name is kept.
+        ("{organisation}: {title}", "Pantry", "Pantry", "Pantry: Pantry"),
+    ],
+)
+def test_the_organisation_is_not_named_twice_in_a_title(
+    title_format: str, organisation: str, title: str, expected: str
+) -> None:
+    design = DocumentDesign(title_format=title_format, organisation=organisation)
+    assert design.title(title, "2026-10-19") == expected
+
+
+def test_digest_and_report_titles_name_the_portfolio(project: Path) -> None:
+    config = load_config(project)
+    register = load_register(config)
+    assert digest_document(register, TODAY, 30).title == "Example Pantry Co. register digest"
+    assert report_document(register, [], TODAY, 30).title == (
+        "Example Pantry Co. change and due alert"
+    )
 
 
 def test_check_color_returns_lower_case() -> None:

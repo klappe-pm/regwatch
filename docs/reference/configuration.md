@@ -113,7 +113,7 @@ Optional table: the design specification that newsletters and documents follow. 
 
 | key | type | default | meaning |
 | --- | --- | --- | --- |
-| `title_format` | string | `"{title}"` | the title of every newsletter and document, 1 to 200 characters; it may use `{title}`, `{date}` and `{organisation}` and no other braces |
+| `title_format` | string | `"{title}"` | the title of every newsletter and document, 1 to 200 characters; it may use `{title}`, `{date}` and `{organisation}` and no other braces. A document's own title starts with the portfolio name (such as "Pantry Co regulatory newsletter", "Pantry Co register digest" or "Pantry Co change and due alert"), so when the format uses `{organisation}` and the title starts with the organisation name, that name is taken off the title and the rest starts with a capital: `{organisation}: {title}` gives "Pantry Co: Regulatory newsletter" |
 | `organisation` | string | `""` | your organisation's name, at most 120 characters; also the logo's alternative text |
 | `primary_color` | string | `"#1d5a92"` | headings and the title band, written `#rrggbb`; it must reach a contrast of 4.5:1 against white (WCAG 2.2 AA) |
 | `accent_color` | string | `"#a8481a"` | rules under headings, written `#rrggbb`, with the same 4.5:1 contrast |

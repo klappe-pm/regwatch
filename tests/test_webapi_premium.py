@@ -121,7 +121,8 @@ def test_a_failed_generation_is_502_without_the_key(premium: Path) -> None:
 def test_the_document_preview_and_downloads(premium: Path) -> None:
     api = make(premium)
     data = get(api, "/api/document", kind="report")
-    assert data["title"] == "regwatch report" and data["formats"] == ["html", "docx", "md"]
+    assert data["title"] == "Example Pantry Co. change and due alert"
+    assert data["formats"] == ["html", "docx", "md"]
     assert "<style>" in data["html"] and "Not legal advice." in data["html"]
     _status, download = api.handle(
         "GET", "/api/document/export", {"kind": "digest", "format": "docx"}, {}

@@ -424,7 +424,7 @@ def test_digest(run, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     out = tmp_path / "digest.md"
     written = run("digest", "--out", str(out))
     assert "wrote" in written.out
-    assert out.read_text(encoding="utf-8").startswith("# regwatch digest")
+    assert out.read_text(encoding="utf-8").startswith("# Example Pantry Co. register digest")
 
 
 def test_report(run, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]

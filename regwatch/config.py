@@ -254,7 +254,17 @@ class DocumentDesign:
         return FONTS[self.font]
 
     def title(self, title: str, date: str) -> str:
-        """``title_format`` filled in with the document's title, its date and the organisation."""
+        """``title_format`` filled in with the document's title, its date and the organisation.
+
+        A document's own title starts with the portfolio name, which is often the
+        organisation, so when the format names ``{organisation}`` a leading
+        organisation name is taken off the title first and the rest starts with a
+        capital: "Pantry Co: Regulatory newsletter", not "Pantry Co: Pantry Co
+        regulatory newsletter".
+        """
+        organisation = self.organisation.strip()
+        if organisation and "{organisation}" in self.title_format:
+            title = _without_leading(title, organisation)
         return (
             self.title_format.replace("{title}", title)
             .replace("{date}", date)
@@ -262,6 +272,17 @@ class DocumentDesign:
             .strip()
             or title
         )
+
+
+def _without_leading(title: str, name: str) -> str:
+    """``title`` without a leading ``name`` (any case, as a whole word), capitalised."""
+    if not title.casefold().startswith(name.casefold()):
+        return title
+    rest = title[len(name) :]
+    if rest[:1].isalnum():
+        return title
+    rest = rest.lstrip(" .,:;")
+    return rest[:1].upper() + rest[1:] if rest else title
 
 
 DEFAULT_NEWSLETTER_FOOTER = (

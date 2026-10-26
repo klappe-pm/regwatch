@@ -16,6 +16,7 @@ import {
 } from "@/components/ui";
 import { postJson, useApi } from "@/lib/api";
 import { colorWarning, contrastWithWhite } from "@/lib/contrast";
+import { sampleTitle } from "@/lib/design-title";
 import type { DesignSettings, LlmSettings, ProviderKey, Settings } from "@/lib/types";
 
 type Saved = (message: string) => void;
@@ -141,10 +142,7 @@ function DesignForm({ design, onSaved }: { design: DesignSettings; onSaved: Save
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const sampleTitle = values.title_format
-    .replaceAll("{title}", "Regulatory briefing")
-    .replaceAll("{date}", today)
-    .replaceAll("{organisation}", values.organisation || "Your organisation");
+  const previewTitle = sampleTitle(values.title_format, today, values.organisation);
   const swatchPrimary = warnings.length ? design.primary_color : values.primary_color;
   const swatchAccent = warnings.length ? design.accent_color : values.accent_color;
 
@@ -199,7 +197,7 @@ function DesignForm({ design, onSaved }: { design: DesignSettings; onSaved: Save
               className="pb-2 text-xl font-semibold leading-tight [overflow-wrap:anywhere]"
               style={{ color: swatchPrimary, borderBottom: `3px solid ${swatchPrimary}` }}
             >
-              {sampleTitle}
+              {previewTitle}
             </p>
             <p
               className="mt-3 pb-1 font-semibold"
