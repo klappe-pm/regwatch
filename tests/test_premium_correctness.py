@@ -341,6 +341,33 @@ def test_a_post_error_keeps_its_status_and_body_without_the_key() -> None:
     assert KEY not in caught.value.body and provider_message(caught.value.body) == "bad key [key]"
 
 
+@pytest.mark.parametrize("body", ["<html>busy</html>", "[1, 2]"])
+@pytest.mark.parametrize("kind", [AnthropicProvider, OpenAIProvider, OllamaProvider])
+def test_a_provider_answer_that_is_not_a_json_object_is_recorded_unreadable(
+    kind: Any, body: str
+) -> None:
+    records: list[dict[str, object]] = []
+    with pytest.raises(GenerationError, match="was not") as caught:
+        generate(kind_provider(kind, body), FACTS, "x", max_tokens=10, record=records.append)
+    assert caught.value.outcome == "unreadable"
+    assert records[0]["outcome"] == "unreadable"
+
+
+def test_a_refusal_is_still_recorded_as_refused() -> None:
+    records: list[dict[str, object]] = []
+    body = json.dumps({"stop_reason": "refusal", "content": []})
+    with pytest.raises(GenerationError, match="declined"):
+        generate(
+            kind_provider(AnthropicProvider, body), FACTS, "x", max_tokens=1, record=records.append
+        )
+    assert records[0]["outcome"] == "refused"
+
+
+def kind_provider(kind: Any, body: str) -> Any:
+    poster = FakePoster(body)
+    return kind(poster, "m") if kind is OllamaProvider else kind(poster, KEY, "m")
+
+
 def test_a_get_error_keeps_its_status_but_reads_no_body() -> None:
     network = web(b"HTTP/1.1 503 Busy\r\nContent-Length: 4\r\n\r\nbusy")
     with pytest.raises(FetchError) as caught:

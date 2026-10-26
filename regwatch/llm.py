@@ -190,9 +190,9 @@ def _json(body: str, provider: str) -> dict[str, Any]:
     try:
         data = json.loads(body)
     except (ValueError, RecursionError) as exc:
-        raise GenerationError(f"the {provider} answer was not JSON") from exc
+        raise GenerationError(f"the {provider} answer was not JSON", "unreadable") from exc
     if not isinstance(data, dict):
-        raise GenerationError(f"the {provider} answer was not a JSON object")
+        raise GenerationError(f"the {provider} answer was not a JSON object", "unreadable")
     return data
 
 
