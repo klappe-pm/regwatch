@@ -86,6 +86,7 @@ MAX_FACT_CHARACTERS = 400
 MAX_PASSAGES = 20
 MAX_PASSAGE_CHARACTERS = 1200
 MAX_CITES = 20
+OLLAMA_CONTEXT = 16384
 FACT_ID_RE = re.compile(r"^[a-z]+:[A-Za-z0-9._/-]{1,120}$")
 _DIGITS = re.compile(r"\d+")
 
@@ -109,7 +110,22 @@ SYSTEM_PROMPT = (
 
 
 class GenerationError(Exception):
-    """Generated copy could not be written. The message holds no key and no prompt."""
+    """Generated copy could not be written. The message holds no key and no prompt.
+
+    ``outcome`` is what the call record says happened: ``refused`` by default.
+    """
+
+    def __init__(self, message: str, outcome: str = "refused") -> None:
+        super().__init__(message)
+        self.outcome = outcome
+
+
+def _cut_off(provider: str, max_tokens: int) -> GenerationError:
+    return GenerationError(
+        f"the {provider} answer was cut off at {max_tokens} tokens, the [llm] max_tokens "
+        "limit; raise max_tokens in regwatch.toml or ask for a shorter period",
+        outcome="cut off",
+    )
 
 
 @dataclass(frozen=True)
@@ -213,6 +229,8 @@ class AnthropicProvider:
         data = _json(body, self.name)
         if data.get("stop_reason") == "refusal":
             raise GenerationError("the anthropic model declined to write this copy")
+        if data.get("stop_reason") == "max_tokens":
+            raise _cut_off(self.name, max_tokens)
         content = data.get("content")
         blocks = content if isinstance(content, list) else []
         text = "".join(
@@ -256,6 +274,8 @@ class OpenAIProvider:
         text = message.get("content") if isinstance(message, dict) else None
         if isinstance(message, dict) and message.get("refusal"):
             raise GenerationError("the openai model declined to write this copy")
+        if isinstance(first, dict) and first.get("finish_reason") == "length":
+            raise _cut_off(self.name, max_tokens)
         usage = _object(data.get("usage"))
         return Completion(
             text if isinstance(text, str) else "",
@@ -279,7 +299,10 @@ class OllamaProvider:
             {
                 "model": self.model,
                 "stream": False,
-                "options": {"num_predict": max_tokens},
+                # Ollama's default context is small enough to cut the facts off, and
+                # "json" makes the model answer with one JSON value.
+                "format": "json",
+                "options": {"num_predict": max_tokens, "num_ctx": OLLAMA_CONTEXT},
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": prompt},
@@ -287,6 +310,8 @@ class OllamaProvider:
             },
         )
         data = _json(body, self.name)
+        if data.get("done_reason") == "length":
+            raise _cut_off(self.name, max_tokens)
         message = data.get("message")
         text = message.get("content") if isinstance(message, dict) else None
         return Completion(
@@ -605,8 +630,8 @@ def generate(
     except FetchError as exc:
         finish("error")
         raise GenerationError(f"the {provider.name} request failed: {exc}") from None
-    except GenerationError:
-        finish("refused")
+    except GenerationError as exc:
+        finish(exc.outcome)
         raise
     entry.update(input_tokens=completion.input_tokens, output_tokens=completion.output_tokens)
     try:
