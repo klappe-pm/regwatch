@@ -112,6 +112,9 @@ def test_the_newsletter_is_written_three_ways_and_never_sent(run: Runner, tmp_pa
     page = (tmp_path / "issue.html").read_text(encoding="utf-8")
     text = (tmp_path / "issue.txt").read_text(encoding="utf-8")
     assert f'width="{EMAIL_WIDTH}"' in page and "<script" not in page and "<style" not in page
+    # The table shrinks to a narrow screen instead of being 600 pixels plus the padding.
+    assert f'style="width:100%;max-width:{EMAIL_WIDTH}px;' in page
+    assert f'style="width:{EMAIL_WIDTH}px' not in page
     assert "<link" not in page and "class=" not in page
     assert "In This Issue" in page and "Reply to this message to stop." in page
     assert "Not legal advice." in page and "Not legal advice." in text

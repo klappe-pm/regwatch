@@ -3,7 +3,7 @@
 The newsletter is built as a ``Document`` from structured data, the same way every
 briefing is, and rendered three ways:
 
-- an HTML email: inline styles only, a table layout 600 pixels wide that common
+- an HTML email: inline styles only, a table layout at most 600 pixels wide that common
   mail clients render, the colours, font and logo of the document design
   specification, and a closing line the user writes for replies or unsubscribing;
 - a plain text part with the same content;
@@ -236,7 +236,7 @@ def render_email_html(
     logo: Logo | None = None,
     logo_src: str = "",
 ) -> str:
-    """The newsletter as an HTML email: inline styles, tables, 600 pixels wide.
+    """The newsletter as an HTML email: inline styles, tables, at most 600 pixels wide.
 
     ``logo_src`` is where the logo image is loaded from: ``cid:logo@regwatch`` in the
     ``.eml`` file and a ``data:`` address in the standalone file. Only a PNG logo is
@@ -256,8 +256,10 @@ def render_email_html(
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
         f'style="background:{SURFACE};">',
         '<tr><td align="center" style="padding:24px 12px;">',
+        # width="600" for clients that read only the attribute; the style lets the table
+        # shrink to the screen, since the cell around it adds 12 pixels on each side.
         f'<table role="presentation" width="{EMAIL_WIDTH}" cellpadding="0" cellspacing="0" '
-        f'border="0" style="width:{EMAIL_WIDTH}px;max-width:100%;background:#ffffff;'
+        f'border="0" style="width:100%;max-width:{EMAIL_WIDTH}px;background:#ffffff;'
         f'font-family:{font};color:{INK};">',
     ]
     if logo is not None and logo.kind == "png" and logo_src:
