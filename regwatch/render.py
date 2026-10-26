@@ -552,8 +552,7 @@ def render_document_xml(
             parts += [_para(f"From {fact}", style="Facts", bullet=True) for fact in passage.facts]
         parts += [_para(paragraph) for paragraph in section.paragraphs]
         parts += [_para(bullet, bullet=True) for bullet in section.bullets]
-    if design.footer:
-        parts.append(_para(design.footer, style="Small"))
+    # The design footer is written once, in the page footer part, not again here.
     parts.append(_para(doc.disclaimer, style="Disclaimer"))
     references = ""
     if design.header:

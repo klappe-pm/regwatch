@@ -27,6 +27,8 @@ page_size = "letter"
 
 With that format a briefing is titled "Example Pantry Co.: Regulatory briefing", not "Example Pantry Co.: Example Pantry Co. regulatory briefing": when the format names the organisation, the organisation's name is taken off the front of the document's own title. The Settings preview shows the title the same way.
 
+The `header` and `footer` lines go at the top and bottom of an HTML page, and in a Word document into its page header and page footer, so they repeat on every printed page and appear once in the text.
+
 An SVG logo must be plain drawing: Regwatch refuses one that holds a script, a style, an embedded image or a link, and says which part it refused. Word documents and email use a PNG logo only, so a PNG is the safer choice. [configuration](../reference/configuration.md#document) lists every key and its limits.
 
 ## Write a Document

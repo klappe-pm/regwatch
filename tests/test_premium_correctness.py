@@ -8,7 +8,9 @@ the keychain a FakeSystem, so nothing leaves the machine.
 from __future__ import annotations
 
 import datetime as dt
+import io
 import json
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +21,8 @@ from test_llm import FACTS, KEY, FakePoster, FakeProvider, answer
 from test_newsletter import FakePoster as NewsletterPoster
 
 from regwatch.cli import main
-from regwatch.config import load_config
+from regwatch.config import DocumentDesign, load_config
+from regwatch.document import Document, Section
 from regwatch.fetch import Credential, FetchError
 from regwatch.llm import (
     ANTHROPIC_FALLBACK_BETA,
@@ -39,6 +42,7 @@ from regwatch.llm import (
 )
 from regwatch.newsletter import NEWSLETTER_SECTIONS, newsletter_content
 from regwatch.register import load_register
+from regwatch.render import docx_bytes
 from regwatch.settings import set_llm, set_premium
 from regwatch.webapi import Api
 
@@ -366,6 +370,19 @@ def test_a_refusal_is_still_recorded_as_refused() -> None:
 def kind_provider(kind: Any, body: str) -> Any:
     poster = FakePoster(body)
     return kind(poster, "m") if kind is OllamaProvider else kind(poster, KEY, "m")
+
+
+# --- C11: Word prints the design footer once, in the page footer -----------------------
+
+
+def test_word_writes_the_design_footer_only_in_the_page_footer() -> None:
+    doc = Document("Briefing", "2026-10-19", sections=[Section("Changes", paragraphs=["x"])])
+    footer = "Pantry Co, 1 Example Road"
+    with zipfile.ZipFile(io.BytesIO(docx_bytes(doc, DocumentDesign(footer=footer)))) as archive:
+        body = archive.read("word/document.xml").decode()
+        page_footer = archive.read("word/footer1.xml").decode()
+    assert footer not in body and page_footer.count(footer) == 1
+    assert '<w:footerReference w:type="default" r:id="rIdFooter"/>' in body
 
 
 def test_a_get_error_keeps_its_status_but_reads_no_body() -> None:
