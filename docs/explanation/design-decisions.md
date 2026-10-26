@@ -85,9 +85,9 @@ The source engine required a detail record for every obligation and failed valid
 
 The Word renderer writes the package with `zipfile` and hand-built XML, including a styles part, a header, a footer and the logo, rather than depending on a document library. regwatch has no runtime dependencies, and the parts it needs are few and stable. The cost is that every new Word feature is written by hand and checked by opening the result in a word processor.
 
-## Inline Styles in the Web App
+## Previews on Their Own Routes
 
-The newsletter and document previews are HTML whose styles must be inline, because that is how an email client reads them, and a frame built from `srcdoc` inherits the page's content security policy. The policy therefore allows inline styles, and nothing else from outside the server's own files. The frame is sandboxed with no permissions, so the preview cannot run script, submit a form or reach the page around it. The alternative, serving each preview from its own route with its own policy, would add a route that returns untrusted HTML at a fixed address, which is a larger surface than a style rule.
+The newsletter and document previews are HTML whose styles must be inline, because that is how an email client reads them. A frame built from `srcdoc` inherits the page's content security policy, so showing them that way meant allowing inline styles across the whole app. Instead each preview is served from its own route, `/api/newsletter/preview` and `/api/document/preview`, with a policy of its own that allows inline styles and `data:` images and nothing else, adds the `sandbox` directive, and lets only the server's own pages frame it. The app's pages keep `style-src 'self'`. The cost is two routes that return HTML built from untrusted text at a fixed address; they are behind the same host, session and premium checks as every route, every value in them is escaped, and the policy and the empty `sandbox` attribute on the frame mean nothing in them can run or load anything.
 
 ## One GitHub Actions Workflow
 

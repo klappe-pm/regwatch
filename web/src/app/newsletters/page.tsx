@@ -122,7 +122,7 @@ function NewsletterView({ llmOn }: { llmOn: boolean }) {
             </h2>
             {data.generated ? <Tag>Generated</Tag> : null}
           </div>
-          <Preview html={data.html} title="Newsletter preview" />
+          <Preview src={`/api/newsletter/preview?${query}`} title="Newsletter preview" />
         </section>
       ) : null}
     </>

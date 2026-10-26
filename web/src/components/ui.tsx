@@ -99,16 +99,18 @@ export function Tag({ children }: { children: ReactNode }) {
 }
 
 /**
- * A preview of a newsletter or a document. The HTML is shown in a frame sandboxed
- * without scripts, forms or access to this page, so nothing in it can run.
+ * A preview of a newsletter or a document. The frame loads the preview route, which
+ * answers with its own policy (inline styles and data: images only), and is sandboxed
+ * without scripts, forms or access to this page, so nothing in it can run and this
+ * page keeps inline styles out.
  */
-export function Preview({ html, title }: { html: string; title: string }) {
+export function Preview({ src, title }: { src: string; title: string }) {
   return (
     <iframe
       title={title}
       sandbox=""
       referrerPolicy="no-referrer"
-      srcDoc={html}
+      src={src}
       className="block h-[70vh] min-h-[480px] w-full border border-line bg-white"
     />
   );

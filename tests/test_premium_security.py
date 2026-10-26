@@ -8,10 +8,12 @@ keychain: the language model is a fake poster and the keychain a FakeSystem.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from conftest import NOW, TODAY
+from conftest import NOW, TODAY, FakeFetcher, FakeSystem
+from test_server import TOKEN, request
 
 from regwatch.config import Config, DocumentDesign, load_config
 from regwatch.document import Document, Section
@@ -34,6 +36,9 @@ from regwatch.newsletter import (
 )
 from regwatch.register import load_register
 from regwatch.sanitize import defang_links, link_like
+from regwatch.server import PREVIEW_POLICY, LocalServer, content_security_policy
+from regwatch.settings import set_premium
+from regwatch.webapi import Api
 
 FACTS = [Fact("change:nl-notices", "changes", "Northland notices content changed")]
 
@@ -182,3 +187,70 @@ def test_the_llm_fetcher_allows_no_loopback_address_for_a_hosted_provider(config
     assert fetcher.loopback_post_url is None
     with pytest.raises(FetchError, match="allow_private_hosts"):
         fetcher._post_scheme(ENDPOINTS["ollama"], None)
+
+
+# --- S4: the app keeps inline styles out; previews have their own policy ------------
+
+
+@pytest.fixture
+def signed_in(project: Path, tmp_path: Path) -> Iterator[LocalServer]:
+    """A server over the example project with premium on, signed in as the browser is."""
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<html>app</html>", encoding="utf-8")
+    set_premium(project, True)
+    api = Api(project, lambda: TODAY, system=FakeSystem("linux").system(), fetcher=FakeFetcher())
+    server = LocalServer(api, web, 0, token=TOKEN)
+    assert request(server, "GET", f"/?token={TOKEN}", cookie=None).status == 303
+    yield server
+    server.server_close()
+
+
+def test_the_app_policy_allows_no_inline_style() -> None:
+    policy = content_security_policy([])
+    assert "unsafe-inline" not in policy and "style-src 'self';" in policy
+    assert "frame-src 'self'" in policy and "frame-ancestors 'none'" in policy
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/newsletter/preview?since=30", "/api/document/preview?kind=digest"]
+)
+def test_a_preview_is_html_under_its_own_policy_framed_only_here(
+    signed_in: LocalServer, path: str
+) -> None:
+    reply = request(signed_in, "GET", path)
+    assert reply.status == 200
+    assert reply.headers["Content-Type"] == "text/html; charset=utf-8"
+    assert (
+        reply.headers["Content-Security-Policy"]
+        == PREVIEW_POLICY
+        == (
+            "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox; "
+            "frame-ancestors 'self'"
+        )
+    )
+    assert reply.headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert reply.headers["Cache-Control"] == "no-store"
+    assert reply.body.startswith(b"<!doctype html>")
+    # Every other response keeps the app policy and refuses to be framed at all.
+    other = request(signed_in, "GET", path.replace("/preview", ""))
+    assert other.headers["X-Frame-Options"] == "DENY"
+    assert "unsafe-inline" not in other.headers["Content-Security-Policy"]
+
+
+@pytest.mark.parametrize(
+    ("change", "status"),
+    [({"host": "evil.example:80"}, 403), ({"cookie": None}, 403), ({"cookie": "wrong"}, 403)],
+)
+def test_a_preview_still_needs_the_host_and_the_session(
+    signed_in: LocalServer, change: dict[str, str | None], status: int
+) -> None:
+    reply = request(signed_in, "GET", "/api/newsletter/preview?since=7", **change)  # type: ignore[arg-type]
+    assert reply.status == status and b"<!doctype" not in reply.body
+    assert reply.headers["X-Frame-Options"] == "DENY"
+
+
+def test_a_preview_needs_premium(signed_in: LocalServer, project: Path) -> None:
+    set_premium(project, False)
+    reply = request(signed_in, "GET", "/api/document/preview")
+    assert reply.status == 403 and b"premium" in reply.body

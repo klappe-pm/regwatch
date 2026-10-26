@@ -99,6 +99,21 @@ def test_no_page_or_stylesheet_loads_from_another_origin() -> None:
             assert not re.search(r"""(?:url\(|@import)\s*["']?\s*(?:https?:)?//""", text), path
 
 
+def test_the_previews_load_their_own_routes_and_never_srcdoc() -> None:
+    """A srcdoc frame inherits the app's policy, which keeps inline styles out, so the
+    previews must load the preview routes, which carry a policy of their own."""
+    scripts = [p for p in built_files() if p.suffix == ".js"]
+    texts = [p.read_bytes().decode("utf-8", errors="replace") for p in scripts]
+    assert any("/api/newsletter/preview?" in t for t in texts)
+    assert any("/api/document/preview?" in t for t in texts)
+    for path in built_files():
+        if path.suffix in (".html", ".js", ".txt"):
+            text = path.read_bytes().decode("utf-8", errors="replace")
+            assert not re.search(r"srcdoc", text, re.IGNORECASE), path
+            if path.suffix == ".html":
+                assert not re.search(r"\sstyle\s*=", text), path
+
+
 @pytest.mark.repo_only
 def test_the_wheel_and_the_sdist_carry_the_build() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")

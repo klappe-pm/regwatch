@@ -120,7 +120,7 @@ function DocumentView({ llmOn }: { llmOn: boolean }) {
             </h2>
             {data.generated ? <Tag>Generated</Tag> : null}
           </div>
-          <Preview html={data.html} title="Document preview" />
+          <Preview src={`/api/document/preview?${query}`} title="Document preview" />
         </section>
       ) : null}
     </>

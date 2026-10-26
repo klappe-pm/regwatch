@@ -40,9 +40,9 @@ from regwatch.focus import FocusError
 from regwatch.register import RegisterError
 from regwatch.settings import SettingsError
 from regwatch.state import StateError
-from regwatch.webapi import Api, ApiError, Download
+from regwatch.webapi import Api, ApiError, Download, Preview
 
-__all__ = ["LocalServer", "ServerError", "content_security_policy", "web_root"]
+__all__ = ["PREVIEW_POLICY", "LocalServer", "ServerError", "content_security_policy", "web_root"]
 
 HOST = "127.0.0.1"
 MAX_BODY_BYTES = 65_536
@@ -85,29 +85,38 @@ def web_root() -> Path:
 
 
 def content_security_policy(script_hashes: list[str]) -> str:
-    """The policy for every response: this origin only, and the page's own inline scripts.
+    """The policy for the app's pages and the JSON interface: this origin only, and the
+    page's own inline scripts.
 
-    Styles may be inline, because the sandboxed previews of a newsletter and a
-    document carry their styles inline, as a mail client needs, and a ``srcdoc``
-    frame inherits this policy. A style cannot run a script, and with images, fonts
-    and connections limited to this origin and ``data:`` it cannot load or send
-    anything elsewhere either.
+    Styles come only from this origin's style sheets. The newsletter and document
+    previews, whose styles are inline as a mail client needs, are separate responses
+    with their own policy, ``PREVIEW_POLICY``, loaded into a sandboxed frame from
+    this origin, which is all ``frame-src`` allows.
     """
     scripts = " ".join(["'self'", *(f"'sha256-{h}'" for h in script_hashes)])
     return "; ".join(
         [
             "default-src 'none'",
             f"script-src {scripts}",
-            "style-src 'self' 'unsafe-inline'",
+            "style-src 'self'",
             "img-src 'self' data:",
             "font-src 'self'",
             "connect-src 'self'",
             "manifest-src 'self'",
+            "frame-src 'self'",
             "base-uri 'none'",
             "form-action 'self'",
             "frame-ancestors 'none'",
         ]
     )
+
+
+PREVIEW_POLICY = (
+    "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox; frame-ancestors 'self'"
+)
+"""The policy of a newsletter or document preview: inline styles and ``data:`` images
+only, no script, form, font, connection or navigation, sandboxed even when opened on
+its own, and framed only by this server's pages."""
 
 
 def _script_hashes(html: bytes) -> list[str]:
@@ -213,14 +222,18 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         content_type: str,
         headers: dict[str, str] | None = None,
         script_hashes: list[str] | None = None,
+        *,
+        preview: bool = False,
     ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Content-Security-Policy", content_security_policy(script_hashes or []))
+        policy = PREVIEW_POLICY if preview else content_security_policy(script_hashes or [])
+        self.send_header("Content-Security-Policy", policy)
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("X-Frame-Options", "DENY")
+        # Only a preview may be framed, and only by this server's own pages.
+        self.send_header("X-Frame-Options", "SAMEORIGIN" if preview else "DENY")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         for name, value in (headers or {}).items():
@@ -367,6 +380,15 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         except Exception:
             # Whatever failed, the message could hold file contents, so it is not sent.
             self._error(500, "the request failed")
+            return
+        if isinstance(payload, Preview):
+            self._send(
+                status,
+                payload.html.encode("utf-8"),
+                "text/html; charset=utf-8",
+                {"Cache-Control": "no-store"},
+                preview=True,
+            )
             return
         if isinstance(payload, Download):
             name = re.sub(r"[^A-Za-z0-9._-]", "_", payload.filename)

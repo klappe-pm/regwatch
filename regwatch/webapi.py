@@ -90,7 +90,7 @@ from regwatch.workspace import (
     with_summary,
 )
 
-__all__ = ["SUPPLY_CATEGORIES", "Api", "ApiError", "Download"]
+__all__ = ["SUPPLY_CATEGORIES", "Api", "ApiError", "Download", "Preview"]
 
 JsonObject = dict[str, Any]
 MAX_RESULTS = 8
@@ -138,7 +138,18 @@ class Download:
     data: bytes
 
 
-Payload = JsonObject | Download
+@dataclass(frozen=True)
+class Preview:
+    """A newsletter or document shown in the page's sandboxed frame.
+
+    The server sends it as ``text/html`` under its own policy, which allows inline
+    styles and ``data:`` images only, so the app's own pages can keep inline styles out.
+    """
+
+    html: str
+
+
+Payload = JsonObject | Download | Preview
 
 
 # --- helpers -----------------------------------------------------------------
@@ -279,9 +290,11 @@ class Api:
             ("GET", "/api/newsletter"): self.newsletter,
             ("POST", "/api/newsletter/generate"): self.newsletter_generate,
             ("GET", "/api/newsletter/export"): self.newsletter_export,
+            ("GET", "/api/newsletter/preview"): self.newsletter_preview,
             ("GET", "/api/document"): self.document,
             ("POST", "/api/document/generate"): self.document_generate,
             ("GET", "/api/document/export"): self.document_export,
+            ("GET", "/api/document/preview"): self.document_preview,
             ("GET", "/api/search"): self.search,
         }
 
@@ -884,6 +897,11 @@ class Api:
         name = f"regwatch-newsletter-{self.today().isoformat()}.{suffix}"
         return Download(name, content_type, data)
 
+    def newsletter_preview(self, query: Mapping[str, str], body: JsonObject) -> Preview:
+        """The newsletter's HTML for the page's sandboxed frame, under the preview policy."""
+        since = self._since(query.get("since"))
+        return Preview(self._newsletter(since, query.get("generated") == "1").html)
+
     def _document_args(self, values: Mapping[str, Any]) -> tuple[str, str]:
         kind = str(values.get("kind") or "briefing")
         tier = str(values.get("tier") or "v2")
@@ -957,6 +975,15 @@ class Api:
             raise ApiError(422, f"the logo cannot be used: {exc}"[:300]) from exc
         content_type, suffix = DOCUMENT_FORMATS[fmt]
         return Download(f"regwatch-{kind}-{self.today().isoformat()}.{suffix}", content_type, data)
+
+    def document_preview(self, query: Mapping[str, str], body: JsonObject) -> Preview:
+        """The document's HTML for the page's sandboxed frame, under the preview policy."""
+        kind, tier = self._document_args(query)
+        config, doc, _dropped = self._designed(kind, tier, query.get("generated") == "1")
+        try:
+            return Preview(document_bytes(config, doc, "html").decode("utf-8"))
+        except DesignError as exc:
+            raise ApiError(422, f"the logo cannot be used: {exc}"[:300]) from exc
 
     # --- search --------------------------------------------------------------
 
