@@ -15,7 +15,9 @@ import pytest
 from conftest import NOW, TODAY, FakeFetcher, FakeSystem
 from test_server import TOKEN, request
 
+import regwatch.design as design_module
 from regwatch.config import Config, DocumentDesign, load_config
+from regwatch.design import MAX_SVG_DEPTH, SVG_NS, DesignError, clean_svg, load_logo
 from regwatch.document import Document, Section
 from regwatch.fetch import FetchError
 from regwatch.llm import (
@@ -254,3 +256,37 @@ def test_a_preview_needs_premium(signed_in: LocalServer, project: Path) -> None:
     set_premium(project, False)
     reply = request(signed_in, "GET", "/api/document/preview")
     assert reply.status == 403 and b"premium" in reply.body
+
+
+# --- S5: a deeply nested SVG logo is refused cleanly ---------------------------------
+
+
+def nested_svg(depth: int) -> str:
+    """An SVG whose root holds ``depth - 1`` nested groups, so ``depth`` levels in all."""
+    groups = depth - 1
+    return f'<svg xmlns="{SVG_NS}">' + "<g>" * groups + "</g>" * groups + "</svg>"
+
+
+def test_a_deeply_nested_svg_logo_is_a_design_error(tmp_path: Path) -> None:
+    logo = tmp_path / "logo.svg"
+    logo.write_text(nested_svg(5000), encoding="utf-8")
+    with pytest.raises(DesignError, match="more than 64 deep"):
+        load_logo(logo, [tmp_path])
+
+
+def test_the_depth_limit_is_64_levels() -> None:
+    assert MAX_SVG_DEPTH == 64
+    assert clean_svg(nested_svg(64)).count(b"<g") == 63
+    with pytest.raises(DesignError, match="more than 64 deep"):
+        clean_svg(nested_svg(65))
+
+
+def test_a_recursion_error_while_writing_the_svg_is_a_design_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def deep(*args: object, **kwargs: object) -> bytes:
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(design_module.ET, "tostring", deep)
+    with pytest.raises(DesignError, match="nested too deeply"):
+        clean_svg(nested_svg(3))

@@ -11,7 +11,8 @@ document or a newsletter is built:
 - it must be a regular file of at most 300,000 bytes;
 - a PNG must start with the PNG signature and an ``IHDR`` chunk naming a size of
   at most 4,000 by 4,000 pixels;
-- an SVG is refused when it declares a DTD or an entity, when it holds any element
+- an SVG is refused when it declares a DTD or an entity, when it nests elements
+  more than 64 deep, when it holds any element
   or attribute outside a short list of drawing elements and presentation
   attributes, or when a value points anywhere but inside the drawing (only
   ``url(#id)`` is allowed). An SVG that passes is written out again from the parsed
@@ -30,10 +31,19 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-__all__ = ["MAX_LOGO_BYTES", "MAX_LOGO_PIXELS", "DesignError", "Logo", "clean_svg", "load_logo"]
+__all__ = [
+    "MAX_LOGO_BYTES",
+    "MAX_LOGO_PIXELS",
+    "MAX_SVG_DEPTH",
+    "DesignError",
+    "Logo",
+    "clean_svg",
+    "load_logo",
+]
 
 MAX_LOGO_BYTES = 300_000
 MAX_LOGO_PIXELS = 4000
+MAX_SVG_DEPTH = 64
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 SVG_NS = "http://www.w3.org/2000/svg"
 _DTD_RE = re.compile(r"<!\s*(doctype|entity)", re.IGNORECASE)
@@ -161,7 +171,16 @@ def clean_svg(text: str) -> bytes:
         raise DesignError("the SVG logo is not well-formed XML") from exc
     if _local(root.tag) != (SVG_NS, "svg") and _local(root.tag) != ("", "svg"):
         raise DesignError("the logo is not an SVG drawing")
-    for element in root.iter():
+    # Walk with an explicit stack and a depth limit: writing a deeply nested tree out
+    # again would otherwise recurse past Python's limit.
+    stack = [(root, 1)]
+    while stack:
+        element, depth = stack.pop()
+        if depth > MAX_SVG_DEPTH:
+            raise DesignError(
+                f"the SVG logo nests elements more than {MAX_SVG_DEPTH} deep, which is refused"
+            )
+        stack.extend((child, depth + 1) for child in element)
         namespace, name = _local(str(element.tag))
         if namespace not in ("", SVG_NS) or name not in _SVG_ELEMENTS:
             raise DesignError(f"the SVG logo holds a <{name[:40]}> element, which is refused")
@@ -177,7 +196,10 @@ def clean_svg(text: str) -> bytes:
             if any(word in lowered for word in ("javascript:", "data:", "expression(")):
                 raise DesignError("the SVG logo holds a script or an address, which is refused")
     ET.register_namespace("", SVG_NS)
-    return bytes(ET.tostring(root, encoding="utf-8"))
+    try:
+        return bytes(ET.tostring(root, encoding="utf-8"))
+    except RecursionError as exc:
+        raise DesignError("the SVG logo is nested too deeply to write out") from exc
 
 
 def _png_size(data: bytes) -> tuple[int, int]:
