@@ -215,19 +215,34 @@ def _png_size(data: bytes) -> tuple[int, int]:
     return width, height
 
 
+LOGO_LOCATION_MESSAGE = (
+    "the logo was not found inside the project folder or a folder in allowed_file_roots"
+)
+
+
 def _read(path: Path, roots: Iterable[Path]) -> bytes:
-    """The bytes of ``path``, checked to lie under a root and to be a small regular file."""
+    """The bytes of ``path``, checked to lie under a root and to be a small regular file.
+
+    The place is checked on the written path before anything on disk is looked at,
+    and a missing file and a file outside the roots get the same message, so the
+    setting cannot be used to learn whether a file exists elsewhere on the machine.
+    """
+    roots = list(roots)
+    written = Path(os.path.abspath(path))
+    places = {Path(os.path.abspath(root)) for root in roots} | {
+        Path(root).resolve() for root in roots
+    }
+    if not any(written.is_relative_to(place) for place in places):
+        raise DesignError(LOGO_LOCATION_MESSAGE)
     if path.is_symlink():
         raise DesignError("the logo file is a symbolic link, which is refused")
     try:
         resolved = path.resolve(strict=True)
     except (OSError, RuntimeError) as exc:
-        raise DesignError("the logo file was not found") from exc
+        raise DesignError(LOGO_LOCATION_MESSAGE) from exc
     allowed = [Path(root).resolve() for root in roots]
     if not any(resolved.is_relative_to(root) for root in allowed):
-        raise DesignError(
-            "the logo must be inside the project folder or a folder in allowed_file_roots"
-        )
+        raise DesignError(LOGO_LOCATION_MESSAGE)
     descriptor = -1
     try:
         vetted = os.stat(resolved)

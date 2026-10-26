@@ -17,7 +17,14 @@ from test_server import TOKEN, request
 
 import regwatch.design as design_module
 from regwatch.config import Config, DocumentDesign, load_config
-from regwatch.design import MAX_SVG_DEPTH, SVG_NS, DesignError, clean_svg, load_logo
+from regwatch.design import (
+    LOGO_LOCATION_MESSAGE,
+    MAX_SVG_DEPTH,
+    SVG_NS,
+    DesignError,
+    clean_svg,
+    load_logo,
+)
 from regwatch.document import Document, Section
 from regwatch.fetch import FetchError
 from regwatch.llm import (
@@ -39,7 +46,7 @@ from regwatch.newsletter import (
 from regwatch.register import load_register
 from regwatch.sanitize import defang_links, link_like
 from regwatch.server import PREVIEW_POLICY, LocalServer, content_security_policy
-from regwatch.settings import set_premium
+from regwatch.settings import SettingsError, set_design, set_premium
 from regwatch.webapi import Api
 
 FACTS = [Fact("change:nl-notices", "changes", "Northland notices content changed")]
@@ -290,3 +297,51 @@ def test_a_recursion_error_while_writing_the_svg_is_a_design_error(
     monkeypatch.setattr(design_module.ET, "tostring", deep)
     with pytest.raises(DesignError, match="nested too deeply"):
         clean_svg(nested_svg(3))
+
+
+# --- S6: the logo setting is no file existence oracle ---------------------------------
+
+
+def outside_messages(project: Path, outside: Path, names: tuple[str, ...]) -> list[str]:
+    messages = []
+    for name in names:
+        with pytest.raises(SettingsError) as caught:
+            set_design(project, {"logo": str(outside / name)})
+        messages.append(str(caught.value))
+    return messages
+
+
+def test_a_logo_outside_the_project_reads_the_same_whether_it_exists(
+    project: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    outside = tmp_path_factory.mktemp("outside")
+    (outside / "present.png").write_bytes(b"x")
+    (outside / "link.png").symlink_to(outside / "present.png")
+    (outside / "folder.png").mkdir()
+    names = ("present.png", "absent.png", "link.png", "folder.png")
+    messages = outside_messages(project, outside, names)
+    assert set(messages) == {LOGO_LOCATION_MESSAGE}
+
+
+def test_a_missing_logo_inside_the_project_reads_like_one_outside(project: Path) -> None:
+    with pytest.raises(SettingsError) as caught:
+        set_design(project, {"logo": "brand/absent.png"})
+    assert str(caught.value) == LOGO_LOCATION_MESSAGE
+
+
+def test_the_place_is_checked_before_the_disk_is_touched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project, outside = tmp_path / "project", tmp_path / "outside"
+    project.mkdir()
+    looked: list[str] = []
+    real = Path.is_symlink
+
+    def watch(self: Path) -> bool:
+        looked.append(str(self))
+        return real(self)
+
+    monkeypatch.setattr(Path, "is_symlink", watch)
+    with pytest.raises(DesignError):
+        load_logo(outside / "logo.png", [project])
+    assert looked == []
