@@ -19,12 +19,16 @@ The newsletter, document and design and language model settings routes are
 premium features: with premium off they answer 403 with a message that names
 ``regwatch premium on``. Generated copy is written only on a POST to a generate
 route, which reaches the configured provider through the fetch client; the result
-is kept in memory so the preview and the downloads show the same text.
+is kept in memory under a hash of the facts it was written from, the provider and
+the model, so the preview and the downloads show the same text and never pair it
+with other facts.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import json
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -49,7 +53,7 @@ from regwatch.fetch import Fetcher
 from regwatch.focus import FocusProfile, build_profile, load_catalogue
 from regwatch.impact import SEVERITIES, Impact, assess_impacts, theme_findings
 from regwatch.keys import PROVIDER_KEYS, KeyStore, KeyStoreError
-from regwatch.llm import GenerationError, GenerationResult, Poster
+from regwatch.llm import Fact, GenerationError, GenerationResult, Poster
 from regwatch.register import Register, load_register
 from regwatch.render import docx_bytes, render_markdown, render_newsletter_html
 from regwatch.sanitize import clean_text, safe_https_url
@@ -113,6 +117,8 @@ NEWSLETTER_FORMATS = {
     "txt": ("text/plain; charset=utf-8", "txt"),
 }
 NEWSLETTER_PERIODS = (7, 14, 30, 90)
+# How many pieces of generated copy are kept in memory; the oldest goes first.
+MAX_KEPT_COPY = 16
 KEY_SOURCE_LABELS = {
     "environment": "Set in the environment",
     "keychain": "Stored in the keychain",
@@ -258,8 +264,9 @@ class Api:
     ) -> None:
         self.config_path = config_path
         self.poster = poster
-        # Generated copy by what it was written for, so a preview and its downloads match.
-        self._generated: dict[tuple[str, ...], GenerationResult] = {}
+        # Generated copy by what it was written for and from (see _cache_key), so a
+        # preview and its downloads match and never pair copy with other facts.
+        self._generated: dict[str, GenerationResult] = {}
         self._generate_lock = threading.Lock()
         self.today = today
         self.system = system or System()
@@ -821,8 +828,31 @@ class Api:
             raise ApiError(400, f"'since' must be a number of days from 1 to {MAX_SINCE_DAYS}")
         return int(text)
 
+    def _cache_key(self, config: Config, scope: tuple[str, ...], facts: Sequence[Fact]) -> str:
+        """The key generated copy is kept under: what it was for, the provider, the model
+        and a hash of every fact it was written from.
+
+        A preview or a download asks for copy under the key of the facts it would be
+        built from now, so copy written from other facts (a later check, a new
+        candidate) or by another provider or model is never shown beside them.
+        """
+        data = {
+            "scope": list(scope),
+            "provider": config.llm.provider,
+            "model": config.llm.effective_model,
+            "facts": [[f.fact_id, f.section, f.text] for f in facts],
+        }
+        encoded = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def _keep(self, key: str, result: GenerationResult) -> None:
+        self._generated.pop(key, None)
+        self._generated[key] = result
+        while len(self._generated) > MAX_KEPT_COPY:
+            self._generated.pop(next(iter(self._generated)))
+
     def _generate(
-        self, config: Config, cache: tuple[str, ...], facts: Any, purpose: str
+        self, config: Config, cache: str, facts: Sequence[Fact], purpose: str
     ) -> GenerationResult:
         if not config.llm.enabled:
             raise ApiError(409, "generated copy is off; turn it on in Settings")
@@ -837,14 +867,16 @@ class Api:
             raise ApiError(502, str(exc)[:300]) from exc
         finally:
             self._generate_lock.release()
-        self._generated[cache] = result
+        self._keep(cache, result)
         return result
 
     def _newsletter(self, since: int, generated: bool, *, generate: bool = False) -> Any:
         config = self._premium("Newsletters")
         today = self.today()
-        cache = ("newsletter", str(since), today.isoformat())
         register, content = newsletter_plan(config, today, since)
+        cache = self._cache_key(
+            config, ("newsletter", str(since), today.isoformat()), content.facts()
+        )
         result: GenerationResult | None = None
         if generate:
             result = self._generate(
@@ -921,8 +953,8 @@ class Api:
     ) -> tuple[Config, Document, list[str]]:
         config = self._premium("Documents")
         today = self.today()
-        cache = ("document", kind, tier, today.isoformat())
         doc, facts = document_plan(config, today, kind, tier)
+        cache = self._cache_key(config, ("document", kind, tier, today.isoformat()), facts)
         result: GenerationResult | None = None
         if generate:
             result = self._generate(

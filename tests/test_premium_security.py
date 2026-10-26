@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from conftest import NOW, TODAY, FakeFetcher, FakeSystem
+from test_newsletter import FakePoster
 from test_server import TOKEN, request
 
 import regwatch.design as design_module
@@ -47,8 +48,8 @@ from regwatch.newsletter import (
 from regwatch.register import load_register
 from regwatch.sanitize import defang_links, link_like
 from regwatch.server import PREVIEW_POLICY, LocalServer, content_security_policy
-from regwatch.settings import SettingsError, set_design, set_premium
-from regwatch.webapi import Api, ApiError
+from regwatch.settings import SettingsError, set_design, set_llm, set_premium
+from regwatch.webapi import MAX_KEPT_COPY, Api, ApiError
 
 FACTS = [Fact("change:nl-notices", "changes", "Northland notices content changed")]
 
@@ -400,3 +401,69 @@ def test_a_provider_key_can_still_be_removed_while_premium_is_off(project: Path)
     api = Api(project, lambda: TODAY, system=fake.system())
     status, payload = api.handle("POST", "/api/keys/remove", {}, {"source_id": "llm-anthropic"})
     assert status == 200 and payload["removed"] is True and fake.keychain == {}
+
+
+# --- S8: generated copy is kept by the facts, the provider and the model ---------------
+
+
+@pytest.fixture
+def generating(project: Path) -> tuple[Api, FakePoster]:
+    set_premium(project, True)
+    set_llm(project, enabled=True)
+    fake = FakeSystem("linux")
+    fake.environ["REGWATCH_KEY_ANTHROPIC"] = PROVIDER_KEY
+    poster = FakePoster(
+        [{"section": "opening", "text": "Northland notices moved.", "cites": ["change:nl-notices"]}]
+    )
+    api = Api(project, lambda: TODAY, system=fake.system(), clock=lambda: NOW, poster=poster)
+    return api, poster
+
+
+def add_candidate(project: Path) -> None:
+    config = load_config(project)
+    config.state_dir.mkdir(parents=True, exist_ok=True)
+    config.candidates_path.write_text(
+        json.dumps({"candidates": [{"date": "2026-10-18", "headline": "A new notice"}]}),
+        encoding="utf-8",
+    )
+
+
+def test_copy_written_from_other_facts_is_never_shown(
+    generating: tuple[Api, FakePoster], project: Path
+) -> None:
+    api, _poster = generating
+    api.handle("POST", "/api/newsletter/generate", {}, {"since": 30})
+    assert api.handle("GET", "/api/newsletter", {"since": "30", "generated": "1"}, {})[0] == 200
+    add_candidate(project)
+    with pytest.raises(ApiError) as caught:
+        api.handle("GET", "/api/newsletter", {"since": "30", "generated": "1"}, {})
+    assert caught.value.status == 409 and "Generate" in caught.value.message
+    with pytest.raises(ApiError):
+        api.handle("GET", "/api/newsletter/export", {"since": "30", "generated": "1"}, {})
+
+
+def test_copy_written_by_another_model_is_never_shown(
+    generating: tuple[Api, FakePoster], project: Path
+) -> None:
+    api, _poster = generating
+    api.handle("POST", "/api/document/generate", {}, {"kind": "report"})
+    query = {"kind": "report", "generated": "1"}
+    assert api.handle("GET", "/api/document", query, {})[1]["generated"] is True
+    set_llm(project, model="claude-other-1")
+    with pytest.raises(ApiError) as caught:
+        api.handle("GET", "/api/document", query, {})
+    assert caught.value.status == 409
+    set_llm(project, provider="openai", model="")
+    with pytest.raises(ApiError):
+        api.handle("GET", "/api/document/preview", query, {})
+
+
+def test_only_the_newest_copy_is_kept_in_memory(generating: tuple[Api, FakePoster]) -> None:
+    api, poster = generating
+    for since in range(1, MAX_KEPT_COPY + 3):
+        api.handle("POST", "/api/newsletter/generate", {}, {"since": since})
+    assert len(api._generated) == MAX_KEPT_COPY and len(poster.payloads) == MAX_KEPT_COPY + 2
+    with pytest.raises(ApiError):
+        api.handle("GET", "/api/newsletter", {"since": "1", "generated": "1"}, {})
+    newest = str(MAX_KEPT_COPY + 2)
+    assert api.handle("GET", "/api/newsletter", {"since": newest, "generated": "1"}, {})[0] == 200

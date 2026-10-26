@@ -398,7 +398,7 @@ The JSON interface the pages use is under `/api/`. Every route needs the session
 | `/api/settings/premium` | POST | sets `[premium] enabled` to `enabled`, true or false |
 | `/api/settings/design` | POST | premium only; sets the `[document]` keys in `design`, an object of text values, and `[newsletter] footer` from its `newsletter_footer`, after checking them as `regwatch.toml` is checked, logo included |
 | `/api/settings/llm` | POST | premium only; sets `[llm]` `enabled`, `provider` and `model`, each optional |
-| `/api/newsletter` | GET | premium only; the newsletter for the last `since` days, 1 to 366, as its subject, HTML and text; `generated=1` shows the copy kept from the last Generate for that period |
+| `/api/newsletter` | GET | premium only; the newsletter for the last `since` days, 1 to 366, as its subject, HTML and text; `generated=1` shows the copy kept from the last Generate for that period, and answers 409 when the facts it would be built from, the provider or the model have changed since |
 | `/api/newsletter/generate` | POST | premium only; writes the newsletter's generated copy for `since` days and keeps it for the preview and downloads |
 | `/api/newsletter/export` | GET | premium only; the same newsletter as a download in `format` `eml`, `html` or `txt` |
 | `/api/newsletter/preview` | GET | premium only; the same newsletter's HTML as `text/html` for the page's sandboxed frame, with the preview policy and `X-Frame-Options: SAMEORIGIN` |
