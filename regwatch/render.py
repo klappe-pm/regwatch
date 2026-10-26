@@ -63,13 +63,26 @@ def _md(text: str) -> str:
 
 
 FACTS_LABEL = "Written from these facts"
+_FACT_ID = re.compile(r"[a-z]+:[^\s`]{1,120}")
+
+
+def _fact_markdown(fact: str) -> str:
+    """A cited fact, ``id: text``, with the id alone in a code span and the text escaped.
+
+    Escaping the whole line put the id's colon pattern and the colon after it in
+    one code span; the id is written on its own so the separator stays outside.
+    """
+    fact_id, separator, text = clean_text(fact).partition(": ")
+    if separator and _FACT_ID.fullmatch(fact_id):
+        return f"`{fact_id}`: {escape_markdown(text)}"
+    return _md(fact)
 
 
 def _passage_markdown(passage: GeneratedPassage) -> list[str]:
     lines = [f"{GENERATED_LABEL}: {_md(passage.text)}", ""]
     if passage.facts:
         lines += [f"{FACTS_LABEL}:", ""]
-        lines += [f"- {_md(fact)}" for fact in passage.facts]
+        lines += [f"- {_fact_markdown(fact)}" for fact in passage.facts]
         lines.append("")
     return lines
 

@@ -4,7 +4,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { generateNotice } from "../src/lib/generate-notice.ts";
+import { copyNotice, generateNotice } from "../src/lib/generate-notice.ts";
+
+test("copying HTML with an inline logo warns that pasting drops it", () => {
+  const html = '<img src="data:image/png;base64,AAAA" alt="Pantry">';
+  assert.match(copyNotice("HTML", html), /drops the logo/);
+  assert.equal(copyNotice("HTML", "<p>no logo</p>"), "Copied the HTML.");
+  assert.equal(copyNotice("text", html), "Copied the text.");
+});
 
 test("a notice from the server is shown instead of Generated", () => {
   const notice = "Nothing in this period gives the language model anything to write from.";

@@ -95,7 +95,6 @@ MAX_PASSAGES = 20
 MAX_PASSAGE_CHARACTERS = 1200
 MAX_CITES = 20
 OLLAMA_CONTEXT = 16384
-FACT_ID_RE = re.compile(r"^[a-z]+:[A-Za-z0-9._/-]{1,120}$")
 _DIGITS = re.compile(r"\d+")
 
 SYSTEM_PROMPT = (

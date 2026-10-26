@@ -251,6 +251,7 @@ export interface Newsletter {
   generated: boolean;
   dropped: string[];
   notice: string;
+  logo_note: string;
 }
 
 export interface DesignedDocument {

@@ -7,6 +7,17 @@ export interface GenerateOutcome {
 }
 
 /**
+ * What to tell the reader after copying the newsletter's HTML or text. The HTML
+ * carries its logo as a data address, which mail programs drop from pasted HTML.
+ */
+export function copyNotice(what: "HTML" | "text", html: string): string {
+  if (what === "HTML" && html.includes('src="data:image/')) {
+    return "Copied the HTML. A mail program drops the logo from pasted HTML; open the .eml download to keep it.";
+  }
+  return `Copied the ${what}.`;
+}
+
+/**
  * What to tell the reader after a Generate that the server answered. A notice from
  * the server (no request was sent, so the fixed sentences stand) wins over the rest.
  */

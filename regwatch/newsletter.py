@@ -21,6 +21,7 @@ from __future__ import annotations
 import datetime as dt
 import email.policy
 import html
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from email.message import EmailMessage
@@ -232,6 +233,20 @@ def _esc(text: str, limit: int | None = None) -> str:
     return html.escape(clean_text(text, limit))
 
 
+_MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
+_DATE = re.compile(
+    r"\d{4}-\d{2}-\d{2}"
+    rf"|\d{{1,2}}(?: to \d{{1,2}})? (?:{_MONTHS})(?: \d{{4}})?"
+    rf"|(?:{_MONTHS}) \d{{4}}"
+)
+NOWRAP = '<span style="white-space:nowrap;">'
+
+
+def _dated(text: str) -> str:
+    """Escaped ``text`` with each date kept on one line, so a narrow screen cannot split it."""
+    return _DATE.sub(lambda match: f"{NOWRAP}{match.group(0)}</span>", _esc(text))
+
+
 def render_email_html(
     doc: Document,
     design: DocumentDesign,
@@ -266,6 +281,12 @@ def render_email_html(
         f'border="0" style="width:100%;max-width:{EMAIL_WIDTH}px;background:#ffffff;'
         f'font-family:{font};color:{INK};">',
     ]
+    # The header line runs above everything, the logo included, as it does on a page.
+    if design.header:
+        out.append(
+            f'<tr><td style="padding:12px 32px 0 32px;font-size:12px;line-height:16px;'
+            f'color:{MUTED};">{_esc(design.header)}</td></tr>'
+        )
     if logo is not None and logo.kind == "png" and logo_src:
         width = min(logo.width or 160, 200)
         out.append(
@@ -274,16 +295,12 @@ def render_email_html(
             f'width="{width}" style="display:block;border:0;max-width:{width}px;height:auto;">'
             "</td></tr>"
         )
-    if design.header:
-        out.append(
-            f'<tr><td style="padding:8px 32px 0 32px;font-size:12px;line-height:16px;'
-            f'color:{MUTED};">{_esc(design.header)}</td></tr>'
-        )
     out += [
         f'<tr><td style="padding:20px 32px;background:{primary};">',
-        f'<h1 style="margin:0;font-size:22px;line-height:28px;color:#ffffff;">{title}</h1>',
+        f'<h1 style="margin:0;font-size:22px;line-height:28px;color:#ffffff;">'
+        f"{_dated(doc.title)}</h1>",
         f'<p style="margin:4px 0 0 0;font-size:14px;line-height:20px;color:#ffffff;">'
-        f"{_esc(doc.subtitle)}</p>",
+        f"{_dated(doc.subtitle)}</p>",
         "</td></tr>",
     ]
     for section in doc.sections:
@@ -294,19 +311,18 @@ def render_email_html(
         )
         out += [passage_html(passage, MUTED) for passage in section.generated]
         out += [
-            f'<p style="margin:0 0 10px 0;font-size:15px;line-height:22px;">{_esc(p)}</p>'
+            f'<p style="margin:0 0 10px 0;font-size:15px;line-height:22px;">{_dated(p)}</p>'
             for p in section.paragraphs
         ]
         if section.bullets:
             out.append(
                 '<ul style="margin:0 0 10px 0;padding-left:20px;font-size:15px;line-height:22px;">'
             )
-            out += [f'<li style="margin:0 0 4px 0;">{_esc(b)}</li>' for b in section.bullets]
+            out += [f'<li style="margin:0 0 4px 0;">{_dated(b)}</li>' for b in section.bullets]
             out.append("</ul>")
         out.append("</td></tr>")
-    closing = [f"{_esc(footer)}"]
-    if design.footer:
-        closing.insert(0, _esc(design.footer))
+    # Only lines with text: an empty footer gives no empty paragraph.
+    closing = [_esc(line) for line in (design.footer, footer) if line.strip()]
     out.append(
         '<tr><td style="padding:24px 32px 28px 32px;">'
         + "".join(

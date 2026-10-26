@@ -18,7 +18,7 @@ import {
   Tag,
 } from "@/components/ui";
 import { postJson, useApi } from "@/lib/api";
-import { generateNotice } from "@/lib/generate-notice";
+import { copyNotice, generateNotice } from "@/lib/generate-notice";
 import { premiumView, viewQuery } from "@/lib/premium-view";
 import type { Newsletter, Settings } from "@/lib/types";
 
@@ -59,10 +59,10 @@ function NewsletterView({ llmOn }: { llmOn: boolean }) {
     }
   }
 
-  async function copy(text: string, what: string) {
+  async function copy(text: string, what: "HTML" | "text") {
     try {
       await navigator.clipboard.writeText(text);
-      setNotice(`Copied the ${what}.`);
+      setNotice(copyNotice(what, data?.html ?? ""));
     } catch {
       setNotice(`The ${what} could not be copied; download it instead.`);
     }
@@ -121,6 +121,7 @@ function NewsletterView({ llmOn }: { llmOn: boolean }) {
             </h2>
             {data.generated ? <Tag>Generated</Tag> : null}
           </div>
+          {data.logo_note ? <p className="mb-2 text-sm text-muted">{data.logo_note}</p> : null}
           <Preview src={`/api/newsletter/preview?${query}`} title="Newsletter preview" />
         </section>
       ) : null}

@@ -79,6 +79,7 @@ __all__ = [
     "RUN_CHANGES",
     "RUN_OK",
     "RUN_UNVERIFIED",
+    "SVG_LOGO_NOTE",
     "KeyedSource",
     "NewsletterFiles",
     "RunOutcome",
@@ -452,6 +453,10 @@ NO_FACTS_NOTICE = (
     "Nothing in this period gives the language model anything to write from, so no "
     "request was sent and the fixed sentences are used."
 )
+SVG_LOGO_NOTE = (
+    "The logo is an SVG, which common mail programs do not show, so the email has no logo. "
+    "Use a PNG logo to show it."
+)
 
 
 def premium_refusal(feature: str) -> str:
@@ -551,6 +556,7 @@ class NewsletterFiles:
     generated: bool
     dropped: tuple[str, ...] = ()
     notice: str = ""
+    logo_note: str = ""
 
 
 def newsletter_files(
@@ -582,6 +588,7 @@ def newsletter_files(
         generated=generated is not None and generated.count > 0,
         dropped=tuple(generated.dropped) if generated is not None else (),
         notice=generated.notice if generated is not None else "",
+        logo_note=SVG_LOGO_NOTE if logo is not None and logo.kind == "svg" else "",
     )
 
 

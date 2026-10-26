@@ -10,7 +10,7 @@ regwatch --config ~/my-register/regwatch.toml premium on
 
 ## Set the Look and the Closing Line
 
-The newsletter follows the same design specification as your documents: the title format, the organisation, two colours, a font and a logo. Set them on the Settings page of `regwatch ui`, or in `regwatch.toml`. Both colours must reach a contrast of 4.5:1 against white, and the logo must be a PNG or an SVG inside the project folder; email shows a PNG logo only. The `[newsletter] footer` line ends every issue; use it to say how to reply or unsubscribe.
+The newsletter follows the same design specification as your documents: the title format, the organisation, two colours, a font and a logo. Set them on the Settings page of `regwatch ui`, or in `regwatch.toml`. Both colours must reach a contrast of 4.5:1 against white, and the logo must be a PNG or an SVG inside the project folder; email shows a PNG logo only, so with an SVG logo the email has none, and the command and the Newsletters page say so. The design's `header` line runs above the logo. The `[newsletter] footer` line ends every issue; use it to say how to reply or unsubscribe.
 
 ```toml
 [document]
@@ -42,7 +42,7 @@ That writes `issue-12.eml`, `issue-12.html` and `issue-12.txt`. Add `--generate`
 
 - Open `issue-12.html` in a browser to read the newsletter as it will look.
 - Open `issue-12.eml` in your mail program. It has a subject and both parts but no recipient; many programs open it as a draft. Add the recipients and send it.
-- Or paste the HTML into your mail tool's HTML editor, and the text into its plain text part.
+- Or paste the HTML into your mail tool's HTML editor, and the text into its plain text part. The HTML carries the logo inline, and mail programs drop it from pasted HTML; open the `.eml` file to keep it.
 
 The Newsletters page of `regwatch ui` does the same: choose the period, preview the newsletter, press Generate for generated copy, copy the HTML or the text, or download the `.eml`, `.html` or `.txt` file.
 

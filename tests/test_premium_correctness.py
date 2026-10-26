@@ -10,21 +10,26 @@ from __future__ import annotations
 import datetime as dt
 import io
 import json
+import re
 import zipfile
 from pathlib import Path
 from typing import Any
 
 import pytest
 from conftest import NOW, TODAY, FakeSystem
+from test_design import SAFE_SVG
 from test_fetch import make, web
 from test_llm import FACTS, KEY, FakePoster, FakeProvider, answer
 from test_newsletter import FakePoster as NewsletterPoster
+from test_newsletter import append, make_png
 
 import regwatch.cli
+import regwatch.llm
 import regwatch.webapi
 from regwatch.cli import main
 from regwatch.config import DocumentDesign, load_config
-from regwatch.document import Document, Section
+from regwatch.design import Logo
+from regwatch.document import Document, GeneratedPassage, Section
 from regwatch.fetch import Credential, FetchError
 from regwatch.llm import (
     ANTHROPIC_FALLBACK_BETA,
@@ -42,12 +47,18 @@ from regwatch.llm import (
     parse_passages,
     provider_message,
 )
-from regwatch.newsletter import NEWSLETTER_SECTIONS, NewsletterContent, newsletter_content
+from regwatch.newsletter import (
+    NEWSLETTER_SECTIONS,
+    NOWRAP,
+    NewsletterContent,
+    newsletter_content,
+    render_email_html,
+)
 from regwatch.register import load_register
-from regwatch.render import docx_bytes
+from regwatch.render import docx_bytes, render_markdown
 from regwatch.settings import set_llm, set_premium
 from regwatch.webapi import Api, ApiError
-from regwatch.workspace import NO_FACTS_NOTICE, document_plan
+from regwatch.workspace import NO_FACTS_NOTICE, SVG_LOGO_NOTE, document_plan
 
 # --- C3: an answer cut off at max_tokens is a clear error -----------------------------
 
@@ -450,6 +461,85 @@ def test_a_failed_generate_is_a_409_not_a_server_error(project: Path) -> None:
         with pytest.raises(ApiError) as caught:
             api.handle("POST", path, {}, body)
         assert caught.value.status == 409 and "request failed" in str(caught.value)
+
+
+# --- C13: smaller corrections ----------------------------------------------------------
+
+EMAIL_DOC = Document(
+    "Pantry newsletter",
+    "2026-10-19",
+    subtitle="Changes from 2026-10-13 to 2026-10-19",
+    sections=[Section("What Changed", bullets=["Due on 15 November 2026: label rules"])],
+)
+PNG_LOGO = Logo("png", b"\x89PNG", 120, 40)
+
+
+def email(design: DocumentDesign, footer: str = "Reply to stop.", logo: Logo | None = None) -> str:
+    return render_email_html(EMAIL_DOC, design, footer, logo=logo, logo_src="cid:logo@regwatch")
+
+
+def test_the_unused_fact_id_pattern_is_gone() -> None:
+    assert not hasattr(regwatch.llm, "FACT_ID_RE")
+
+
+def test_the_email_header_line_runs_above_the_logo() -> None:
+    page = email(DocumentDesign(header="Internal draft"), logo=PNG_LOGO)
+    assert page.index("Internal draft") < page.index('<img src="cid:logo@regwatch"')
+
+
+def test_dates_in_the_email_do_not_break_across_lines() -> None:
+    page = email(DocumentDesign())
+    assert f"{NOWRAP}2026-10-13</span> to {NOWRAP}2026-10-19</span>" in page
+    assert f"Due on {NOWRAP}15 November 2026</span>: label rules" in page
+    assert "<title>Pantry newsletter</title>" in page
+
+
+def test_an_empty_footer_writes_no_empty_paragraph() -> None:
+    page = email(DocumentDesign(footer=""), footer="")
+    assert not re.search(r"<p [^>]*></p>", page)
+    assert email(DocumentDesign(footer="1 Example Road")).count("1 Example Road") == 1
+
+
+def test_a_markdown_fact_keeps_its_id_alone_in_a_code_span() -> None:
+    passage = GeneratedPassage(
+        "It moved.", ["change:us-fda-news"], ["change:us-fda-news: FDA *news*"]
+    )
+    doc = Document("T", "2026-10-19", sections=[Section("Changes", generated=[passage])])
+    assert "- `change:us-fda-news`: FDA \\*news\\*" in render_markdown(doc)
+
+
+def test_llm_status_without_a_keychain_tool_names_the_variable(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = FakeSystem("linux")
+    fake.tools.clear()
+    code = main(["--config", str(project), "llm", "status"], today=TODAY, system=fake.system())
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "key REGWATCH_KEY_ANTHROPIC: unavailable; no keychain tool was found" in out
+    assert "set the environment variable REGWATCH_KEY_ANTHROPIC" in out
+    assert "keys set" not in out
+
+
+def test_an_svg_logo_is_reported_as_missing_from_the_email(
+    project: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (project.parent / "logo.svg").write_text(SAFE_SVG, encoding="utf-8")
+    append(project, '[document]\nlogo = "logo.svg"\n')
+    set_premium(project, True)
+    args = ["--config", str(project), "newsletter", "--out", str(tmp_path / "n")]
+    assert main(args, today=TODAY, now=NOW) == 0
+    assert SVG_LOGO_NOTE in capsys.readouterr().out
+    api = Api(project, lambda: TODAY, clock=lambda: NOW)
+    assert api.handle("GET", "/api/newsletter", {"since": "7"}, {})[1]["logo_note"] == SVG_LOGO_NOTE
+
+
+def test_a_png_logo_gives_no_logo_note(project: Path) -> None:
+    (project.parent / "logo.png").write_bytes(make_png(240, 80))
+    append(project, '[document]\nlogo = "logo.png"\n')
+    set_premium(project, True)
+    api = Api(project, lambda: TODAY, clock=lambda: NOW)
+    assert api.handle("GET", "/api/newsletter", {"since": "7"}, {})[1]["logo_note"] == ""
 
 
 # --- C11: Word prints the design footer once, in the page footer -----------------------

@@ -1828,6 +1828,8 @@ def _cmd_newsletter(ctx: _Context, args: argparse.Namespace) -> int:
     _say_dropped("newsletter", files.dropped)
     if files.notice:
         _say(f"regwatch newsletter: {files.notice}")
+    if files.logo_note:
+        _say(f"regwatch newsletter: {files.logo_note}")
     copy = "generated" if files.generated else "fixed sentences"
     _say(f"regwatch newsletter: {files.subject}; opening and summaries: {copy}")
     _say("Regwatch does not send email. Review the newsletter, then send it from your mail tool.")
@@ -1850,7 +1852,11 @@ def _cmd_llm(ctx: _Context, args: argparse.Namespace) -> int:
     key_env = LLM_KEYS.get(llm.provider)
     if key_env:
         where = ctx.keystore().status(key_env).source
-        hint = f"; run 'regwatch keys set llm-{llm.provider}'"
+        if where == "unavailable":
+            # No keychain tool, so 'keys set' cannot help: the variable is the only way in.
+            hint = f"; no keychain tool was found, so set the environment variable {key_env}"
+        else:
+            hint = f"; run 'regwatch keys set llm-{llm.provider}'"
         _say(f"key {key_env}: {where}" + ("" if where in ("environment", "keychain") else hint))
     else:
         _say("Ollama runs on this machine at 127.0.0.1:11434 and needs no key.")

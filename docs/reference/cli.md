@@ -398,7 +398,7 @@ The JSON interface the pages use is under `/api/`. Every route needs the session
 | `/api/settings/premium` | POST | sets `[premium] enabled` to `enabled`, true or false |
 | `/api/settings/design` | POST | premium only; sets the `[document]` keys in `design`, an object of text values, and `[newsletter] footer` from its `newsletter_footer`, after checking them as `regwatch.toml` is checked, logo included |
 | `/api/settings/llm` | POST | premium only; sets `[llm]` `enabled`, `provider` and `model`, each optional |
-| `/api/newsletter` | GET | premium only; the newsletter for the last `since` days, 1 to 366, as its subject, HTML and text; `generated=1` shows the copy kept from the last Generate for that period, and answers 409 when the facts it would be built from, the provider or the model have changed since |
+| `/api/newsletter` | GET | premium only; the newsletter for the last `since` days, 1 to 366, as its subject, HTML and text, with `logo_note` saying when an SVG logo leaves the email without one; `generated=1` shows the copy kept from the last Generate for that period, and answers 409 when the facts it would be built from, the provider or the model have changed since |
 | `/api/newsletter/generate` | POST | premium only; writes the newsletter's generated copy for `since` days and keeps it for the preview and downloads |
 | `/api/newsletter/export` | GET | premium only; the same newsletter as a download in `format` `eml`, `html` or `txt` |
 | `/api/newsletter/preview` | GET | premium only; the same newsletter's HTML as `text/html` for the page's sandboxed frame, with the preview policy and `X-Frame-Options: SAMEORIGIN` |
@@ -437,7 +437,7 @@ Shows or changes the language model behind generated copy, the `[llm]` table in 
 | `use PROVIDER` | set `[llm] provider` to `anthropic`, `openai` or `ollama`, and `[llm] model` to `--model`, or to empty for the provider's default |
 | `--model NAME` | with `use`, the model name |
 
-Each prints `regwatch llm: <on or off>, <provider>, <model>`, then where the provider's key comes from (`environment`, `keychain`, `missing` or `unavailable`) with the `keys set` command that stores one, or for Ollama the address it runs at, which needs no key and no `allow_private_hosts`. The provider keys are kept with `keys set llm-anthropic` and `keys set llm-openai`.
+Each prints `regwatch llm: <on or off>, <provider>, <model>`, then where the provider's key comes from (`environment`, `keychain`, `missing` or `unavailable`) with the `keys set` command that stores one, or, when no keychain tool was found (`unavailable`), the environment variable to set instead, or for Ollama the address it runs at, which needs no key and no `allow_private_hosts`. The provider keys are kept with `keys set llm-anthropic` and `keys set llm-openai`.
 
 ```text
 regwatch llm use anthropic

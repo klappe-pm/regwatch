@@ -921,6 +921,7 @@ class Api:
             "generated": files.generated,
             "dropped": list(files.dropped),
             "notice": files.notice,
+            "logo_note": files.logo_note,
         }
 
     def newsletter(self, query: Mapping[str, str], body: JsonObject) -> JsonObject:
