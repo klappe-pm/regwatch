@@ -4,7 +4,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { premiumView } from "../src/lib/premium-view.ts";
+import { premiumView, viewQuery } from "../src/lib/premium-view.ts";
+
+test("a second Generate loads the new copy, so the query changes", () => {
+  const first = viewQuery("since=7", true, 1);
+  const second = viewQuery("since=7", true, 2);
+  assert.notEqual(first, second);
+  assert.ok(first.startsWith("since=7&generated=1"));
+});
+
+test("without generated copy the query is the plain one", () => {
+  assert.equal(viewQuery("kind=digest&tier=v2", false, 3), "kind=digest&tier=v2");
+});
 
 test("a failed status request is an error, not loading", () => {
   assert.equal(premiumView(null, "The server stopped."), "error");

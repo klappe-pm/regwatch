@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import TODAY
+from conftest import NOW, TODAY, FakeSystem
 from test_llm import FACTS, KEY, FakePoster, FakeProvider, answer
+from test_newsletter import FakePoster as NewsletterPoster
 
 from regwatch.config import load_config
 from regwatch.llm import (
@@ -27,6 +28,8 @@ from regwatch.llm import (
 )
 from regwatch.newsletter import newsletter_content
 from regwatch.register import load_register
+from regwatch.settings import set_llm, set_premium
+from regwatch.webapi import Api
 
 # --- C3: an answer cut off at max_tokens is a clear error -----------------------------
 
@@ -94,3 +97,35 @@ def test_a_period_holds_exactly_its_days(project: Path, since: int, first_day: s
     assert content.start == first and content.end == TODAY
     assert [c["date"] for c in content.candidates] == [first_day, "2026-10-19"]
     assert (content.end - content.start).days + 1 == since
+
+
+# --- C5: a second Generate shows the new copy ----------------------------------------
+
+
+class SwitchingPoster(NewsletterPoster):
+    """Answers each Generate with the next of its openings."""
+
+    def __init__(self, openings: list[str]) -> None:
+        super().__init__([])
+        self.openings = openings
+
+    def post_json(self, url: str, payload: Any, **kwargs: Any) -> str:
+        text = self.openings[len(self.payloads)]
+        self.passages = [{"section": "opening", "text": text, "cites": ["change:nl-notices"]}]
+        return super().post_json(url, payload, **kwargs)
+
+
+def test_a_second_generate_replaces_the_copy_the_page_reloads(project: Path) -> None:
+    set_premium(project, True)
+    set_llm(project, enabled=True)
+    fake = FakeSystem("linux")
+    fake.environ["REGWATCH_KEY_ANTHROPIC"] = KEY
+    poster = SwitchingPoster(["First take.", "Second take."])
+    api = Api(project, lambda: TODAY, system=fake.system(), clock=lambda: NOW, poster=poster)
+    for round_number, expected in ((1, "First take."), (2, "Second take.")):
+        api.handle("POST", "/api/newsletter/generate", {}, {"since": 7})
+        query = {"since": "7", "generated": "1", "round": str(round_number)}
+        page = api.handle("GET", "/api/newsletter", query, {})[1]["html"]
+        preview = api.handle("GET", "/api/newsletter/preview", query, {})[1].html
+        assert expected in page and expected in preview
+        assert "First take." not in page or round_number == 1

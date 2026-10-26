@@ -85,6 +85,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- Pressing Generate a second time on the Newsletters or Documents page left the first copy in the preview, because the page asked for the same address again and kept what it had. Each successful Generate now changes the address the page and its preview load, so the new copy is shown.
 - A newsletter period was a day too long: `--since 7` on 19 October ran from 12 October. It now runs from 13 October, so a period of N days holds exactly N days, today included.
 - An answer the provider cut off at `[llm] max_tokens` (Anthropic `stop_reason` `max_tokens`, OpenAI `finish_reason` `length`, Ollama `done_reason` `length`) was read as an unreadable answer. It is now an error that says the answer was cut off and names `[llm] max_tokens`, recorded as `cut off`. Ollama is asked for JSON (`format` `json`) with a 16,384 token context (`num_ctx`), since its small default cut the facts off.
 - A title format with `{organisation}` named the organisation twice ("Pantry Co: Pantry Co regulatory newsletter"), because every document title starts with the portfolio name. A leading organisation name is now taken off the document's title when the format names `{organisation}`. The register digest and the change and due alert are titled "<portfolio> register digest" and "<portfolio> change and due alert" instead of "regwatch digest" and "regwatch report", in `regwatch digest`, `regwatch report` and `regwatch document`, and the Settings preview shows a title built the same way.

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui";
 import { postJson, useApi } from "@/lib/api";
 import { TIERS } from "@/lib/labels";
-import { premiumView } from "@/lib/premium-view";
+import { premiumView, viewQuery } from "@/lib/premium-view";
 import type { DesignedDocument, Settings } from "@/lib/types";
 
 const KINDS: [string, string][] = [
@@ -38,9 +38,10 @@ function DocumentView({ llmOn }: { llmOn: boolean }) {
   const [kind, setKind] = useState("briefing");
   const [tier, setTier] = useState("v2");
   const [generated, setGenerated] = useState(false);
+  const [round, setRound] = useState(0);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const query = `kind=${kind}&tier=${tier}${generated ? "&generated=1" : ""}`;
+  const query = viewQuery(`kind=${kind}&tier=${tier}`, generated, round);
   const { data, error, loading } = useApi<DesignedDocument>(`/api/document?${query}`);
 
   function reset() {
@@ -54,6 +55,7 @@ function DocumentView({ llmOn }: { llmOn: boolean }) {
     try {
       const result = await postJson<DesignedDocument>("/api/document/generate", { kind, tier });
       setGenerated(true);
+      setRound((value) => value + 1);
       setNotice(
         result.dropped.length
           ? `Generated. ${result.dropped.length} passage(s) were left out because they cited facts they were not given.`

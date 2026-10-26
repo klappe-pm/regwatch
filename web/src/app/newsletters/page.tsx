@@ -18,7 +18,7 @@ import {
   Tag,
 } from "@/components/ui";
 import { postJson, useApi } from "@/lib/api";
-import { premiumView } from "@/lib/premium-view";
+import { premiumView, viewQuery } from "@/lib/premium-view";
 import type { Newsletter, Settings } from "@/lib/types";
 
 const PERIODS: [string, string][] = [
@@ -31,9 +31,10 @@ const PERIODS: [string, string][] = [
 function NewsletterView({ llmOn }: { llmOn: boolean }) {
   const [since, setSince] = useState("7");
   const [generated, setGenerated] = useState(false);
+  const [round, setRound] = useState(0);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const query = `since=${since}${generated ? "&generated=1" : ""}`;
+  const query = viewQuery(`since=${since}`, generated, round);
   const { data, error, loading } = useApi<Newsletter>(`/api/newsletter?${query}`);
 
   function choose(value: string) {
@@ -48,6 +49,7 @@ function NewsletterView({ llmOn }: { llmOn: boolean }) {
     try {
       const result = await postJson<Newsletter>("/api/newsletter/generate", { since: Number(since) });
       setGenerated(true);
+      setRound((value) => value + 1);
       setNotice(
         result.dropped.length
           ? `Generated. ${result.dropped.length} passage(s) were left out because they cited facts they were not given.`
