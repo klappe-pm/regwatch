@@ -37,6 +37,7 @@ from regwatch.llm import (
     ANTHROPIC_FALLBACK_BETA,
     ANTHROPIC_FALLBACK_MODELS,
     MAX_CITES,
+    MAX_FACTS,
     MAX_PROVIDER_MESSAGE,
     OLLAMA_CONTEXT,
     RETRY_DELAY_SECONDS,
@@ -710,3 +711,72 @@ def test_a_get_error_keeps_its_status_but_reads_no_body() -> None:
     with pytest.raises(FetchError) as caught:
         make(network).fetch("https://example.org/")
     assert caught.value.status == 503 and caught.value.body == ""
+
+
+# --- T1: the mutations that survived the earlier suite ---------------------------------
+
+
+def test_the_anthropic_request_carries_the_fallback_and_the_effort() -> None:
+    poster = FakePoster(DONE)
+    AnthropicProvider(poster, KEY, "claude-opus-5-5").complete("S", "P", 77)
+    call = poster.calls[0]
+    assert call["payload"] == {
+        "model": "claude-opus-5-5",
+        "max_tokens": 77,
+        "system": "S",
+        "messages": [{"role": "user", "content": "P"}],
+        "output_config": {"effort": "low"},
+        "fallbacks": "default",
+    }
+    assert call["headers"] == {
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "server-side-fallback-2026-07-01",
+    }
+
+
+def test_openai_is_sent_max_completion_tokens() -> None:
+    body = json.dumps({"choices": [{"message": {"content": "x"}, "finish_reason": "stop"}]})
+    poster = FakePoster(body)
+    OpenAIProvider(poster, KEY, "gpt-test").complete("S", "P", 55)
+    payload = poster.calls[0]["payload"]
+    assert payload["max_completion_tokens"] == 55 and "max_tokens" not in payload
+
+
+def test_the_period_starts_on_its_first_day_and_not_before(project: Path) -> None:
+    register = load_register(load_config(project))
+    first, before = "2026-10-13", "2026-10-12"
+    candidates = [{"date": first, "headline": "in"}, {"date": before, "headline": "out"}]
+    content = newsletter_content(register, [], [], candidates, TODAY, 7)
+    assert content.start == dt.date(2026, 10, 13)
+    assert [c["headline"] for c in content.candidates] == ["in"]
+
+
+@pytest.mark.parametrize("status", ["ERROR", "MISSING"])
+def test_a_source_that_could_not_be_checked_is_among_the_changes(
+    project: Path, status: str
+) -> None:
+    register = load_register(load_config(project))
+    results = [
+        SourceResult("nl-notices", status, "snapshot", None, "boom"),
+        SourceResult("quiet", "UNCHANGED", "snapshot", "a" * 64),
+    ]
+    content = newsletter_content(register, results, [], [], TODAY, 7)
+    assert [r.source_id for r in content.changes] == ["nl-notices"]
+    doc = build_newsletter(register, content, DocumentDesign())
+    assert "one source that could not be checked" in doc.sections[0].paragraphs[0]
+
+
+def test_the_email_carries_the_design_footer() -> None:
+    page = email(DocumentDesign(footer="Pantry Co, 1 Example Road"), footer="Reply to stop.")
+    closing = page[page.index("Pantry Co, 1 Example Road") :]
+    assert "Reply to stop." in closing and "Not legal advice." in closing
+
+
+def test_at_most_max_facts_are_sent() -> None:
+    many = [Fact(f"change:s-{n}", "changes", f"Source {n}: content changed") for n in range(250)]
+    provider = FakeProvider(answer())
+    generate(provider, many, "x", max_tokens=10)
+    prompt = provider.prompts[0][1]
+    sent = json.loads(prompt[prompt.index("[") :])
+    assert len(sent) == MAX_FACTS == 200
+    assert sent[-1]["id"] == "change:s-199"
