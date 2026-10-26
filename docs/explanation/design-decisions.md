@@ -69,13 +69,25 @@ In the source engine the tiered briefing produced Markdown directly while the da
 - `scan`, `capture` and the `--live` flag became `check`, `capture` and `--fetch`, with the snapshot behaviour above.
 - `briefing` and `brief` became one `brief` command with a `--kind` option.
 - The Word, newsletter and web post renderers became the separate `render` command, which works from a saved model.
-- The `newsletter` command, which wrote a running index of records that linked to sibling report files by name, was not ported. It depended on a rollout directory layout specific to one project. `digest`, `report` and `export` cover the general cases.
+- The source engine's `newsletter` command, which wrote a running index of records that linked to sibling report files by name, was not ported. It depended on a rollout directory layout specific to one project. The `regwatch newsletter` command that exists now is a different, premium feature: one send-ready issue for a period, described below.
 - Scheduled workflows were not ported. There is no CI in this repository, and scheduling is left to the user. The how-to guide on [adding a source](../how-to-guides/add-a-source.md) shows the commands to schedule.
 - A fixed set of industry lenses became the themes file. A fixed file of one agency's warning letter themes became the enforcement file.
 
 ## Detail Records Are Optional
 
 The source engine required a detail record for every obligation and failed validation without one. regwatch allows an obligation to have none, and the tiered briefing shows a placeholder that says detail is pending. A required record forces a new user to write prose before they can run anything. The cost is that a register can quietly lack detail; `export` shows which obligations have none, since their summary column is empty.
+
+## Newsletters Are Files, Not Sends
+
+`regwatch newsletter` writes an `.eml` with no recipients beside the `.html` and `.txt` parts, and the web app offers the same files and a copy button. It never sends. Sending would need mail credentials, a recipient list and bounce handling, and it would turn an unreviewed mistake into one that reached every reader. A person opens the file in their own mail tool, reads it and sends it. The cost is one more step for each issue.
+
+## Word Files Without a Library
+
+The Word renderer writes the package with `zipfile` and hand-built XML, including a styles part, a header, a footer and the logo, rather than depending on a document library. regwatch has no runtime dependencies, and the parts it needs are few and stable. The cost is that every new Word feature is written by hand and checked by opening the result in a word processor.
+
+## Inline Styles in the Web App
+
+The newsletter and document previews are HTML whose styles must be inline, because that is how an email client reads them, and a frame built from `srcdoc` inherits the page's content security policy. The policy therefore allows inline styles, and nothing else from outside the server's own files. The frame is sandboxed with no permissions, so the preview cannot run script, submit a form or reach the page around it. The alternative, serving each preview from its own route with its own policy, would add a route that returns untrusted HTML at a fixed address, which is a larger surface than a style rule.
 
 ## One GitHub Actions Workflow
 
