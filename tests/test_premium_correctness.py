@@ -19,12 +19,15 @@ from test_newsletter import FakePoster as NewsletterPoster
 
 from regwatch.config import load_config
 from regwatch.llm import (
+    MAX_CITES,
     OLLAMA_CONTEXT,
     AnthropicProvider,
+    Fact,
     GenerationError,
     OllamaProvider,
     OpenAIProvider,
     generate,
+    parse_passages,
 )
 from regwatch.newsletter import newsletter_content
 from regwatch.register import load_register
@@ -129,3 +132,23 @@ def test_a_second_generate_replaces_the_copy_the_page_reloads(project: Path) -> 
         preview = api.handle("GET", "/api/newsletter/preview", query, {})[1].html
         assert expected in page and expected in preview
         assert "First take." not in page or round_number == 1
+
+
+# --- C7: a passage citing more facts than can be shown is dropped, never cut ----------
+
+MANY = [Fact(f"change:source-{n}", "changes", f"Source {n} content changed") for n in range(25)]
+
+
+def test_a_passage_citing_more_than_the_limit_is_dropped_with_a_reason() -> None:
+    ids = [f.fact_id for f in MANY]
+    text = json.dumps({"passages": [{"section": "changes", "text": "Many moved.", "cites": ids}]})
+    result = parse_passages(text, MANY)
+    assert result.count == 0
+    assert result.dropped == ["passage 1: it cites 25 facts; a passage may cite at most 20"]
+
+
+def test_a_passage_citing_exactly_the_limit_keeps_every_fact() -> None:
+    ids = [f.fact_id for f in MANY[:MAX_CITES]] + [MANY[0].fact_id]
+    text = json.dumps({"passages": [{"section": "changes", "text": "Many moved.", "cites": ids}]})
+    kept = parse_passages(text, MANY).section("changes")[0]
+    assert len(kept.cites) == len(kept.facts) == MAX_CITES == 20

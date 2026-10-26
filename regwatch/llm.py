@@ -559,7 +559,14 @@ def parse_passages(
                 f"passage {number}: it cites {shown}, which is not one of the facts it was given"
             )
             continue
-        cited = list(dict.fromkeys(cites))[:MAX_CITES]
+        cited = list(dict.fromkeys(cites))
+        if len(cited) > MAX_CITES:
+            # Cutting the list would hide facts the passage was written from.
+            result.dropped.append(
+                f"passage {number}: it cites {len(cited)} facts; a passage may cite at most "
+                f"{MAX_CITES}"
+            )
+            continue
         # A real id can carry an invented figure: every number in the passage must be
         # written in the facts it cites, or the citation proves nothing about it.
         known_numbers = {_number(n) for c in cited for n in _DIGITS.findall(known[c].text)}

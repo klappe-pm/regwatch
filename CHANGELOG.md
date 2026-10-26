@@ -85,6 +85,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- A generated passage that cited more than 20 facts was kept with only the first 20 shown beside it, silently hiding facts it was written from. It is now dropped with the reason.
 - A PNG logo in the newsletter `.eml` file showed as an attachment in some mail programs. The logo part is now `Content-Disposition: inline`, and the `multipart/related` part names its root with `type="text/html"`, as RFC 2387 asks.
 - Pressing Generate a second time on the Newsletters or Documents page left the first copy in the preview, because the page asked for the same address again and kept what it had. Each successful Generate now changes the address the page and its preview load, so the new copy is shown.
 - A newsletter period was a day too long: `--since 7` on 19 October ran from 12 October. It now runs from 13 October, so a period of N days holds exactly N days, today included.
