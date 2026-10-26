@@ -64,6 +64,47 @@ def test_plain_http_goes_only_to_loopback_with_allow_private_hosts() -> None:
     assert b"Host: 127.0.0.1:11434\r\n" in network.requests[0]
 
 
+OLLAMA = "http://127.0.0.1:11434/api/chat"
+
+
+def test_the_loopback_allowance_reaches_its_one_address_without_private_hosts() -> None:
+    network = Network({}, [ok(b"{}")])
+    fetcher = make(network, loopback_post_url=OLLAMA)
+    assert fetcher.allow_private_hosts is False
+    assert fetcher.post_json(OLLAMA, {"m": 1}) == "{}"
+    assert network.connected == [("127.0.0.1", 11434)] and network.wrapped == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://127.0.0.1:11435/api/chat", "http://127.0.0.1:11434/other", "http://127.0.0.2:11434/"],
+)
+def test_the_loopback_allowance_covers_no_other_address(url: str) -> None:
+    network = Network({}, [ok(b"{}")])
+    with pytest.raises(FetchError, match="allow_private_hosts"):
+        make(network, loopback_post_url=OLLAMA).post_json(url, {})
+    assert network.connected == []
+
+
+def test_the_loopback_allowance_opens_no_get_and_no_private_https() -> None:
+    network = web(hosts={"example.org": ["10.0.0.5"]})
+    fetcher = make(network, loopback_post_url=OLLAMA)
+    for call in (
+        lambda: fetcher.fetch("https://127.0.0.1:11434/api/chat"),
+        lambda: fetcher.fetch("https://example.org/"),
+        lambda: fetcher.post_json("https://example.org/", {}),
+    ):
+        with pytest.raises(FetchError, match="non-public address"):
+            call()
+    assert network.connected == []
+
+
+@pytest.mark.parametrize("url", ["https://127.0.0.1:11434/", "http://localhost:11434/", "x"])
+def test_the_loopback_allowance_must_name_a_plain_http_loopback_literal(url: str) -> None:
+    with pytest.raises(ValueError, match=r"plain http to 127\.0\.0\.1"):
+        make(Network({}, []), loopback_post_url=url)
+
+
 @pytest.mark.parametrize(
     "url", ["http://localhost:11434/", "http://10.0.0.5/", "http://[::2]/", "http://example.org/"]
 )

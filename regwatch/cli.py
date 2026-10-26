@@ -1839,11 +1839,8 @@ def _cmd_llm(ctx: _Context, args: argparse.Namespace) -> int:
         where = ctx.keystore().status(key_env).source
         hint = f"; run 'regwatch keys set llm-{llm.provider}'"
         _say(f"key {key_env}: {where}" + ("" if where in ("environment", "keychain") else hint))
-    elif not config.fetch.allow_private_hosts:
-        _say(
-            "Ollama runs on this machine at 127.0.0.1, which regwatch refuses unless "
-            "allow_private_hosts = true is set under [fetch]"
-        )
+    else:
+        _say("Ollama runs on this machine at 127.0.0.1:11434 and needs no key.")
     if not config.premium.enabled:
         _say(f"Generated copy is a premium feature; {PREMIUM_HINT}.")
     return EXIT_OK

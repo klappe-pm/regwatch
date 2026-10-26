@@ -362,10 +362,8 @@ function LlmForm({ llm, onSaved }: { llm: LlmSettings; onSaved: Saved }) {
       </form>
       {llm.provider === "ollama" ? (
         <p className="border-t border-line pt-3 text-sm text-muted">
-          Ollama runs on this machine at 127.0.0.1 and needs no key.{" "}
-          {llm.allow_private_hosts
-            ? "allow_private_hosts is set, so Regwatch can reach it."
-            : "Regwatch refuses addresses on this machine until you set allow_private_hosts = true under [fetch] in regwatch.toml."}
+          Ollama runs on this machine at 127.0.0.1:11434 and needs no key. Regwatch reaches that one
+          address and no other address on this machine.
         </p>
       ) : key ? (
         <ProviderKeyRow row={key} onSaved={onSaved} />

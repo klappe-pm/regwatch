@@ -229,7 +229,6 @@ export interface LlmSettings {
   model: string;
   providers: string[];
   default_models: Record<string, string>;
-  allow_private_hosts: boolean;
   keys: ProviderKey[];
 }
 

@@ -435,7 +435,7 @@ Shows or changes the language model behind generated copy, the `[llm]` table in 
 | `use PROVIDER` | set `[llm] provider` to `anthropic`, `openai` or `ollama`, and `[llm] model` to `--model`, or to empty for the provider's default |
 | `--model NAME` | with `use`, the model name |
 
-Each prints `regwatch llm: <on or off>, <provider>, <model>`, then where the provider's key comes from (`environment`, `keychain`, `missing` or `unavailable`) with the `keys set` command that stores one, or for Ollama a note when `allow_private_hosts` is not set. The provider keys are kept with `keys set llm-anthropic` and `keys set llm-openai`.
+Each prints `regwatch llm: <on or off>, <provider>, <model>`, then where the provider's key comes from (`environment`, `keychain`, `missing` or `unavailable`) with the `keys set` command that stores one, or for Ollama the address it runs at, which needs no key and no `allow_private_hosts`. The provider keys are kept with `keys set llm-anthropic` and `keys set llm-openai`.
 
 ```text
 regwatch llm use anthropic

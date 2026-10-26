@@ -100,7 +100,7 @@ Optional table, written by `regwatch llm` and the Settings page of `regwatch ui`
 | key | type | default | meaning |
 | --- | --- | --- | --- |
 | `enabled` | boolean | false | turns generated copy on |
-| `provider` | string | `"anthropic"` | `anthropic` (the Messages API), `openai` (Chat Completions) or `ollama` (a local model on `127.0.0.1:11434`, which needs `allow_private_hosts = true` under `[fetch]`) |
+| `provider` | string | `"anthropic"` | `anthropic` (the Messages API), `openai` (Chat Completions) or `ollama` (a local model at `http://127.0.0.1:11434/api/chat`, which the language model call may reach without `allow_private_hosts`; no other fetch may) |
 | `model` | string | `""` | the model name, letters, digits and `. _ : / -`, at most 100 characters; empty means the provider's default: `claude-opus-5-5`, `gpt-5-mini` or `llama3.2` |
 | `max_tokens` | integer | 4000 | the most tokens one answer may use, 256 to 32000 |
 | `timeout_seconds` | number | 180 | the deadline of one call, above 0 and at most 600; it replaces the `[fetch]` timeouts for this call only |

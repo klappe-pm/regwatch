@@ -439,7 +439,8 @@ def test_the_llm_command_sets_the_provider_model_and_switch(
     settings = load_config(project).llm
     assert (settings.enabled, settings.provider, settings.model) == (True, "openai", "gpt-test")
     code, out, _err = run(project, capsys, "llm", "use", "ollama")
-    assert "allow_private_hosts" in out and load_config(project).llm.model == ""
+    assert "127.0.0.1:11434 and needs no key" in out and "allow_private_hosts" not in out
+    assert load_config(project).llm.model == ""
     code, _out, err = run(project, capsys, "llm", "use")
     assert code == 2 and "name a provider" in err
     code, out, _err = run(project, capsys, "config", "show")

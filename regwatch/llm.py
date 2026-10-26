@@ -20,7 +20,8 @@ these rules:
   token counts, the duration and the outcome, never a key and never a prompt.
 
 The provider is pluggable: Anthropic by default, OpenAI, or a local Ollama model on
-``127.0.0.1``, which needs ``allow_private_hosts`` because it is this machine.
+``127.0.0.1``, which the fetch client reaches through its own allowance for that one
+address, without ``allow_private_hosts``.
 """
 
 from __future__ import annotations
@@ -300,7 +301,10 @@ def llm_fetcher(config: Config) -> SafeFetcher:
 
     A model can take a while to answer, so the per-operation timeout and the total
     deadline are both ``[llm] timeout_seconds``; the size limit, the address checks
-    and ``allow_private_hosts`` are the ones every fetch uses.
+    and ``allow_private_hosts`` are the ones every fetch uses. With ``[llm] provider =
+    "ollama"`` the client may also POST to the fixed Ollama address on ``127.0.0.1``,
+    and to nothing else on this machine, so a local model needs no
+    ``allow_private_hosts``, which would open every fetch to private addresses.
     """
     settings = config.fetch
     return SafeFetcher(
@@ -309,6 +313,7 @@ def llm_fetcher(config: Config) -> SafeFetcher:
         settings.user_agent,
         total_timeout_seconds=config.llm.timeout_seconds,
         allow_private_hosts=settings.allow_private_hosts,
+        loopback_post_url=ENDPOINTS["ollama"] if config.llm.provider == "ollama" else None,
     )
 
 

@@ -735,7 +735,6 @@ class Api:
                 "model": config.llm.model,
                 "providers": list(LLM_PROVIDERS),
                 "default_models": dict(DEFAULT_MODELS),
-                "allow_private_hosts": config.fetch.allow_private_hosts,
                 "keys": keys,
             },
         }

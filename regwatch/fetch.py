@@ -34,8 +34,9 @@ The shipped SafeFetcher is deliberately small and enforces these rules:
   drops it, and it is removed from every error message;
 - ``post_json`` sends a JSON body with the same checks, limits and deadline. It
   follows no redirect, and it speaks plain ``http`` only to a loopback address
-  written as an IP literal, only with ``allow_private_hosts`` set and never with
-  a key: that is how a local model server on ``127.0.0.1`` is reached.
+  written as an IP literal, never with a key, and only with ``allow_private_hosts``
+  set or to the one ``loopback_post_url`` the client was made with: that is how a
+  local model server on ``127.0.0.1`` is reached without opening every fetch.
 
 Tests and embedders can supply any object with a matching ``fetch`` method, and
 ``SafeFetcher`` takes a resolver, a connector and a TLS wrapper so that it can be
@@ -313,6 +314,7 @@ class SafeFetcher:
         total_timeout_seconds: float = 60.0,
         allow_private_hosts: bool = False,
         allowed_file_roots: Iterable[Path] = (),
+        loopback_post_url: str | None = None,
         resolver: Resolver | None = None,
         connector: Connector | None = None,
         wrapper: Wrapper | None = None,
@@ -322,6 +324,11 @@ class SafeFetcher:
         self.user_agent = user_agent
         self.total_timeout_seconds = total_timeout_seconds
         self.allow_private_hosts = allow_private_hosts
+        # The one plain http address on this machine ``post_json`` may reach without
+        # ``allow_private_hosts``: a local model server. Every other fetch is unchanged.
+        if loopback_post_url is not None and not _is_loopback_post_url(loopback_post_url):
+            raise ValueError("the loopback address must be plain http to 127.0.0.1 or ::1")
+        self.loopback_post_url = loopback_post_url
         self.allowed_file_roots = tuple(Path(root).resolve() for root in allowed_file_roots)
         self._resolver = resolver or _default_resolver
         self._connector = connector or _default_connector
@@ -361,9 +368,10 @@ class SafeFetcher:
         The address checks, the size limit and the deadline are the ones ``fetch``
         applies. No redirect is followed: a POST that is answered with one is an
         error. ``url`` is ``https``, or plain ``http`` to a loopback address written
-        as an IP literal (``127.0.0.1`` or ``::1``) when ``allow_private_hosts`` is
-        set and no key is sent. ``headers`` are extra headers that carry no secret;
-        they cannot replace the headers the client sets. Every error raised with a
+        as an IP literal (``127.0.0.1`` or ``::1``) when no key is sent and either
+        ``allow_private_hosts`` is set or ``url`` is exactly ``loopback_post_url``.
+        ``headers`` are extra headers that carry no secret; they cannot replace the
+        headers the client sets. Every error raised with a
         ``credential`` is cleaned of the key, with its cause dropped, and a body
         that echoes the key has it replaced.
         """
@@ -378,7 +386,15 @@ class SafeFetcher:
             tls = self._post_scheme(url, credential) == "https"
             deadline = time.monotonic() + self.total_timeout_seconds
             data, location = self._request(
-                url, deadline, credential, method="POST", body=body, extra=extra, tls=tls
+                url,
+                deadline,
+                credential,
+                method="POST",
+                body=body,
+                extra=extra,
+                tls=tls,
+                # Plain http was allowed above only to a loopback IP literal.
+                loopback=not tls,
             )
             if location is not None:
                 raise FetchError("the server answered with a redirect; a POST is not redirected")
@@ -409,7 +425,7 @@ class SafeFetcher:
             raise FetchError("a key is sent only over https; refused")
         if not _is_loopback_literal(parts.hostname or ""):
             raise FetchError("plain http is allowed only to 127.0.0.1 or ::1")
-        if not self.allow_private_hosts:
+        if not (self.allow_private_hosts or url == self.loopback_post_url):
             raise FetchError(
                 "a request to this machine needs allow_private_hosts; set it under [fetch]"
             )
@@ -531,12 +547,17 @@ class SafeFetcher:
         body: bytes | None = None,
         extra: Mapping[str, str] | None = None,
         tls: bool = True,
+        loopback: bool = False,
     ) -> tuple[bytes, str | None]:
         parts = urlsplit(url)
         host = _wire_host(parts.hostname or "")
         default_port = 443 if tls else 80
         port = parts.port or default_port
-        addresses = self._vet(host, port, deadline)
+        if loopback and _is_loopback_literal(host):
+            # A loopback IP literal that _post_scheme allowed; no name is looked up.
+            addresses = [host]
+        else:
+            addresses = self._vet(host, port, deadline)
         query = parts.query
         headers = {
             "Host": _host_header(host, port, default_port),
@@ -712,6 +733,15 @@ def _is_loopback_literal(host: str) -> bool:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
+
+
+def _is_loopback_post_url(url: str) -> bool:
+    """True for a plain ``http`` URL whose host is a loopback IP literal."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return parts.scheme == "http" and _is_loopback_literal(parts.hostname or "")
 
 
 def _is_ip_literal(host: str) -> bool:
