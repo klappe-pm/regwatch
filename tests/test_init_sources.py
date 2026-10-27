@@ -34,11 +34,12 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture
-def run(capsys: pytest.CaptureFixture[str]) -> Run:
+def run(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> Run:
     def invoke(
         *args: str, fake: FakeSystem | None = None, fetcher: Any = None
     ) -> tuple[int, str, str]:
-        system = (fake or FakeSystem("linux")).system()
+        # A writable home apart from the test home, so a schedule file never lands on the real root.
+        system = (fake or FakeSystem("linux")).system(tmp_path / "fake-home")
         code = main(list(args), today=TODAY, now=NOW, system=system, fetcher=fetcher)
         captured = capsys.readouterr()
         return code, captured.out, captured.err
