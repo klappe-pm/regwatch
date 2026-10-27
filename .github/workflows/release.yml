@@ -54,6 +54,14 @@ jobs:
             echo "the build added files under regwatch/web/ that are not committed"
             exit 1
           }
+      - name: keep the CI build of the web app when the check fails
+        # The module ids in the chunks depend on the build path, so only this runner can produce the committed copy.
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-build
+          path: regwatch/web/
+          if-no-files-found: error
       - name: install the build tools
         run: python -m pip install --require-hashes -r requirements/build.txt
       - name: tag matches version

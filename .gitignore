@@ -27,6 +27,8 @@ site/
 /web/next-env.d.ts
 /web/src/lib/icons.generated.ts
 /web/tsconfig.tsbuildinfo
+# a user-level rule that ignores folders starting with an underscore must not hide the hashed chunks
+!/regwatch/web/_next/
 
 # secrets
 .env
