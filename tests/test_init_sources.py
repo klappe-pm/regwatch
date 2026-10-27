@@ -36,9 +36,12 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 @pytest.fixture
 def run(capsys: pytest.CaptureFixture[str]) -> Run:
     def invoke(
-        *args: str, fake: FakeSystem | None = None, fetcher: Any = None
+        *args: str,
+        fake: FakeSystem | None = None,
+        fetcher: Any = None,
+        system_home: Path | None = None,
     ) -> tuple[int, str, str]:
-        system = (fake or FakeSystem("linux")).system()
+        system = (fake or FakeSystem("linux")).system(system_home)
         code = main(list(args), today=TODAY, now=NOW, system=system, fetcher=fetcher)
         captured = capsys.readouterr()
         return code, captured.out, captured.err
@@ -323,7 +326,11 @@ def test_keys_schedule_and_first_run_when_answered_yes(
     directory = home / "work"
     prompts = answers("", "", "", "us-regulations-gov-api", "", "", "", "y", "y", "y", "y")
     fetcher = KeyedFetcher()
-    code, out, _ = run("init", "--dir", str(directory), fake=fake, fetcher=fetcher)
+    # init writes the launchd plist under the system home before it calls launchctl.
+    system_home = home / "system-home"
+    code, out, _ = run(
+        "init", "--dir", str(directory), fake=fake, fetcher=fetcher, system_home=system_home
+    )
     assert any(p.startswith("  Store the key for us-regulations-gov-api now?") for p in prompts)
     assert fake.keychain == {"REGWATCH_KEY_REGULATIONS_GOV": KEY}
     assert "Stored in the macOS login keychain." in out
