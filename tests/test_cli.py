@@ -597,8 +597,11 @@ def test_outputs_cannot_land_inside_the_state_or_snapshots_directories(run, conf
 
 def test_a_case_variant_of_a_register_file_is_refused(run, config: Config, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     other = config.register.obligations.parent / "OBLIGATIONS.CSV"
+    # On a case insensitive filesystem the variant is the register file itself.
+    case_insensitive = other.exists()
     assert run("export", "--csv", str(other)).code == 2
-    assert not other.exists()
+    if not case_insensitive:
+        assert not other.exists()
 
 
 @pytest.mark.parametrize(
