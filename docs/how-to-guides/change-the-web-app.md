@@ -38,7 +38,7 @@ Follow the design rules the existing pages follow:
 - Headings are Title Case; labels say what a control does in plain words. A test checks the headings through their copy keys.
 - Icons come from Material Symbols Outlined through `web/scripts/make-icons.mjs`, which copies the paths of the icons in its list into the build. Add a name to that list to use another icon.
 - Nothing loads from another origin: no remote font, script, image or style. The server's content security policy blocks any such load, and a test fails on a remote address in the build.
-- No inline style and no inline script. The server sends `style-src 'self'`; Material UI's styles are written into constructed style sheets in the browser (`web/src/emotion.ts`) and into style sheet files at build time (`web/scripts/postbuild.mjs`), which fails the build on an inline style or script.
+- No inline style and no inline script. The server sends `style-src 'self'`; Material UI's styles are written into constructed style sheets in the browser (`createCspEmotionCache` from `@klappe/design-system/emotion`, in `web/pages/_app.tsx`) and into style sheet files at build time (`ds csp out`), which fails the build on an inline style or script.
 - Every control is reachable from the keyboard and shows a visible focus ring.
 
 Run the checks before you commit: the generated files are current, no colour or text is hard coded, and the types check.

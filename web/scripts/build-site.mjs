@@ -10,7 +10,7 @@ const steps = [
   [join(web, "scripts/make-icons.mjs")],
   [join(web, "node_modules/@klappe/design-system/bin/ds.mjs"), "check"],
   [join(web, "node_modules/next/dist/bin/next"), "build", "--webpack"],
-  [join(web, "scripts/postbuild.mjs")],
+  [join(web, "node_modules/@klappe/design-system/bin/ds.mjs"), "csp", "out"],
 ];
 for (const args of steps) {
   const result = spawnSync(process.execPath, args, { cwd: web, env, stdio: "inherit" });

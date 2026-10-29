@@ -372,8 +372,8 @@ components:
   document-preview:
     material: none
     selector: '[data-part="document-preview"]'
-    backgroundColor: "var(--ds-color-white)"
-    textColor: "var(--ds-color-ink)"
+    backgroundColor: "{colors.white!}"
+    textColor: "{colors.ink!}"
     border: "1px solid var(--ds-role-outline-variant)"
     padding: "15px"
   public-button:

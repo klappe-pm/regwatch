@@ -1,5 +1,5 @@
 // The shared parts of the local application, built from Material UI and styled by the components
-// in DESIGN.md. Every part renders through `Piece`, which tags it with data-part for the hub.
+// in DESIGN.md. Every part renders through `Piece`; `Part` tags it with data-part for the hub.
 import { Part, T, type PartProps } from "@klappe/design-system";
 import Box from "@mui/material/Box";
 import InputBase, { type InputBaseProps } from "@mui/material/InputBase";
@@ -18,9 +18,9 @@ import { ICON_PATHS, type IconName } from "@/lib/icons.generated";
 import { SEVERITY, words } from "@/lib/labels";
 import { t } from "@/lib/text";
 
-/** A part from DESIGN.md, marked with data-part so the hub's usage scan finds it in the built pages. */
-export function Piece({ name, ...rest }: PartProps) {
-  return <Part name={name} data-part={name} {...rest} />;
+/** A part from DESIGN.md. `Part` marks it with data-part, so the hub's usage scan finds it in the built pages. */
+export function Piece(props: PartProps) {
+  return <Part {...props} />;
 }
 
 /** A Material Symbols Outlined icon at weight 400, drawn inline. Decorative unless labelled. */

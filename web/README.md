@@ -9,7 +9,7 @@ The pages are a Next.js app (Pages Router, webpack, static export) built from Ma
 - Design: the frontmatter of the repository's `DESIGN.md` holds the colours with their Material roles, type, spacing, corner radii and components. `ds sync` writes `design/` from it (`spec.json`, `ds.css`, `tailwind.css`); the theme and every part are built from those files.
 - Copy: every visible string is in a copy document under `docs/content-management-system/` (`pages/` per page, `global/` for shared words). `ds sync` compiles them to `design/copy.json`, and the pages look words up through `createCopy(..., { onMissing: "throw" })`, `T` and `Lines`.
 - `ds.config.json` sets where `ds` reads and writes; run `ds` from this folder (`npm run sync`, and `npm run check` for the checks).
-- Content security: the local server sends `style-src 'self'` and allows inline scripts only by hash. `src/emotion.ts` writes Material UI's styles into constructed style sheets in the browser, and `scripts/postbuild.mjs` moves the styles rendered at build time into style sheet files and fails on any inline style or script.
+- Content security: the local server sends `style-src 'self'` and allows inline scripts only by hash. `createCspEmotionCache` from `@klappe/design-system/emotion` writes Material UI's styles into constructed style sheets in the browser, and `ds csp out` moves the styles rendered at build time into style sheet files and fails on any inline style or script.
 
 ## Public Build
 

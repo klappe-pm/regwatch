@@ -1,6 +1,5 @@
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
-import Switch from "@mui/material/Switch";
 import Typography from "@mui/material/Typography";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 
@@ -239,8 +238,9 @@ function ProviderKeyRow({ row, onSaved }: { row: ProviderKey; onSaved: Saved }) 
 /** An on and off switch, labelled by the text beside it. */
 function Toggle({ checked, labelledBy, disabled = false, onChange }: { checked: boolean; labelledBy: string; disabled?: boolean; onChange: () => void }) {
   return (
-    <Switch
-      data-part="switch"
+    <Piece
+      name="switch"
+      unlabeled
       size="small"
       checked={checked}
       disabled={disabled}
