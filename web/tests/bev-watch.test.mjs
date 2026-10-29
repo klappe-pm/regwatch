@@ -42,6 +42,32 @@ test("undo after importing a deleted product preserves the imported record and r
   assert.deepEqual(parseWorkspace(JSON.parse(JSON.stringify(restored))),restored);
 });
 
+test("a stale second tab cannot overwrite an already saved newer portfolio",()=>{
+  const data=new Map();
+  globalThis.localStorage={getItem:name=>data.get(name)??null,setItem:(name,value)=>data.set(name,value)};
+  const tabA=loadWorkspace();
+  const tabB=loadWorkspace();
+  const product={id:"example",name:"Tea",category:"Non-alcoholic beverages",ingredients:"Tea",markets:["United States"]};
+  assert.equal(saveWorkspace({...tabA,products:[product]},tabA),true);
+  assert.throws(()=>saveWorkspace({...tabB,reviewed:["label"]},tabB),/changed in another tab/);
+  const latest=loadWorkspace();
+  assert.deepEqual(latest.products,[product]);
+  assert.deepEqual(latest.reviewed,[]);
+  assert.equal(saveWorkspace({...latest,reviewed:["label"]},latest),true);
+  assert.deepEqual(loadWorkspace().products,[product]);
+  assert.deepEqual(loadWorkspace().reviewed,["label"]);
+});
+
+test("a stale tab cannot resurrect a workspace cleared elsewhere",()=>{
+  const data=new Map();
+  globalThis.localStorage={getItem:name=>data.get(name)??null,setItem:(name,value)=>data.set(name,value)};
+  saveWorkspace({...emptyWorkspace(),company:"Example Beverages"});
+  const stale=loadWorkspace();
+  data.delete(WORKSPACE_STORAGE);
+  assert.throws(()=>saveWorkspace({...stale,reviewed:["label"]},stale),/changed in another tab/);
+  assert.deepEqual(loadWorkspace(),emptyWorkspace());
+});
+
 test("exported briefings carry sample status and never claim monitoring is live",()=>{
   const text=briefingText({...emptyWorkspace(),company:"Example Beverages"});
   assert.match(text,/Bev Watch \| Example Beverages/);

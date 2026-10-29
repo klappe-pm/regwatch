@@ -36,6 +36,7 @@ export default function WorkspacePage() {
   const [ready,setReady] = useState(false);
   const [notice,setNotice] = useState("");
   const [error,setError] = useState("");
+  const [conflict,setConflict] = useState(false);
   const [query,setQuery] = useState("");
   const [filter,setFilter] = useState("all");
   const [expanded,setExpanded] = useState<string|null>(null);
@@ -47,9 +48,13 @@ export default function WorkspacePage() {
   const importRef = useRef<HTMLInputElement>(null);
   useEffect(()=>{const w=loadWorkspace();setWorkspace(w);setDraftName(w.company);setDraftCadence(w.cadence);setReady(true);},[]);
   useEffect(()=>{setNotice("");setError("");setQuery("");setFilter("all");setExpanded(null);},[view]);
-  function update(next:Workspace,message="Saved in this browser."):boolean {
-    if (!saveWorkspace(next)) {setError("Your browser could not save this change. Allow site storage and try again.");return false;}
-    setWorkspace(next);setNotice(message);setError("");return true;
+  function update(next:Workspace,message="Saved in this browser.",replace=false):boolean {
+    try {
+      if (!saveWorkspace(next,replace?undefined:workspace)) {setError("Your browser could not save this change. Allow site storage and try again.");return false;}
+    } catch (reason) {
+      setConflict(true);setNotice("");setError(reason instanceof Error?reason.message:"Reload the workspace before saving again.");return false;
+    }
+    setWorkspace(next);setNotice(message);setError("");setConflict(false);return true;
   }
   function saveProduct(product:Product) {
     const products=workspace.products.some(p=>p.id===product.id)?workspace.products.map(p=>p.id===product.id?product:p):[...workspace.products,product];
@@ -61,12 +66,12 @@ export default function WorkspacePage() {
       if(file.size>1024*1024)throw new Error("Choose a workspace export smaller than 1 MB.");
       const restored=parseWorkspace(JSON.parse(await file.text()));
       if(!restored)throw new Error("This file is not a valid Bev Watch workspace export.");
-      if(update(restored,"Workspace restored in this browser.")){setDraftName(restored.company);setDraftCadence(restored.cadence);setDeleted(null);setEditing(null);}
+      if(update(restored,"Workspace restored in this browser.",true)){setDraftName(restored.company);setDraftCadence(restored.cadence);setDeleted(null);setEditing(null);}
     }catch(reason){setError(reason instanceof Error?reason.message:"Could not import the workspace.");}
     if(importRef.current)importRef.current.value="";
   }
   function clearWorkspace() {
-    try {localStorage.removeItem(WORKSPACE_STORAGE);const w=emptyWorkspace();setWorkspace(w);setDraftName("");setDraftCadence("Weekly");setConfirmClear(false);setDeleted(null);setNotice("This browser workspace has been cleared.");setError("");}
+    try {localStorage.removeItem(WORKSPACE_STORAGE);const w=emptyWorkspace();setWorkspace(w);setDraftName("");setDraftCadence("Weekly");setConfirmClear(false);setDeleted(null);setNotice("This browser workspace has been cleared.");setError("");setConflict(false);}
     catch {setError("Your browser could not clear the workspace. Clear this site's storage in browser settings.");}
   }
   const pending=SAMPLE_UPDATES.filter(u=>!workspace.reviewed.includes(u.id));
@@ -78,7 +83,7 @@ export default function WorkspacePage() {
     <div className="bw-workspace-body"><header className="bw-workspace-top"><span>{current.label}</span><Link href="/privacy/">Saved on this device <Icon name="lock" size={15}/></Link></header><main id="workspace-main">
       <div className="bw-preview-banner"><Icon name="article" size={20}/><p><strong>Preview workspace.</strong> Regulatory updates are synthetic examples. Live monitoring, email, accounts, and paid subscriptions are not active.</p></div>
       <header className="bw-page-heading"><div><h1>{view==="overview"?"Your next move, in focus.":current.label}</h1><p>{({overview:"A clear place to review what could matter to your beverage business.",updates:"Explore the review workflow using illustrative regulatory updates.",portfolio:"Keep your products, ingredients, and market context together.",sources:"Choose the official sources you want on your watchlist.",briefings:"A useful starting point for your next regulatory conversation.",membership:"Your access and subscription details, in one place.",settings:"Your workspace, preferences, and data."} as Record<string,string>)[view]}</p></div>{view==="overview" && <Link href="/workspace/?view=portfolio" className="bw-button"><Icon name="add" size={19}/>Add a product</Link>}{view==="portfolio" && !editing && <button type="button" className="bw-button" onClick={()=>setEditing("new")}><Icon name="add" size={19}/>Add product</button>}</header>
-      {notice && <p className="bw-notice" role="status">{notice}</p>}{error && <p className="bw-error" role="alert">{error}</p>}
+      {notice && <p className="bw-notice" role="status">{notice}</p>}{error && <p className="bw-error" role="alert">{error}</p>}{conflict && <button type="button" className="bw-outline" onClick={()=>window.location.reload()}>Reload workspace</button>}
       {!ready ? <p aria-live="polite">Loading your browser workspace…</p> : <>
       {view==="overview" && <>
         {!workspace.completed && <div className="bw-setup-callout"><div><h2>Make This Workspace Yours.</h2><p>Choose your beverages, markets, and sources in a few simple steps.</p></div><Link href="/onboarding/" className="bw-button">Complete setup <Icon name="arrow_forward" size={19}/></Link></div>}

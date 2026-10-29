@@ -14,8 +14,10 @@ export default function OnboardingPage() {
   const [workspace, setWorkspace] = useState<Workspace>(emptyWorkspace);
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState(false);
+  const baseline = useRef<Workspace>(emptyWorkspace());
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { setWorkspace(loadWorkspace()); }, []);
+  useEffect(() => { const loaded=loadWorkspace();setWorkspace(loaded);baseline.current=loaded; }, []);
   function change(patch: Partial<Workspace>) { setWorkspace(w => ({...w, ...patch})); setError(""); }
   function go(next: number) { setStep(next); setError(""); window.setTimeout(() => heading.current?.focus(), 0); }
   function submit(event: FormEvent) {
@@ -25,7 +27,12 @@ export default function OnboardingPage() {
     if (step === 2 && workspace.sources.length === 0) { setError("Choose at least one source for your watchlist."); return; }
     const next = {...workspace, company: workspace.company.trim(), completed: step === 4 || workspace.completed};
     if (step === 1) next.sources = next.sources.filter(id => SOURCES.some(s=>s.id===id && next.markets.includes(s.market)));
-    if (!saveWorkspace(next)) { setError("Your browser could not save the workspace. Allow site storage, then try again."); return; }
+    try {
+      if (!saveWorkspace(next,baseline.current)) { setError("Your browser could not save the workspace. Allow site storage, then try again."); return; }
+    } catch (reason) {
+      setConflict(true);setError(reason instanceof Error?reason.message:"Reload the workspace before saving again.");return;
+    }
+    baseline.current=next;
     setWorkspace(next);
     if (step === 4) router.push("/workspace/"); else go(step + 1);
   }
@@ -44,6 +51,7 @@ export default function OnboardingPage() {
         {step===3 && <><fieldset><legend>Preferred briefing frequency</legend><div className="bw-choice-grid">{(["Daily","Weekly"] as const).map(c=><label className={`bw-choice ${workspace.cadence===c?"is-selected":""}`} key={c}><input type="radio" name="cadence" checked={workspace.cadence===c} onChange={()=>change({cadence:c})}/><span>{c}</span></label>)}</div></fieldset><div className="bw-note"><Icon name="article"/><p>You can export a sample briefing from your workspace. This preference is saved for future setup; it does not schedule a run or an email.</p></div></>}
         {step===4 && <><dl className="bw-summary"><div><dt>Business</dt><dd>{workspace.company}</dd></div><div><dt>Beverages</dt><dd>{workspace.categories.join(", ")}</dd></div><div><dt>Markets</dt><dd>{workspace.markets.join(", ")}</dd></div><div><dt>Sources</dt><dd>{SOURCES.filter(s=>workspace.sources.includes(s.id)).map(s=>s.short).join(", ")}</dd></div><div><dt>Briefing preference</dt><dd>{workspace.cadence}</dd></div></dl><div className="bw-note"><Icon name="check_circle"/><p>Preview access is free. No card, account, live monitoring, or paid subscription is created.</p></div></>}
         {error && <p role="alert" className="bw-error">{error}</p>}
+        {conflict && <button type="button" className="bw-outline" onClick={()=>window.location.reload()}>Reload workspace</button>}
         <div className="bw-form-actions">{step>0 ? <button className="bw-text-link" type="button" onClick={()=>go(step-1)}>Back</button> : <Link href="/" className="bw-text-link">Back to website</Link>}<button type="submit" className="bw-button">{step===4?"Open my workspace":"Continue"}<Icon name="arrow_forward" size={20}/></button></div>
         <p className="bw-form-footer">For human review. Not legal advice. <Link href="/privacy/">Your data</Link></p>
       </form>

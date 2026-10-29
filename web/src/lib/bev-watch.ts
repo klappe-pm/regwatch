@@ -36,8 +36,23 @@ export function parseWorkspace(value: unknown): Workspace | null {
 export function loadWorkspace(): Workspace {
   try { return parseWorkspace(JSON.parse(localStorage.getItem(WORKSPACE_STORAGE) || "null")) || emptyWorkspace(); } catch { return emptyWorkspace(); }
 }
-export function saveWorkspace(workspace: Workspace): boolean {
-  try { localStorage.setItem(WORKSPACE_STORAGE, JSON.stringify(workspace)); return true; } catch { return false; }
+export class WorkspaceConflict extends Error {
+  constructor() { super("This workspace changed in another tab. Reload the workspace to load the latest saved data before trying again."); }
+}
+/** Ordinary saves check their loaded snapshot; an explicit import can replace it. */
+export function saveWorkspace(workspace: Workspace, expected?: Workspace): boolean {
+  try {
+    if (expected) {
+      const raw = localStorage.getItem(WORKSPACE_STORAGE);
+      const current = raw === null ? emptyWorkspace() : parseWorkspace(JSON.parse(raw));
+      if (current === null || JSON.stringify(current) !== JSON.stringify(expected)) throw new WorkspaceConflict();
+    }
+    localStorage.setItem(WORKSPACE_STORAGE, JSON.stringify(workspace));
+    return true;
+  } catch (reason) {
+    if (reason instanceof WorkspaceConflict) throw reason;
+    return false;
+  }
 }
 export function toggleValue(values: string[], value: string): string[] { return values.includes(value) ? values.filter(x => x !== value) : [...values, value]; }
 /** Undo must preserve an imported product with the same identity. */

@@ -23,7 +23,7 @@ npm --prefix "$HOME/projects/regwatch/web" run build
 
 ## Preview Data Contract
 
-The public workspace uses the versioned `Workspace` schema in `src/lib/bev-watch.ts`, persisted in browser local storage. Onboarding, portfolio editing, source preferences, review state, backup import/export, and sample briefing export work locally in the browser. Imports validate the schema before replacing a workspace, and undo preserves an imported product's identity.
+The public workspace uses the versioned `Workspace` schema in `src/lib/bev-watch.ts`, persisted in browser local storage. Onboarding, portfolio editing, source preferences, review state, backup import/export, and sample briefing export work locally in the browser. Imports validate the schema before replacing a workspace, and undo preserves an imported product's identity. Ordinary workspace and onboarding saves compare their loaded snapshot with stored data and prompt a reload if another tab saved changes. Import and confirmed clearing remain deliberate replacement operations. Browser storage is a preview mechanism, not a transactional database or device synchronization service.
 
 Regulatory examples are synthetic and explicitly labeled. Source links navigate to official websites; they do not verify or substantiate the invented updates. The preview performs no scheduled monitoring and sends no emails. It does not create accounts, synchronize data between devices, collect payments, or grant paid entitlements.
 
