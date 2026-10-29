@@ -44,6 +44,17 @@ MESSAGE_PREFIXES = (
     "https://github.com/zloirock/core-js",
     "https://tailwindcss.com",
 )
+# Public preview links navigate only when selected. They never load remote assets.
+SOURCE_LINKS = {
+    "https://www.fda.gov/food",
+    "https://www.fda.gov/food/food-labeling-nutrition",
+    "https://www.ttb.gov/",
+    "https://www.federalregister.gov/",
+    "https://www.canada.ca/en/health-canada.html",
+    "https://www.food.gov.uk/",
+    "https://eur-lex.europa.eu/",
+    "https://www.foodstandards.gov.au/",
+}
 
 
 def built_files() -> list[Path]:
@@ -64,7 +75,7 @@ def test_the_build_holds_no_link_or_hidden_file() -> None:
 
 
 def allowed(url: str) -> bool:
-    if url in NAMESPACES or url.startswith(MESSAGE_PREFIXES):
+    if url in NAMESPACES or url in SOURCE_LINKS or url.startswith(MESSAGE_PREFIXES):
         return True
     # A one-label host such as http://n is a base for parsing relative addresses
     # or a polyfill's self-test; it cannot name a server on the internet.
@@ -85,6 +96,18 @@ def test_no_built_file_refers_to_another_origin() -> None:
 
 @pytest.mark.parametrize("url", ["https://cdn.example.com/x.js", "http://fonts.example/f.woff2"])
 def test_the_scan_refuses_a_real_remote_address(url: str) -> None:
+    assert not allowed(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.fda.gov.evil.example/food",
+        "https://www.fda.gov/unlisted.js",
+        "http://www.fda.gov/food",
+    ],
+)
+def test_source_navigation_exceptions_are_exact(url: str) -> None:
     assert not allowed(url)
 
 

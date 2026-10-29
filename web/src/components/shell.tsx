@@ -11,6 +11,8 @@ import type { SearchResults } from "@/lib/types";
 
 import { Icon } from "./icon";
 import { useStatus } from "./status";
+import { Brand } from "./brand";
+import { isPublicPage } from "@/lib/bev-watch";
 
 const NAV: { href: string; label: string; icon: IconName; premium?: boolean }[] = [
   { href: "/", label: "Overview", icon: "dashboard" },
@@ -233,6 +235,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const compact = collapsed || narrow;
 
+  if (isPublicPage(pathname)) return <>{children}</>;
+
   function toggle() {
     setCollapsed((value) => {
       writeCollapsed(!value);
@@ -256,12 +260,10 @@ export function Shell({ children }: { children: ReactNode }) {
       >
         <div className={`flex h-14 items-center border-b border-line ${compact ? "justify-center" : "px-4"}`}>
           {compact ? (
-            <span className="text-lg font-semibold text-structure" aria-label="Regwatch">
-              R
-            </span>
+            <Brand compact/>
           ) : (
             <div className="min-w-0">
-              <p className="text-base font-semibold leading-5">Regwatch</p>
+              <Brand/>
               <p className="truncate text-xs text-muted">{status ? status.project : " "}</p>
             </div>
           )}
@@ -318,7 +320,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="mx-auto max-w-6xl">
           {children}
           <p className="mt-12 border-t border-line pt-4 text-xs text-muted">
-            Regwatch flags candidates for human review. It is not legal advice.
+            Bev Watch flags candidates for human review. It is not legal advice.
             {status ? ` Version ${status.version}.` : ""}
           </p>
         </div>

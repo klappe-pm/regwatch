@@ -11,6 +11,7 @@
     "icons": "node scripts/make-icons.mjs",
     "typecheck": "node scripts/make-icons.mjs && tsc --noEmit",
     "build": "node scripts/make-icons.mjs && next build && node scripts/copy-export.mjs",
+    "build:site": "node scripts/build-site.mjs",
     "dev": "node scripts/make-icons.mjs && next dev",
     "test": "node --test tests/*.test.mjs"
   },

@@ -38,7 +38,7 @@ GITHUB_FILES = {
 # Pages that quote attribution lines on purpose, because the page is about them.
 QUOTES_ATTRIBUTION: set[str] = set()
 # Pages kept out of the public tree. They are ignored by git and may exist in a working copy.
-UNPUBLISHED = (DOCS / "documentation-guide",)
+UNPUBLISHED = (DOCS / "documentation-guide", ROOT / "local")
 
 # node_modules and out are the web app's dependencies and Next.js output, both ignored by git.
 SKIP_DIRS = {
@@ -67,7 +67,7 @@ TEXT_SUFFIXES = {
     ".yml",
 }
 TEXT_NAMES = {"LICENSE", ".editorconfig", ".gitattributes", ".gitignore"}
-RESERVED_NAMES = {*COMMUNITY_FILES, "PULL_REQUEST_TEMPLATE.md"}
+RESERVED_NAMES = {*COMMUNITY_FILES, "PULL_REQUEST_TEMPLATE.md", "PRODUCT.md", "DESIGN.md"}
 CHANGE_KINDS = {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"}
 AGENT_FILES = ("AGENTS.md", "CLAUDE.md", "CODEX.md", "GEMINI.md")
 

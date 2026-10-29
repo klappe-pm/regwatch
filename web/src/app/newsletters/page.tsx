@@ -137,7 +137,7 @@ export default function NewslettersPage() {
     <>
       <PageHeader
         title="Newsletters"
-        description="A send-ready newsletter assembled from the period's changes, as HTML email with a plain text part. Regwatch does not send email; you review it and send it from your own mail tool."
+        description="A send-ready newsletter assembled from the period's changes, as HTML email with a plain text part. Bev Watch does not send email; you review it and send it from your own mail tool."
       />
       {view === "loading" ? <Loading /> : null}
       {view === "error" && error ? <ErrorNote message={error} /> : null}

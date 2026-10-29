@@ -8,9 +8,9 @@ import { Loading } from "@/components/ui";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Regwatch",
-  description: "Regulatory changes and their candidate impacts, for human review.",
-  robots: { index: false, follow: false },
+  title: { default: "Bev Watch | Beverage regulation, in focus", template: "%s | Bev Watch" },
+  description: "Bring your beverage products, markets, and regulatory source reviews into one clear workspace.",
+  robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = {

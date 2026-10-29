@@ -37,7 +37,8 @@ def test_the_web_logic_tests_pass() -> None:
     files = sorted(str(path) for path in WEB_TESTS.glob("*.test.mjs"))
     assert files, "web/tests/ holds no test file"
     result = subprocess.run(  # noqa: S603 (an argument list of repository test files)
-        [node, "--test", *files],
+        # The default reporter changes with terminal detection; the assertion below is TAP.
+        [node, "--test", "--test-reporter=tap", *files],
         cwd=ROOT / "web",
         capture_output=True,
         text=True,

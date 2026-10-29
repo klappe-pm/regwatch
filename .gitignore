@@ -24,6 +24,10 @@ site/
 /web/node_modules/
 /web/.next/
 /web/out/
+/web/site/
+/web/.vercel/
+/local/
+/.impeccable/review/
 /web/next-env.d.ts
 /web/src/lib/icons.generated.ts
 /web/tsconfig.tsbuildinfo

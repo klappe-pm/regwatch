@@ -63,7 +63,7 @@ export default function BriefingsPage() {
     <>
       <PageHeader
         title="Briefings"
-        description="The briefings Regwatch builds from your register, rendered here and ready to export."
+        description="The briefings Bev Watch builds from your register, rendered here and ready to export."
         actions={
           <>
             <ButtonLink href={`/api/briefing/export?${query}&format=md`} download>
