@@ -28,6 +28,8 @@ jobs:
           package-manager-cache: false
       - name: install the web app from the lockfile
         run: npm --prefix web ci --include=dev --ignore-scripts --no-audit --no-fund
+      - name: generate the icon module
+        run: npm --prefix web run icons
       - name: design, copy and type checks
         run: npm --prefix web run check
       - name: logic and copy tests
