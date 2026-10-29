@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
+import shutil
 from pathlib import Path
 
 import pytest
 from conftest import ROOT
+
+from regwatch.system import CommandResult, run_command
 
 pytestmark = pytest.mark.repo_only
 
@@ -188,20 +190,56 @@ def tracked_github_files() -> set[str]:
 
     Falls back to a directory listing when git is unavailable or the tree is not a checkout.
     """
-    try:
-        out = subprocess.run(
-            ["git", "ls-files", ".github"], cwd=ROOT, capture_output=True, text=True, check=True
-        ).stdout
-        files = {line for line in out.splitlines() if line}
-        if files:
-            return files
-    except (OSError, subprocess.CalledProcessError):
-        pass
+    git = shutil.which("git")
+    if git is not None:
+        result = run_command([git, "-C", str(ROOT), "ls-files", ".github"])
+        if result.returncode == 0:
+            files = {line for line in result.stdout.splitlines() if line}
+            if files:
+                return files
     return {p.relative_to(ROOT).as_posix() for p in (ROOT / ".github").rglob("*") if p.is_file()}
 
 
 def test_github_holds_only_the_allowed_files() -> None:
     assert tracked_github_files() == GITHUB_FILES
+
+
+def test_tracked_github_files_uses_resolved_git_and_the_program_runner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+
+    def run(args: list[str]) -> CommandResult:
+        calls.append(args)
+        return CommandResult(0, ".github/tracked.yml\n")
+
+    monkeypatch.setattr(f"{__name__}.ROOT", tmp_path)
+    monkeypatch.setattr(shutil, "which", lambda name: "/synthetic/bin/git")
+    monkeypatch.setattr(f"{__name__}.run_command", run, raising=False)
+
+    assert tracked_github_files() == {".github/tracked.yml"}
+    assert calls == [["/synthetic/bin/git", "-C", str(tmp_path), "ls-files", ".github"]]
+
+
+@pytest.mark.parametrize("available", [False, True])
+def test_tracked_github_files_falls_back_when_git_is_missing_or_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, available: bool
+) -> None:
+    folder = tmp_path / ".github"
+    folder.mkdir()
+    (folder / "fallback.yml").write_text("name: example\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def run(args: list[str]) -> CommandResult:
+        calls.append(args)
+        return CommandResult(128, "", "not a repository")
+
+    monkeypatch.setattr(f"{__name__}.ROOT", tmp_path)
+    monkeypatch.setattr(shutil, "which", lambda name: "/synthetic/bin/git" if available else None)
+    monkeypatch.setattr(f"{__name__}.run_command", run, raising=False)
+
+    assert tracked_github_files() == {".github/fallback.yml"}
+    assert len(calls) == int(available)
 
 
 def test_there_is_one_docs_tree() -> None:

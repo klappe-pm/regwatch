@@ -378,7 +378,7 @@ def _str_list(
 def _integer(
     table: dict[str, Any], key: str, section: str, default: int, low: int, high: int
 ) -> int:
-    value = table.get(key, default)
+    value: object = table.get(key, default)
     if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
         raise ConfigError(f"[{section}] {key} must be an integer from {low} to {high}")
     return value

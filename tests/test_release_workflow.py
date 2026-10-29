@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import re
-import subprocess
+import shutil
+from pathlib import Path
 
 import pytest
 from conftest import ROOT
+
+from regwatch.system import CommandResult, run_command
 
 pytestmark = pytest.mark.repo_only
 
@@ -32,16 +35,40 @@ def run_commands(block: str) -> list[str]:
 
 
 def test_only_the_release_workflow_exists() -> None:
-    try:
-        out = subprocess.run(
-            ["git", "ls-files", ".github/workflows"], cwd=ROOT, capture_output=True, text=True, check=True
-        ).stdout
-        workflows = sorted(line.rsplit("/", 1)[-1] for line in out.splitlines() if line)
-    except (OSError, subprocess.CalledProcessError):
-        workflows = []
+    workflows = []
+    git = shutil.which("git")
+    if git is not None:
+        result = run_command([git, "-C", str(ROOT), "ls-files", ".github/workflows"])
+        if result.returncode == 0:
+            workflows = sorted(
+                line.rsplit("/", 1)[-1] for line in result.stdout.splitlines() if line
+            )
     if not workflows:
         workflows = sorted(p.name for p in WORKFLOW.parent.iterdir())
     assert workflows == ["release.yml"]
+
+
+def test_workflow_inventory_uses_resolved_git_and_the_program_runner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    folder = tmp_path / ".github" / "workflows"
+    folder.mkdir(parents=True)
+    (folder / "release.yml").write_text("name: example\n", encoding="utf-8")
+    (folder / "ignored.yml").write_text("name: ignored\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def run(args: list[str]) -> CommandResult:
+        calls.append(args)
+        return CommandResult(0, ".github/workflows/release.yml\n")
+
+    monkeypatch.setattr(f"{__name__}.ROOT", tmp_path)
+    monkeypatch.setattr(f"{__name__}.WORKFLOW", folder / "release.yml")
+    monkeypatch.setattr(shutil, "which", lambda name: "/synthetic/bin/git")
+    monkeypatch.setattr(f"{__name__}.run_command", run, raising=False)
+
+    test_only_the_release_workflow_exists()
+
+    assert calls == [["/synthetic/bin/git", "-C", str(tmp_path), "ls-files", ".github/workflows"]]
 
 
 def test_the_jobs_are_build_test_and_publish() -> None:
