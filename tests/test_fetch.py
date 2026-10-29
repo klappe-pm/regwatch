@@ -7,6 +7,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -54,6 +55,7 @@ class Network:
     def connector(self, address: str, port: int, timeout: float) -> socket.socket:
         self.connected.append((address, port))
         client, server = socket.socketpair()
+        server.settimeout(timeout)
         self.clients.append(client)
         handler = self.handlers.pop(0)
         threading.Thread(target=self._serve, args=(server, handler), daemon=True).start()
@@ -68,6 +70,18 @@ class Network:
             data = b""
             while b"\r\n\r\n" not in data:
                 chunk = server.recv(4096)
+                if not chunk:
+                    return
+                data += chunk
+            headers, separator, _body = data.partition(b"\r\n\r\n")
+            content_length = 0
+            for line in headers.split(b"\r\n")[1:]:
+                name, _colon, value = line.partition(b":")
+                if name.lower() == b"content-length":
+                    content_length = int(value.strip())
+            expected = len(headers) + len(separator) + content_length
+            while len(data) < expected:
+                chunk = server.recv(min(4096, expected - len(data)))
                 if not chunk:
                     return
                 data += chunk
@@ -98,6 +112,42 @@ def make(network: Network, **kwargs: object) -> SafeFetcher:
 
 def web(*handlers: Handler, hosts: dict[str, list[str]] | None = None) -> Network:
     return Network(hosts or {"example.org": [PUBLIC]}, list(handlers))
+
+
+@pytest.mark.parametrize("delivery", ["headers-first", "split-header-and-body", "single-read"])
+def test_fake_network_records_the_complete_request_body(delivery: str) -> None:
+    body = b'{"sample": "beverage"}'
+    headers = f"POST /example HTTP/1.1\r\nContent-Length: {len(body)}\r\n\r\n".encode()
+    fragments = {
+        "headers-first": [headers, body[:4], body[4:]],
+        "split-header-and-body": [headers[:7], headers[7:], body],
+        "single-read": [headers + body],
+    }
+    server = Mock(spec=socket.socket)
+    server.recv.side_effect = fragments[delivery]
+    network = Network({}, [])
+    response = ok()
+
+    network._serve(server, response)
+
+    assert network.requests == [headers + body]
+    server.sendall.assert_called_once_with(response)
+    server.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("ending", [b"", TimeoutError("fixture receive timed out")])
+def test_fake_network_does_not_record_or_answer_an_incomplete_request_body(
+    ending: bytes | OSError,
+) -> None:
+    server = Mock(spec=socket.socket)
+    server.recv.side_effect = [b"POST /example HTTP/1.1\r\nContent-Length: 3\r\n\r\n", b"x", ending]
+    network = Network({}, [])
+
+    network._serve(server, ok())
+
+    assert network.requests == []
+    server.sendall.assert_not_called()
+    server.close.assert_called_once_with()
 
 
 # --- URL checks ---------------------------------------------------------------
