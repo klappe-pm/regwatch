@@ -1,0 +1,51 @@
+# Onboarding Copy
+
+Managed text for the onboarding copy surface. Edit a value after its key, then rebuild the web app.
+
+- `your-business`: Your business
+- `your-markets`: Your markets
+- `your-sources`: Your sources
+- `your-briefing`: Your briefing
+- `ready-to-review`: Ready to review
+- `add-your-business-name-and-choose-at`: Add your business name and choose at least one beverage category.
+- `choose-at-least-one-market-to-continue`: Choose at least one market to continue.
+- `choose-at-least-one-source-for-your`: Choose at least one source for your watchlist.
+- `your-browser-could-not-save-the-workspace`: Your browser could not save the workspace. Allow site storage, then try again.
+- `reload-the-workspace-before-saving-again`: Reload the workspace before saving again.
+- `explore-first`: Explore first
+- `a-watchlist`: A watchlist
+- `that-knows`: that knows
+- `your-business-2`: your business.
+- `setup-progress`: Setup progress
+- `your-choices-are-saved-in-this-browser`: Your choices are saved in this browser as you continue. No account or payment is created.
+- `step`: Step
+- `of`: of
+- `what-do-you-make`: What do you make?
+- `where-do-you-sell`: Where do you sell?
+- `build-your-source-list`: Build your source list.
+- `make-the-briefing-yours`: Make the briefing yours.
+- `your-watchlist-is-ready`: Your watchlist is ready.
+- `start-with-the-business-and-beverage-categories`: Start with the business and beverage categories you want to keep in focus.
+- `choose-your-current-markets-you-can-add`: Choose your current markets. You can add more as your business grows.
+- `choose-the-official-sources-your-team-wants`: Choose the official sources your team wants to review. These are watchlist preferences; live monitoring is not active.
+- `set-your-preferred-review-rhythm-email-delivery`: Set your preferred review rhythm. Email delivery is not active in the public preview.
+- `review-your-choices-then-explore-the-workspace`: Review your choices, then explore the workspace with clearly labeled sample updates.
+- `business-name`: Business name
+- `your-beverage-business`: Your beverage business
+- `beverage-categories`: Beverage categories
+- `markets`: Markets
+- `sources-for-your-selected-markets`: Sources for your selected markets
+- `preferred-briefing-frequency`: Preferred briefing frequency
+- `you-can-export-a-sample-briefing-from`: You can export a sample briefing from your workspace. This preference is saved for future setup; it does not schedule a run or an email.
+- `business`: Business
+- `beverages`: Beverages
+- `sources`: Sources
+- `briefing-preference`: Briefing preference
+- `preview-access-is-free-no-card-account`: Preview access is free. No card, account, live monitoring, or paid subscription is created.
+- `reload-workspace`: Reload workspace
+- `back`: Back
+- `back-to-website`: Back to website
+- `open-my-workspace`: Open my workspace
+- `continue`: Continue
+- `for-human-review-not-legal-advice`: For human review. Not legal advice.
+- `your-data`: Your data

@@ -25,6 +25,8 @@ site/
 /web/.next/
 /web/out/
 /web/site/
+/web/.site-verified-*/
+/web/.site-before-managed-*/
 /web/.vercel/
 /local/
 /.impeccable/review/

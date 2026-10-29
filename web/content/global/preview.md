@@ -1,0 +1,72 @@
+# Preview Data Copy
+
+Managed text for the preview data copy surface. Edit a value after its key, then rebuild the web app.
+
+- `bev-watch`: Bev Watch
+- `non-alcoholic-beverages`: Non-alcoholic beverages
+- `beer-cider`: Beer & cider
+- `wine`: Wine
+- `spirits`: Spirits
+- `functional-beverages`: Functional beverages
+- `cannabis-hemp-beverages`: Cannabis & hemp beverages
+- `united-states`: United States
+- `canada`: Canada
+- `united-kingdom`: United Kingdom
+- `european-union`: European Union
+- `australia-new-zealand`: Australia & New Zealand
+- `food-drug-administration`: Food & Drug Administration
+- `fda`: FDA
+- `ingredients-labeling-food-safety`: Ingredients, labeling & food safety
+- `alcohol-and-tobacco-tax-and-trade-bureau`: Alcohol and Tobacco Tax and Trade Bureau
+- `ttb`: TTB
+- `alcohol-labeling-formulas-permits`: Alcohol labeling, formulas & permits
+- `federal-register`: Federal Register
+- `fr`: FR
+- `proposed-and-final-federal-rules`: Proposed and final federal rules
+- `health-canada`: Health Canada
+- `hc`: HC
+- `food-standards-product-labeling`: Food standards & product labeling
+- `food-standards-agency`: Food Standards Agency
+- `fsa`: FSA
+- `food-safety-guidance-alerts`: Food safety, guidance & alerts
+- `eur-lex`: EUR-Lex
+- `eu`: EU
+- `european-union-legislation`: European Union legislation
+- `food-standards-australia-new-zealand`: Food Standards Australia New Zealand
+- `fsanz`: FSANZ
+- `food-standards-consultations`: Food standards & consultations
+- `daily`: Daily
+- `weekly`: Weekly
+- `this-workspace-changed-in-another-tab-reload`: This workspace changed in another tab. Reload the workspace to load the latest saved data before trying again.
+- `a-labeling-proposal-appears-in-your-market`: A labeling proposal appears in your market
+- `labeling`: Labeling
+- `review-first`: Review first
+- `an-illustrative-proposal-would-change-how-a`: An illustrative proposal would change how a beverage label presents a nutrient claim. Compare the proposal with your product claims and identify where a label review would be needed.
+- `review-affected-labels-and-record-a-decision`: Review affected labels and record a decision with your regulatory reviewer.
+- `an-ingredient-consultation-opens-for-comment`: An ingredient consultation opens for comment
+- `ingredients`: Ingredients
+- `watch`: Watch
+- `this-sample-consultation-demonstrates-how-an-ingredient`: This sample consultation demonstrates how an ingredient mentioned in your portfolio could be surfaced for review. It is invented and does not describe a current proceeding.
+- `check-whether-the-ingredient-is-used-in`: Check whether the ingredient is used in your portfolio and whether a response is appropriate.
+- `alcohol-label-guidance-is-revised`: Alcohol label guidance is revised
+- `alcohol`: Alcohol
+- `an-invented-guidance-change-shows-how-alcohol`: An invented guidance change shows how alcohol-specific updates could reach your team. A qualified reviewer must verify actual guidance before deciding what to change.
+- `compare-your-label-approval-workflow-with-the`: Compare your label approval workflow with the primary source.
+- `a-food-standard-changes-in-a-second`: A food standard changes in a second market
+- `standards`: Standards
+- `this-synthetic-example-illustrates-cross-market-monitoring`: This synthetic example illustrates cross-market monitoring. It does not describe an actual change to Canadian food standards.
+- `assign-a-reviewer-for-products-sold-in`: Assign a reviewer for products sold in this market.
+- `a-workspace-for-your-beverage-portfolio`: A workspace for your beverage portfolio
+- `market-and-source-selection`: Market and source selection
+- `a-prioritized-review-queue`: A prioritized review queue
+- `briefing-export`: Briefing export
+- `saved-review-decisions`: Saved review decisions
+- `your-workspace`: Your workspace
+- `preview-briefing-all-regulatory-updates-below-are`: Preview briefing. All regulatory updates below are synthetic examples, not current regulatory information.
+- `not-selected`: Not selected
+- `no-products-added`: No products added
+- `for-human-review-not-legal-advice-no`: For human review. Not legal advice. No live monitoring or email delivery is active in this preview.
+- `briefing-markets`: Markets:
+- `briefing-products`: Products:
+- `briefing-review`: Suggested review:
+- `briefing-source`: Example source homepage:

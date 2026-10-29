@@ -1,0 +1,55 @@
+# Landing Copy
+
+Managed text for the landing copy surface. Edit a value after its key, then rebuild the web app.
+
+- `1`: 1
+- `2`: 2
+- `3`: 3
+- `the-rules-change`: The rules change.
+- `keep-your-next`: Keep your next
+- `move-in-focus`: move in focus.
+- `beverage-regulation-is-a-lot-to-keep`: Beverage regulation is a lot to keep up with. Bring your products, markets, and source reviews into one clear workspace.
+- `build-your-watchlist`: Build your watchlist
+- `explore-the-preview`: Explore the preview
+- `made-for-beverage-founders-operators-and-regulatory`: Made for beverage founders, operators, and regulatory teams.
+- `illustrative-bev-watch-briefing`: Illustrative Bev Watch briefing
+- `your-beverage-briefing`: Your beverage briefing
+- `preview`: PREVIEW
+- `a-clearer-view-of-what-needs-review`: A clearer view of what needs review
+- `your-portfolio`: Your portfolio.
+- `your-priorities`: Your priorities.
+- `united-states`: United States
+- `non-alcoholic-beverages`: Non-alcoholic beverages
+- `review-first`: Review first
+- `a-labeling-proposal-appears-in-your-market`: A Labeling Proposal Appears in Your Market
+- `connect-the-source-to-the-product-then`: Connect the source to the product, then decide what needs a closer look.
+- `fda`: FDA
+- `labeling-claims`: Labeling & claims
+- `watch`: Watch
+- `an-ingredient-consultation-opens`: An Ingredient Consultation Opens
+- `fr`: FR
+- `ingredients-standards`: Ingredients & standards
+- `synthetic-examples-no-current-regulatory-claims`: Synthetic examples. No current regulatory claims.
+- `start-with-the-sources`: Start with the sources
+- `your-business-follows`: your business follows.
+- `ttb`: TTB
+- `federal-register`: Federal Register
+- `health-canada`: Health Canada
+- `eur-lex`: EUR-Lex
+- `less-searching`: Less searching.
+- `more-perspective`: More perspective.
+- `a-useful-regulatory-workflow-starts-with-your`: A useful regulatory workflow starts with your business. Set the context once, then keep the review organized.
+- `set-up-your-workspace`: Set up your workspace
+- `tell-us-what-you-make`: Tell Us What You Make.
+- `add-your-beverage-categories-ingredients-and-products`: Add your beverage categories, ingredients, and products so your portfolio has a place in the conversation.
+- `choose-where-you-sell`: Choose Where You Sell.
+- `build-a-watchlist-around-your-markets-and`: Build a watchlist around your markets and the official sources you want your team to review.
+- `turn-information-into-a-review`: Turn Information into a Review.
+- `work-through-the-queue-save-relevant-updates`: Work through the queue, save relevant updates, and export a briefing to share with a qualified reviewer.
+- `a-little-more-clarity`: A little more clarity.
+- `a-lot-less-noise`: A lot less noise.
+- `one-source-can-affect-a-formulation-a`: One source can affect a formulation, a label, or a launch. Bev Watch keeps the context close to the information, so your team can make the call.
+- `the-public-preview-lets-you-try-the`: The public preview lets you try the workflow with sample updates. Hosted monitoring, team accounts, and paid subscriptions are not active yet.
+- `make-room-for`: Make room for
+- `your-next-move`: your next move.
+- `put-your-beverage-portfolio-in-focus`: Put your beverage portfolio in focus.
