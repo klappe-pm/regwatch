@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/router";
 import { isPublicPage } from "@/lib/bev-watch";
 
 import { useApi } from "@/lib/api";
@@ -22,7 +22,7 @@ const StatusContext = createContext<StatusValue>({
 
 /** The project name, the version and whether premium is on, shared by every page. */
 export function StatusProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const { pathname } = useRouter();
   const publicPage = isPublicPage(pathname);
   const { data, error, reload } = useApi<Status>(publicPage ? null : "/api/status");
   return (

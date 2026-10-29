@@ -1,7 +1,10 @@
 // The options of the global search in the navigation rail. Kept free of React and of
 // the "@/" path alias so `node --test` can load it directly (web/tests/).
 
+import { t } from "./text.ts";
 import type { SearchResults } from "./types";
+
+const S = "global.labels.search";
 
 export interface SearchOption {
   id: string;
@@ -9,6 +12,13 @@ export interface SearchOption {
   text: string;
   detail: string;
   href: string;
+}
+
+/** The groups the options fall in, in the order the panel lists them. */
+export const SEARCH_GROUPS = ["sources", "changes", "obligations"] as const;
+
+export function searchGroupName(group: string): string {
+  return t(`${S}.group-${group}`);
 }
 
 /**
@@ -22,9 +32,9 @@ export function searchOptions(results: SearchResults | null): SearchOption[] {
   results.sources.forEach((s, i) =>
     found.push({
       id: `s${i}`,
-      group: "Sources",
+      group: "sources",
       text: s.name,
-      detail: s.mine ? `${s.jurisdiction} · watched` : `${s.jurisdiction} · catalogue`,
+      detail: t(s.mine ? `${S}.watched` : `${S}.catalogue`, { jurisdiction: s.jurisdiction }),
       href: s.mine
         ? `/sources/?q=${encodeURIComponent(s.source_id)}`
         : `/sources/?catalogue=${encodeURIComponent(s.source_id)}`,
@@ -35,16 +45,16 @@ export function searchOptions(results: SearchResults | null): SearchOption[] {
       c.kind === "impact"
         ? {
             id: `c${i}`,
-            group: "Changes",
+            group: "changes",
             text: c.obligation_title,
-            detail: `${c.product_name} · ${c.jurisdiction}`,
+            detail: t(`${S}.impact`, { product: c.product_name, jurisdiction: c.jurisdiction }),
             href: `/changes/?q=${encodeURIComponent(c.obligation_id)}`,
           }
         : {
             id: `c${i}`,
-            group: "Changes",
+            group: "changes",
             text: c.headline,
-            detail: `Unconfirmed · ${c.date}`,
+            detail: t(`${S}.unconfirmed`, { date: c.date }),
             href: `/changes/?q=${encodeURIComponent(c.headline)}`,
           },
     ),
@@ -52,9 +62,9 @@ export function searchOptions(results: SearchResults | null): SearchOption[] {
   results.obligations.forEach((o, i) =>
     found.push({
       id: `o${i}`,
-      group: "Obligations",
+      group: "obligations",
       text: o.title,
-      detail: `${o.jurisdiction} · ${o.status}`,
+      detail: t(`${S}.obligation`, { jurisdiction: o.jurisdiction, status: o.status }),
       href: `/obligations/?q=${encodeURIComponent(o.obligation_id)}`,
     }),
   );
@@ -63,8 +73,8 @@ export function searchOptions(results: SearchResults | null): SearchOption[] {
 
 /** The note the search panel shows instead of options, or null when it shows options. */
 export function searchNote(query: string, count: number, error: string | null): string | null {
-  if (query.trim() === "") return "Type a name, a jurisdiction or a term.";
-  if (error) return `The search failed: ${error}`;
-  if (count === 0) return "No matches.";
+  if (query.trim() === "") return t(`${S}.empty`);
+  if (error) return t(`${S}.failed`, { error });
+  if (count === 0) return t(`${S}.no-matches`);
   return null;
 }

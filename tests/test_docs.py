@@ -36,11 +36,18 @@ GITHUB_FILES = {
     f".github/{PACKAGE}-banner.svg",
     f".github/{PACKAGE}-social.png",
     ".github/workflows/release.yml",
+    ".github/workflows/web.yml",
 }
 # Pages that quote attribution lines on purpose, because the page is about them.
 QUOTES_ATTRIBUTION: set[str] = set()
 # Pages kept out of the public tree. They are ignored by git and may exist in a working copy.
 UNPUBLISHED = (DOCS / "documentation-guide", ROOT / "local")
+# The copy documents the web app's text comes from: data in the shared copy format (a lowercase
+# document name, `## `group`` sections and `- `key`: text` lines), not documentation pages, so
+# the page rules below do not apply to them; test_the_copy_documents_are_well_formed does.
+COPY_DOCS = DOCS / "content-management-system"
+# DESIGN.md opens with YAML frontmatter, the design tokens the web app is generated from.
+FRONTMATTER = {"DESIGN.md"}
 
 # node_modules and out are the web app's dependencies and Next.js output, both ignored by git.
 SKIP_DIRS = {
@@ -138,7 +145,11 @@ def text_files() -> list[Path]:
 
 
 def markdown_files() -> list[Path]:
-    return [p for p in text_files() if p.suffix == ".md"]
+    return [p for p in text_files() if p.suffix == ".md" and COPY_DOCS not in p.parents]
+
+
+def copy_documents() -> list[Path]:
+    return sorted(COPY_DOCS.rglob("*.md"))
 
 
 def label(path: Path) -> str:
@@ -151,7 +162,13 @@ MARKDOWN = pytest.mark.parametrize("path", markdown_files(), ids=label)
 def lines_of(path: Path) -> list[tuple[int, str, bool]]:
     """Every line as (number, text, inside a fence). The fence lines themselves count as inside."""
     result, fenced = [], False
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    # Frontmatter is data, like a fenced block: it is neither prose nor headings.
+    front = lines.index("---", 1) + 1 if path.name in FRONTMATTER and lines[:1] == ["---"] else 0
+    for number, line in enumerate(lines, 1):
+        if number <= front:
+            result.append((number, line, True))
+            continue
         if FENCE.match(line):
             fenced = not fenced
             result.append((number, line, True))
@@ -248,7 +265,28 @@ def test_there_is_one_docs_tree() -> None:
     for quadrant in QUADRANTS:
         assert (DOCS / quadrant / "README.md").is_file(), quadrant
     present = {p.name for p in DOCS.iterdir() if p.is_dir() and not is_unpublished(p)}
-    assert present == set(QUADRANTS)
+    assert present == {*QUADRANTS, COPY_DOCS.name}
+
+
+COPY_HEADING = re.compile(r"^#{2,6} `[a-z0-9-]+`$")
+COPY_LINE = re.compile(r"^- `[a-z0-9-]+`: \S.*$")
+
+
+@pytest.mark.parametrize("path", copy_documents(), ids=label)
+def test_the_copy_documents_are_well_formed(path: Path) -> None:
+    """Each copy document names itself, says what it holds, and has only groups and keys."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == f"# {path.stem}", label(path)
+    assert lines[2] and not lines[2].startswith(("#", "-")), f"{label(path)} has no purpose line"
+    bad = [
+        number
+        for number, line in enumerate(lines[3:], 4)
+        if line and not COPY_HEADING.match(line) and not COPY_LINE.match(line)
+    ]
+    assert not bad, f"{label(path)} has lines that are neither a group nor a key: {bad}"
+    text = "\n".join(lines)
+    assert EM not in text and EN not in text, label(path)
+    assert path.read_text(encoding="utf-8").endswith("\n"), label(path)
 
 
 def test_each_quadrant_index_lists_every_page_in_its_folder() -> None:
@@ -326,7 +364,8 @@ def test_the_page_carries_no_provenance_keys(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     front = text.split("---", 2)[1] if text.startswith("---") else ""
     assert not PROVENANCE_KEY.search(front), label(path)
-    assert not text.startswith("---"), f"{label(path)} has frontmatter, which no page needs"
+    if path.name not in FRONTMATTER:
+        assert not text.startswith("---"), f"{label(path)} has frontmatter, which no page needs"
 
 
 @MARKDOWN

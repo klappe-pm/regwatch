@@ -1,20 +1,61 @@
-export const BRAND = "Bev Watch";
+// The public preview's data: the workspace schema kept in browser storage, the sources and the
+// synthetic updates. The stored values (categories, markets, source ids) are the schema and stay
+// fixed; what the pages show for them comes from the copy documents.
+import { t } from "./text.ts";
+
+const DATA = "global.preview-data";
+
+export const BRAND = t(`${DATA}.brand.name`);
 export const WORKSPACE_STORAGE = "bev-watch.workspace.v1";
 export function isPublicPage(pathname: string): boolean {
   if (process.env.NEXT_PUBLIC_BEV_WATCH_MODE === "hosted-preview") return true;
   const normalized = pathname.replace(/\/?$/, "/");
   return ["/pricing/", "/onboarding/", "/workspace/", "/privacy/"].includes(normalized);
 }
-export const CATEGORIES = ["Non-alcoholic beverages", "Beer & cider", "Wine", "Spirits", "Functional beverages", "Cannabis & hemp beverages"];
-export const MARKETS = ["United States", "Canada", "United Kingdom", "European Union", "Australia & New Zealand"];
-export const SOURCES = [
-  { id: "fda", name: "Food & Drug Administration", short: "FDA", market: "United States", topic: "Ingredients, labeling & food safety", url: "https://www.fda.gov/food" },
-  { id: "ttb", name: "Alcohol and Tobacco Tax and Trade Bureau", short: "TTB", market: "United States", topic: "Alcohol labeling, formulas & permits", url: "https://www.ttb.gov/" },
-  { id: "fr", name: "Federal Register", short: "FR", market: "United States", topic: "Proposed and final federal rules", url: "https://www.federalregister.gov/" },
-  { id: "hc", name: "Health Canada", short: "HC", market: "Canada", topic: "Food standards & product labeling", url: "https://www.canada.ca/en/health-canada.html" },
-  { id: "fsa", name: "Food Standards Agency", short: "FSA", market: "United Kingdom", topic: "Food safety, guidance & alerts", url: "https://www.food.gov.uk/" },
-  { id: "eu", name: "EUR-Lex", short: "EU", market: "European Union", topic: "European Union legislation", url: "https://eur-lex.europa.eu/" },
-  { id: "fsanz", name: "Food Standards Australia New Zealand", short: "FSANZ", market: "Australia & New Zealand", topic: "Food standards & consultations", url: "https://www.foodstandards.gov.au/" },
+
+/** Stored category values, with the copy key that names each one. */
+const CATEGORY_KEYS: [string, string][] = [
+  ["Non-alcoholic beverages", "non-alcoholic"],
+  ["Beer & cider", "beer-cider"],
+  ["Wine", "wine"],
+  ["Spirits", "spirits"],
+  ["Functional beverages", "functional"],
+  ["Cannabis & hemp beverages", "cannabis-hemp"],
+];
+const MARKET_KEYS: [string, string][] = [
+  ["United States", "us"],
+  ["Canada", "ca"],
+  ["United Kingdom", "uk"],
+  ["European Union", "eu"],
+  ["Australia & New Zealand", "anz"],
+];
+export const CATEGORIES = CATEGORY_KEYS.map(([value]) => value);
+export const MARKETS = MARKET_KEYS.map(([value]) => value);
+
+function named(pairs: [string, string][], group: string, value: string): string {
+  const key = pairs.find(([stored]) => stored === value)?.[1];
+  return key ? t(`${DATA}.${group}.${key}`) : value;
+}
+export const categoryName = (value: string): string => named(CATEGORY_KEYS, "categories", value);
+export const marketName = (value: string): string => named(MARKET_KEYS, "markets", value);
+
+export interface Source { id: string; name: string; short: string; market: string; topic: string; url: string }
+const source = (id: string, market: string, url: string): Source => ({
+  id,
+  market,
+  url,
+  name: t(`${DATA}.sources.${id}.name`),
+  short: t(`${DATA}.sources.${id}.short`),
+  topic: t(`${DATA}.sources.${id}.topic`),
+});
+export const SOURCES: Source[] = [
+  source("fda", "United States", "https://www.fda.gov/food"),
+  source("ttb", "United States", "https://www.ttb.gov/"),
+  source("fr", "United States", "https://www.federalregister.gov/"),
+  source("hc", "Canada", "https://www.canada.ca/en/health-canada.html"),
+  source("fsa", "United Kingdom", "https://www.food.gov.uk/"),
+  source("eu", "European Union", "https://eur-lex.europa.eu/"),
+  source("fsanz", "Australia & New Zealand", "https://www.foodstandards.gov.au/"),
 ];
 export interface Product { id: string; name: string; category: string; ingredients: string; markets: string[] }
 export interface Workspace { version: 1; company: string; categories: string[]; markets: string[]; sources: string[]; cadence: "Daily" | "Weekly"; products: Product[]; reviewed: string[]; saved: string[]; completed: boolean }
@@ -37,7 +78,7 @@ export function loadWorkspace(): Workspace {
   try { return parseWorkspace(JSON.parse(localStorage.getItem(WORKSPACE_STORAGE) || "null")) || emptyWorkspace(); } catch { return emptyWorkspace(); }
 }
 export class WorkspaceConflict extends Error {
-  constructor() { super("This workspace changed in another tab. Reload the workspace to load the latest saved data before trying again."); }
+  constructor() { super(t(`${DATA}.messages.conflict`)); }
 }
 /** Ordinary saves check their loaded snapshot; an explicit import can replace it. */
 export function saveWorkspace(workspace: Workspace, expected?: Workspace): boolean {
@@ -59,15 +100,36 @@ export function toggleValue(values: string[], value: string): string[] { return 
 export function restoreProduct(products: Product[], product: Product): Product[] {
   return products.some(p=>p.id===product.id) ? products : [...products,product];
 }
-export const SAMPLE_UPDATES = [
-  { id: "label", title: "A labeling proposal appears in your market", source: "FDA", market: "United States", category: "Labeling", priority: "Review first", summary: "An illustrative proposal would change how a beverage label presents a nutrient claim. Compare the proposal with your product claims and identify where a label review would be needed.", action: "Review affected labels and record a decision with your regulatory reviewer.", url: "https://www.fda.gov/food/food-labeling-nutrition" },
-  { id: "ingredient", title: "An ingredient consultation opens for comment", source: "FR", market: "United States", category: "Ingredients", priority: "Watch", summary: "This sample consultation demonstrates how an ingredient mentioned in your portfolio could be surfaced for review. It is invented and does not describe a current proceeding.", action: "Check whether the ingredient is used in your portfolio and whether a response is appropriate.", url: "https://www.federalregister.gov/" },
-  { id: "alcohol", title: "Alcohol label guidance is revised", source: "TTB", market: "United States", category: "Alcohol", priority: "Review first", summary: "An invented guidance change shows how alcohol-specific updates could reach your team. A qualified reviewer must verify actual guidance before deciding what to change.", action: "Compare your label approval workflow with the primary source.", url: "https://www.ttb.gov/" },
-  { id: "canada", title: "A food standard changes in a second market", source: "HC", market: "Canada", category: "Standards", priority: "Watch", summary: "This synthetic example illustrates cross-market monitoring. It does not describe an actual change to Canadian food standards.", action: "Assign a reviewer for products sold in this market.", url: "https://www.canada.ca/en/health-canada.html" },
+export interface SampleUpdate { id: string; title: string; source: string; market: string; category: string; priority: string; first: boolean; summary: string; action: string; url: string }
+const update = (id: string, sourceId: string, market: string, first: boolean, url: string): SampleUpdate => ({
+  id,
+  market,
+  first,
+  url,
+  source: t(`${DATA}.sources.${sourceId}.short`),
+  priority: t(`${DATA}.priorities.${first ? "first" : "watch"}`),
+  title: t(`${DATA}.updates.${id}.title`),
+  category: t(`${DATA}.updates.${id}.category`),
+  summary: t(`${DATA}.updates.${id}.summary`),
+  action: t(`${DATA}.updates.${id}.action`),
+});
+export const SAMPLE_UPDATES: SampleUpdate[] = [
+  update("label", "fda", "United States", true, "https://www.fda.gov/food/food-labeling-nutrition"),
+  update("ingredient", "fr", "United States", false, "https://www.federalregister.gov/"),
+  update("alcohol", "ttb", "United States", true, "https://www.ttb.gov/"),
+  update("canada", "hc", "Canada", false, "https://www.canada.ca/en/health-canada.html"),
 ];
-export const PLAN_FEATURES = ["A workspace for your beverage portfolio", "Market and source selection", "A prioritized review queue", "Briefing export", "Saved review decisions"];
+export const PLAN_FEATURES = ["1-workspace", "2-markets", "3-queue", "4-export", "5-decisions"].map((key) => t(`${DATA}.plan-features.${key}`));
 export function briefingText(workspace: Workspace): string {
-  return [`${BRAND} | ${workspace.company || "Your workspace"}`, "Preview briefing. All regulatory updates below are synthetic examples, not current regulatory information.", `Markets: ${workspace.markets.join(", ") || "Not selected"}`, `Products: ${workspace.products.map(p => p.name).join(", ") || "No products added"}`, ...SAMPLE_UPDATES.map(u => `${u.title}\n${u.summary}\nSuggested review: ${u.action}\nExample source homepage: ${u.url}`), "For human review. Not legal advice. No live monitoring or email delivery is active in this preview."].join("\n\n");
+  const b = (key: string, vars?: Record<string, string>) => t(`${DATA}.briefing-export.${key}`, vars);
+  return [
+    b("heading", { brand: BRAND, company: workspace.company || b("your-workspace") }),
+    b("intro"),
+    b("markets", { markets: workspace.markets.map(marketName).join(", ") || b("not-selected") }),
+    b("products", { products: workspace.products.map(p => p.name).join(", ") || b("no-products") }),
+    ...SAMPLE_UPDATES.map(u => `${u.title}\n${u.summary}\n${b("suggested", { action: u.action })}\n${b("source", { url: u.url })}`),
+    b("closing"),
+  ].join("\n\n");
 }
 export function downloadText(filename: string, content: string, type = "text/plain") {
   const url = URL.createObjectURL(new Blob([content], { type })); const a = document.createElement("a");

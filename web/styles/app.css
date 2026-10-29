@@ -1,0 +1,43 @@
+/* The few rules the pages need outside Material UI. Colours come from design/ds.css only. Material
+   UI's styles sit in the `mui` cascade layer, so these plain rules win over them. */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
+}
+
+/* Every interactive element keeps one visible keyboard focus ring. */
+:focus-visible {
+  outline: 2px solid var(--ds-role-primary);
+  outline-offset: 2px;
+}
+
+:root[data-theme="light"] :focus-visible {
+  outline-color: var(--ds-color-bw-focus);
+}
+
+table,
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: var(--ds-color-white);
+    color: var(--ds-color-black);
+  }
+  main {
+    padding: 0 !important;
+    margin-left: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

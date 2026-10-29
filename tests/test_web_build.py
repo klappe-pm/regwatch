@@ -43,6 +43,8 @@ MESSAGE_PREFIXES = (
     "https://nextjs.org/docs/",
     "https://github.com/zloirock/core-js",
     "https://tailwindcss.com",
+    # Material UI names its documentation in error messages and comments; nothing loads it.
+    "https://mui.com/",
 )
 # Public preview links navigate only when selected. They never load remote assets.
 SOURCE_LINKS = {
@@ -132,6 +134,9 @@ def test_the_previews_load_their_own_routes_and_never_srcdoc() -> None:
     for path in built_files():
         if path.suffix in (".html", ".js", ".txt"):
             text = path.read_bytes().decode("utf-8", errors="replace")
+            # Emotion's list of valid DOM property names spells srcDoc between bars; a list
+            # entry renders nothing, so only that exact entry is taken out before the scan.
+            text = text.replace("|srcDoc|", "|")
             assert not re.search(r"srcdoc", text, re.IGNORECASE), path
             if path.suffix == ".html":
                 assert not re.search(r"\sstyle\s*=", text), path
@@ -153,6 +158,11 @@ def test_every_web_dependency_is_pinned_exactly() -> None:
     package = json.loads((ROOT / "web" / "package.json").read_text(encoding="utf-8"))
     for group in ("dependencies", "devDependencies"):
         for name, version in package[group].items():
+            # A vendored tarball is pinned by its file, which the lockfile hashes like any other.
+            if version.startswith("file:vendor/"):
+                assert re.fullmatch(r"file:vendor/[a-z0-9.-]+-\d+\.\d+\.\d+\.tgz", version), name
+                assert (ROOT / "web" / version.removeprefix("file:")).is_file(), version
+                continue
             assert re.fullmatch(r"\d+\.\d+\.\d+", version), f"{name} {version}"
     for parent, pins in package.get("overrides", {}).items():
         for name, version in pins.items():
@@ -191,4 +201,6 @@ def test_no_locked_package_is_older_than_its_security_fix() -> None:
             seen.setdefault(name, []).append(path)
             assert version >= FIXED_IN[name], f"{path} {entry['version']}"
     assert set(seen) == set(FIXED_IN), seen
-    assert "node_modules/next/node_modules/postcss" in seen["postcss"]
+    # next pins an older postcss of its own; the override makes every copy the fixed one, which
+    # npm may keep nested under next or hoist to the top level.
+    assert {"node_modules/next/node_modules/postcss", "node_modules/postcss"} & set(seen["postcss"])

@@ -1,52 +1,37 @@
-/** Display names for the values the server sends as identifiers. */
+/** Display names for the values the server sends as identifiers, from the copy documents. */
+import { t } from "./text.ts";
+
+const L = "global.labels";
 
 /** A language model provider's own name: Anthropic, OpenAI, Ollama. */
-export const PROVIDERS: Record<string, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  ollama: "Ollama",
-};
-
 export function providerName(provider: string): string {
-  return PROVIDERS[provider] ?? provider;
+  return ["anthropic", "openai", "ollama"].includes(provider) ? t(`${L}.providers.${provider}`) : provider;
 }
 
-export const CATEGORIES: [string, string][] = [
-  ["regulation", "Regulation"],
-  ["policy-and-lobbying", "Policy and Lobbying"],
-  ["ingredients-supply", "Ingredients Supply"],
-  ["packaging-materials", "Packaging Materials"],
-  ["commodities-and-forecasts", "Commodities and Forecasts"],
-  ["manufacturing-and-chemicals", "Manufacturing and Chemicals"],
-  ["logistics-and-trade", "Logistics and Trade"],
-  ["construction-and-facilities", "Construction and Facilities"],
-  ["industry-news", "Industry News"],
-];
+const pairs = (group: string, ids: string[]): [string, string][] => ids.map((id) => [id, t(`${L}.${group}.${id}`)]);
 
-export const ACCESS: [string, string][] = [
-  ["free", "Free"],
-  ["free-key", "Free Key"],
-  ["paid", "Paid"],
-];
+export const CATEGORIES: [string, string][] = pairs("categories", [
+  "regulation",
+  "policy-and-lobbying",
+  "ingredients-supply",
+  "packaging-materials",
+  "commodities-and-forecasts",
+  "manufacturing-and-chemicals",
+  "logistics-and-trade",
+  "construction-and-facilities",
+  "industry-news",
+]);
 
-export const SEVERITY: Record<string, string> = {
-  "act-now": "Act now",
-  high: "High",
-  watch: "Watch",
-  info: "Info",
-};
+export const ACCESS: [string, string][] = pairs("access", ["free", "free-key", "paid"]);
 
-export const TIERS: [string, string][] = [
-  ["v1", "Headlines"],
-  ["v2", "Context and Citations"],
-  ["v3", "Full Detail"],
-];
+export const SEVERITY: Record<string, string> = Object.fromEntries(pairs("severity", ["act-now", "high", "watch", "info"]));
+
+export const TIERS: [string, string][] = pairs("tiers", ["v1", "v2", "v3"]);
 
 export function label(pairs: [string, string][], value: string): string {
   return pairs.find(([id]) => id === value)?.[1] ?? value;
 }
 
-/** "free-key" or "act_now" as "Free key": the words of an identifier, capitalised once. */
 /** "north-america" as "North America": every word capitalised, for place names. */
 export function place(value: string): string {
   return value
@@ -56,19 +41,19 @@ export function place(value: string): string {
     .join(" ");
 }
 
+/** "free-key" or "act_now" as "Free key": the words of an identifier, capitalised once. */
 export function words(value: string): string {
   const text = value.replace(/[-_]+/g, " ").trim();
   return text ? text[0].toUpperCase() + text.slice(1) : "";
 }
 
-const CADENCE: Record<string, string> = { hourly: "Every hour", daily: "Every day", weekly: "Every week" };
-
 export function cadence(value: string | null): string {
-  return value ? (CADENCE[value] ?? words(value)) : "Unknown";
+  if (!value) return t(`${L}.cadence.unknown`);
+  return ["hourly", "daily", "weekly"].includes(value) ? t(`${L}.cadence.${value}`) : words(value);
 }
 
 /** An ISO time as a short local date and time, or the fallback when there is none. */
-export function when(value: string | null | undefined, fallback = "Not set"): string {
+export function when(value: string | null | undefined, fallback = t(`${L}.time.not-set`)): string {
   if (!value) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -77,8 +62,8 @@ export function when(value: string | null | undefined, fallback = "Not set"): st
 
 /** What a run's exit status means, in the words `regwatch run` uses. */
 export function outcome(code: number | undefined): string {
-  if (code === 0) return "No changes";
-  if (code === 3) return "Changes to review";
-  if (code === 4) return "Needs attention";
-  return code === undefined ? "" : `Exit ${code}`;
+  if (code === 0) return t(`${L}.outcome.none`);
+  if (code === 3) return t(`${L}.outcome.changes`);
+  if (code === 4) return t(`${L}.outcome.attention`);
+  return code === undefined ? "" : t(`${L}.outcome.exit`, { code });
 }

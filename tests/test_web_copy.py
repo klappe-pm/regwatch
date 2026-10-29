@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -11,14 +12,43 @@ from test_docs import SMALL_WORDS
 
 pytestmark = pytest.mark.repo_only
 
-PAGES = sorted((ROOT / "web" / "src").rglob("*.tsx"))
-# A heading element whose content is literal text, not an expression.
-HEADING = re.compile(r"<h([1-6])\b[^>]*>([^<{]+)</h\1>")
+WEB = ROOT / "web"
+PAGES = sorted([*(WEB / "src").rglob("*.tsx"), *(WEB / "pages").rglob("*.tsx")])
+COPY = json.loads((WEB / "design" / "copy.json").read_text(encoding="utf-8"))
+# The text of every element comes from the copy documents, so a heading is found by the copy key
+# it shows: a heading element (or a Section or PageHeader title) whose first child is a lookup
+# with a literal key, such as `<Typography component="h3" ...>{p("detail.why")}`. A page's `p`
+# helper prefixes the key with the page's document, read from its definition.
+PREFIX = re.compile(r"const p = \([^)]*\) => t\(`([\w.-]+)\.\$\{key\}`")
+LOOKUP = r"\{(p|t)\(\"([\w.-]+)\""
+HEADING = re.compile(
+    r"component=\"h[1-4]\"[^>]*>\s*" + LOOKUP
+    + r"|<Heading\b[^>]*>\s*" + LOOKUP
+    + r"|<(?:Section|PageHeader)\s+title=" + LOOKUP
+)
+# Fragments of a display heading split over lines (the public pages' "title-1", "title-2" and
+# "title-emphasis") are sentences, as the literal headings with <br/> inside them were.
+FRAGMENT = re.compile(r"(^|[.-])title-(\d|emphasis)$|\.(aside|intro)-\d$|\.title-\d$")
 
 
-def literal_headings(path: Path) -> list[str]:
+def heading_keys(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
-    return [" ".join(match.group(2).split()) for match in HEADING.finditer(text)]
+    prefix = PREFIX.search(text)
+    keys = []
+    for match in HEADING.finditer(text):
+        groups = [g for g in match.groups() if g is not None]
+        helper, key = groups[0], groups[1]
+        keys.append(f"{prefix.group(1)}.{key}" if helper == "p" and prefix else key)
+    return keys
+
+
+def headings(path: Path) -> list[str]:
+    # A placeholder such as {count} is filled in at run time and is not a word of the heading.
+    return [
+        " ".join(re.sub(r"\{\w+\}", "", COPY[key]).split())
+        for key in heading_keys(path)
+        if not FRAGMENT.search(key)
+    ]
 
 
 def not_title_case(text: str) -> bool:
@@ -32,15 +62,21 @@ def not_title_case(text: str) -> bool:
     return False
 
 
-def test_the_pages_have_literal_headings_to_check() -> None:
-    found = [heading for path in PAGES for heading in literal_headings(path)]
+def test_the_pages_have_headings_to_check() -> None:
+    found = [heading for path in PAGES for heading in headings(path)]
     assert "Why It Was Flagged" in found
     assert "Impacts on Your Products" in found
+    assert "Make This Workspace Yours." in found
+
+
+def test_every_heading_key_is_in_the_copy() -> None:
+    missing = [key for path in PAGES for key in heading_keys(path) if key not in COPY]
+    assert not missing, missing
 
 
 @pytest.mark.parametrize("path", PAGES, ids=lambda p: p.relative_to(ROOT).as_posix())
-def test_every_literal_heading_is_title_case(path: Path) -> None:
-    bad = [heading for heading in literal_headings(path) if not_title_case(heading)]
+def test_every_heading_is_title_case(path: Path) -> None:
+    bad = [heading for heading in headings(path) if not_title_case(heading)]
     assert not bad, f"{path.relative_to(ROOT)} has headings that are not Title Case: {bad}"
 
 

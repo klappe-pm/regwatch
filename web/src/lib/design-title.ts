@@ -2,6 +2,8 @@
 // DocumentDesign.title in regwatch/config.py. Kept free of React so node --test can
 // check it.
 
+import { t } from "./text.ts";
+
 function withoutLeading(title: string, name: string): string {
   if (!title.toLowerCase().startsWith(name.toLowerCase())) return title;
   let rest = title.slice(name.length);
@@ -28,6 +30,7 @@ export function designTitle(format: string, title: string, date: string, organis
 
 /** The title the Settings preview shows: a briefing as the real documents name one. */
 export function sampleTitle(format: string, date: string, organisation: string): string {
-  const name = organisation.trim() || "Your organisation";
-  return designTitle(format, `${name} regulatory briefing`, date, organisation.trim() ? organisation : name);
+  const name = organisation.trim() || t("global.labels.design-title.your-organisation");
+  const title = t("global.labels.design-title.sample-title", { organisation: name });
+  return designTitle(format, title, date, organisation.trim() ? organisation : name);
 }

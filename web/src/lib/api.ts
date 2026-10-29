@@ -1,7 +1,9 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
+
+import { t } from "./text.ts";
 
 /** A refusal or failure from the local server, with its short message. */
 export class ApiFailure extends Error {}
@@ -17,7 +19,7 @@ async function read<T>(response: Response): Promise<T> {
     const message =
       typeof body === "object" && body !== null && "error" in body
         ? String((body as { error: unknown }).error)
-        : `The request failed (${response.status}).`;
+        : t("global.ui.state.request-failed-status", { status: response.status });
     throw new ApiFailure(message);
   }
   return body as T;
@@ -69,7 +71,7 @@ export function useApi<T>(path: string | null): Loaded<T> {
         }
       })
       .catch((reason: unknown) => {
-        if (live) setError(reason instanceof Error ? reason.message : "The request failed.");
+        if (live) setError(reason instanceof Error ? reason.message : t("global.ui.state.request-failed"));
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -83,7 +85,8 @@ export function useApi<T>(path: string | null): Loaded<T> {
   return { data, error, loading, reload };
 }
 
-/** One query parameter of the current address. Needs a Suspense boundary, as the layout has. */
+/** One query parameter of the current address; empty until the router has read the address. */
 export function useQueryParam(name: string): string {
-  return useSearchParams().get(name) ?? "";
+  const value = useRouter().query[name];
+  return typeof value === "string" ? value : Array.isArray(value) ? (value[0] ?? "") : "";
 }

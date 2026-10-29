@@ -4,6 +4,7 @@ const nextConfig = {
   output: "export",
   // Each page becomes a folder with an index.html, which the local server resolves.
   trailingSlash: true,
+  reactStrictMode: true,
   images: { unoptimized: true },
   poweredByHeader: false,
   productionBrowserSourceMaps: false,

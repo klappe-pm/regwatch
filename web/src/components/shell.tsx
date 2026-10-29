@@ -1,33 +1,43 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { T } from "@klappe/design-system";
+import Box from "@mui/material/Box";
+import ButtonBase from "@mui/material/ButtonBase";
+import InputBase from "@mui/material/InputBase";
+import Link from "@mui/material/Link";
+import Typography from "@mui/material/Typography";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import NextLink from "next/link";
+import { useRouter } from "next/router";
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { getJson } from "@/lib/api";
+import { isPublicPage } from "@/lib/bev-watch";
 import type { IconName } from "@/lib/icons.generated";
-import { type SearchOption, searchNote, searchOptions } from "@/lib/search-options";
+import { SEARCH_GROUPS, type SearchOption, searchGroupName, searchNote, searchOptions } from "@/lib/search-options";
+import { t } from "@/lib/text";
 import type { SearchResults } from "@/lib/types";
 
-import { Icon } from "./icon";
-import { useStatus } from "./status";
 import { Brand } from "./brand";
-import { isPublicPage } from "@/lib/bev-watch";
+import { useStatus } from "./status";
+import { Icon, Piece } from "./ui";
 
-const NAV: { href: string; label: string; icon: IconName; premium?: boolean }[] = [
-  { href: "/", label: "Overview", icon: "dashboard" },
-  { href: "/changes/", label: "Changes", icon: "difference" },
-  { href: "/sources/", label: "Sources", icon: "database" },
-  { href: "/obligations/", label: "Obligations", icon: "gavel" },
-  { href: "/briefings/", label: "Briefings", icon: "article" },
-  { href: "/newsletters/", label: "Newsletters", icon: "mail", premium: true },
-  { href: "/documents/", label: "Documents", icon: "description", premium: true },
-  { href: "/automations/", label: "Automations", icon: "schedule" },
-  { href: "/keys/", label: "Keys", icon: "key" },
-  { href: "/settings/", label: "Settings", icon: "settings" },
+const NAV: { href: string; key: string; icon: IconName; premium?: boolean }[] = [
+  { href: "/", key: "overview", icon: "dashboard" },
+  { href: "/changes/", key: "changes", icon: "difference" },
+  { href: "/sources/", key: "sources", icon: "database" },
+  { href: "/obligations/", key: "obligations", icon: "gavel" },
+  { href: "/briefings/", key: "briefings", icon: "article" },
+  { href: "/newsletters/", key: "newsletters", icon: "mail", premium: true },
+  { href: "/documents/", key: "documents", icon: "description", premium: true },
+  { href: "/automations/", key: "automations", icon: "schedule" },
+  { href: "/keys/", key: "keys", icon: "key" },
+  { href: "/settings/", key: "settings", icon: "settings" },
 ];
 
 const RAIL_KEY = "regwatch.rail";
+const muted = "var(--ds-role-on-surface-variant)";
+const selection = "var(--ds-role-secondary-container)";
 
 function readCollapsed(): boolean {
   try {
@@ -43,18 +53,6 @@ function writeCollapsed(collapsed: boolean): void {
   } catch {
     // Storage may be blocked; the rail still works for this visit.
   }
-}
-
-function useNarrow(): boolean {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 767px)");
-    const update = () => setNarrow(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  return narrow;
 }
 
 /** One search over sources, changes and obligations, as a keyboard-driven combobox. */
@@ -88,7 +86,7 @@ function Search({ compact }: { compact: boolean }) {
         .catch((reason: unknown) => {
           if (live) {
             setResults(null);
-            setFailure(reason instanceof Error ? reason.message : "The request failed.");
+            setFailure(reason instanceof Error ? reason.message : t("global.ui.state.request-failed"));
           }
         });
     }, 150);
@@ -110,7 +108,7 @@ function Search({ compact }: { compact: boolean }) {
   function go(option: SearchOption) {
     close();
     setQuery("");
-    router.push(option.href);
+    void router.push(option.href);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -130,19 +128,12 @@ function Search({ compact }: { compact: boolean }) {
   }
 
   const input = (
-    <div className="flex h-8 items-center gap-1 rounded-sm border border-control bg-raised px-2">
-      <Icon name="search" size={18} className="text-muted" />
-      <input
-        ref={inputRef}
+    <Piece name="control-input" sx={{ display: "flex", height: "30px", alignItems: "center", gap: 1, px: 2 }}>
+      <Icon name="search" size={18} sx={{ color: muted }} />
+      <InputBase
+        inputRef={inputRef}
         type="search"
-        role="combobox"
-        aria-label="Search sources, changes and obligations"
-        aria-expanded={showPanel && list.length > 0}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        aria-activedescendant={active >= 0 && list[active] ? `${listId}-${list[active].id}` : undefined}
-        placeholder="Search"
-        className="w-full min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
+        placeholder={t("global.shell.search.placeholder")}
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
@@ -150,82 +141,99 @@ function Search({ compact }: { compact: boolean }) {
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
+        inputProps={{
+          role: "combobox",
+          "aria-label": t("global.shell.search.label"),
+          "aria-expanded": showPanel && list.length > 0,
+          "aria-controls": listId,
+          "aria-autocomplete": "list",
+          "aria-activedescendant": active >= 0 && list[active] ? `${listId}-${list[active].id}` : undefined,
+        }}
+        sx={{ width: "100%", minWidth: 0, fontSize: "13px", color: "inherit", "& input": { p: 0, "&::placeholder": { color: muted, opacity: 1 } } }}
       />
-    </div>
+    </Piece>
   );
 
-  const groups = ["Sources", "Changes", "Obligations"];
   const panel = (
-    <div className="absolute left-full top-0 z-30 ml-2 w-[min(28rem,calc(100vw-5rem))] border border-line bg-raised shadow-sm">
-      {compact ? <div className="border-b border-line p-2">{input}</div> : null}
-      <div id={listId} role="listbox" aria-label="Search results" className="max-h-[70vh] overflow-y-auto py-1">
+    <Piece
+      name="search-panel"
+      sx={{ position: "absolute", left: "100%", top: 0, zIndex: 30, ml: 2, width: "min(28rem, calc(100vw - 5rem))" }}
+    >
+      {compact ? <Box sx={{ borderBottom: "1px solid var(--ds-role-outline-variant)", p: 2 }}>{input}</Box> : null}
+      <Box id={listId} role="listbox" aria-label={t("global.shell.search.results")} sx={{ maxHeight: "70vh", overflowY: "auto", py: 1 }}>
         {note !== null ? (
-          <p role={failure ? "alert" : undefined} className="px-4 py-2 text-sm text-muted">
+          <Typography component="p" role={failure ? "alert" : undefined} sx={{ px: 4, py: 2, typography: "small", color: muted }}>
             {note}
-          </p>
+          </Typography>
         ) : (
-          groups.map((group) => {
+          SEARCH_GROUPS.map((group) => {
             const items = list.filter((o) => o.group === group);
             if (!items.length) return null;
+            const name = searchGroupName(group);
             return (
-              <div key={group} role="group" aria-label={group}>
-                <p className="px-4 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">{group}</p>
+              <div key={group} role="group" aria-label={name}>
+                <Typography component="p" sx={{ px: 4, pt: 2, typography: "overline", color: muted }}>
+                  {name}
+                </Typography>
                 {items.map((option) => {
                   const selected = list[active]?.id === option.id;
                   return (
-                    <div
+                    <Box
                       key={option.id}
                       id={`${listId}-${option.id}`}
                       role="option"
                       aria-selected={selected}
-                      className={`cursor-pointer px-4 py-1 ${selected ? "bg-selection" : "hover:bg-selection"}`}
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => go(option)}
+                      sx={{ cursor: "pointer", px: 4, py: 1, bgcolor: selected ? selection : "transparent", "&:hover": { bgcolor: selection } }}
                     >
-                      <span className="block truncate text-sm text-ink">{option.text}</span>
-                      <span className="block truncate text-xs text-muted">{option.detail}</span>
-                    </div>
+                      <Box component="span" sx={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", typography: "small" }}>
+                        {option.text}
+                      </Box>
+                      <Box component="span" sx={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", typography: "caption", color: muted }}>
+                        {option.detail}
+                      </Box>
+                    </Box>
                   );
                 })}
               </div>
             );
           })
         )}
-      </div>
-    </div>
+      </Box>
+    </Piece>
   );
 
   return (
-    <div
-      className="relative"
+    <Box
+      sx={{ position: "relative" }}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close();
       }}
     >
       {compact ? (
-        <button
-          type="button"
-          className="flex h-10 w-10 items-center justify-center rounded-sm text-ink hover:bg-selection"
-          aria-label="Search sources, changes and obligations"
+        <ButtonBase
+          aria-label={t("global.shell.search.label")}
           aria-expanded={open}
           onClick={() => {
             setOpen((value) => !value);
             window.setTimeout(() => inputRef.current?.focus(), 0);
           }}
+          sx={{ display: "flex", height: "37.5px", width: "37.5px", borderRadius: 1, "&:hover": { bgcolor: selection } }}
         >
           <Icon name="search" />
-        </button>
+        </ButtonBase>
       ) : (
         input
       )}
       {showPanel ? panel : null}
-    </div>
+    </Box>
   );
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const narrow = useNarrow();
+  const { pathname } = useRouter();
+  const narrow = useMediaQuery("(max-width: 767px)", { noSsr: false });
   const { status } = useStatus();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -244,87 +252,119 @@ export function Shell({ children }: { children: ReactNode }) {
     });
   }
 
+  const rail = compact ? "var(--ds-space-rail-compact)" : "var(--ds-space-rail)";
+
   return (
-    <div className="min-h-screen">
-      <a
+    <Box sx={{ minHeight: "100vh" }}>
+      <Link
         href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:bg-raised focus:px-2 focus:py-1"
+        sx={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+          "&:focus": { position: "fixed", left: "7.5px", top: "7.5px", zIndex: 50, width: "auto", height: "auto", clip: "auto", px: 2, py: 1, bgcolor: "var(--ds-role-surface-container-lowest)" },
+        }}
       >
-        Skip to content
-      </a>
-      <nav
-        aria-label="Main"
-        className={`no-print fixed inset-y-0 left-0 z-20 flex flex-col border-r border-line bg-raised ${
-          compact ? "w-14 items-center" : "w-60"
-        }`}
+        <T k="global.shell.nav.skip" />
+      </Link>
+      <Piece
+        name="nav-rail"
+        component="nav"
+        aria-label={t("global.shell.nav.label")}
+        className="no-print"
+        sx={{ position: "fixed", top: 0, bottom: 0, left: 0, zIndex: 20, display: "flex", flexDirection: "column", width: rail, alignItems: compact ? "center" : "stretch" }}
       >
-        <div className={`flex h-14 items-center border-b border-line ${compact ? "justify-center" : "px-4"}`}>
+        <Box
+          sx={{
+            display: "flex",
+            height: "52.5px",
+            flexShrink: 0,
+            alignItems: "center",
+            borderBottom: "1px solid var(--ds-role-outline-variant)",
+            width: "100%",
+            ...(compact ? { justifyContent: "center" } : { px: 4 }),
+            "& [data-part='brand']": { color: "var(--ds-role-primary)" },
+          }}
+        >
           {compact ? (
-            <Brand compact/>
+            <Brand compact />
           ) : (
-            <div className="min-w-0">
-              <Brand/>
-              <p className="truncate text-xs text-muted">{status ? status.project : " "}</p>
-            </div>
+            <Box sx={{ minWidth: 0 }}>
+              <Brand />
+              <Typography component="p" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", typography: "caption", color: muted }}>
+                {status ? status.project : " "}
+              </Typography>
+            </Box>
           )}
-        </div>
-        <div className={compact ? "py-2" : "p-2"}>
+        </Box>
+        <Box sx={compact ? { py: 2 } : { p: 2 }}>
           <Search compact={compact} />
-        </div>
-        <ul className={`flex-1 overflow-y-auto ${compact ? "w-full px-1" : "px-2"}`}>
+        </Box>
+        <Box component="ul" sx={{ m: 0, listStyle: "none", flex: 1, overflowY: "auto", width: "100%", px: compact ? 1 : 2 }}>
           {NAV.map((item) => {
-            const current = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const current = item.href === "/" ? pathname === "/" || pathname === "/overview" : pathname.startsWith(item.href.slice(0, -1));
             const locked = item.premium && status !== null && !status.premium;
+            const text = t(`global.shell.nav.${item.key}`);
             return (
               <li key={item.href}>
-                <Link
+                <Piece
+                  name="nav-link"
+                  component={NextLink}
                   href={item.href}
+                  selected={current}
                   aria-current={current ? "page" : undefined}
-                  title={compact ? item.label : undefined}
-                  aria-label={compact ? `${item.label}${locked ? " (premium)" : ""}` : undefined}
-                  className={`my-0.5 flex h-10 items-center gap-2 rounded-sm text-sm ${
-                    compact ? "justify-center" : "px-2"
-                  } ${
-                    current
-                      ? "bg-selection font-semibold text-structure"
-                      : "text-ink hover:bg-selection"
-                  }`}
+                  title={compact ? text : undefined}
+                  aria-label={compact ? (locked ? t("global.ui.locked.premium-suffix", { label: text }) : text) : undefined}
+                  sx={{ my: "1.875px", gap: 2, px: compact ? 0 : 2, justifyContent: compact ? "center" : "flex-start" }}
                 >
                   <Icon name={item.icon} />
-                  {compact ? null : <span className="flex-1">{item.label}</span>}
-                  {!compact && locked ? <Icon name="lock" size={16} label="Premium" className="text-muted" /> : null}
-                </Link>
+                  {compact ? null : <Box component="span" sx={{ flex: 1 }}>{text}</Box>}
+                  {!compact && locked ? <Icon name="lock" size={16} label={t("global.ui.locked.premium")} sx={{ color: muted }} /> : null}
+                </Piece>
               </li>
             );
           })}
-        </ul>
+        </Box>
         {narrow ? null : (
-          <div className={`border-t border-line ${compact ? "py-2" : "p-2"}`}>
-            <button
-              type="button"
+          <Box sx={{ borderTop: "1px solid var(--ds-role-outline-variant)", width: "100%", ...(compact ? { py: 2, display: "flex", justifyContent: "center" } : { p: 2 }) }}>
+            <ButtonBase
               onClick={toggle}
               aria-expanded={!collapsed}
-              aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-              title={collapsed ? "Expand navigation" : "Collapse navigation"}
-              className={`flex h-10 items-center gap-2 rounded-sm text-sm text-muted hover:bg-selection ${
-                compact ? "w-10 justify-center" : "w-full px-2"
-              }`}
+              aria-label={t(collapsed ? "global.shell.nav.expand-label" : "global.shell.nav.collapse-label")}
+              title={t(collapsed ? "global.shell.nav.expand-label" : "global.shell.nav.collapse-label")}
+              sx={{
+                display: "flex",
+                height: "37.5px",
+                alignItems: "center",
+                gap: 2,
+                borderRadius: 1,
+                typography: "small",
+                color: muted,
+                "&:hover": { bgcolor: selection },
+                ...(compact ? { width: "37.5px", justifyContent: "center" } : { width: "100%", px: 2, justifyContent: "flex-start" }),
+              }}
             >
               <Icon name={collapsed ? "left_panel_open" : "left_panel_close"} />
-              {compact ? null : <span>Collapse</span>}
-            </button>
-          </div>
+              {compact ? null : <span>{t("global.shell.nav.collapse")}</span>}
+            </ButtonBase>
+          </Box>
         )}
-      </nav>
-      <main id="main" className={`min-w-0 px-4 py-6 md:px-8 ${compact ? "ml-14" : "ml-60"}`}>
-        <div className="mx-auto max-w-6xl">
+      </Piece>
+      <Box component="main" id="main" sx={{ minWidth: 0, px: { xs: 4, md: 8 }, py: 6, ml: rail }}>
+        <Box sx={{ mx: "auto", maxWidth: "var(--ds-space-content)" }}>
           {children}
-          <p className="mt-12 border-t border-line pt-4 text-xs text-muted">
-            Bev Watch flags candidates for human review. It is not legal advice.
-            {status ? ` Version ${status.version}.` : ""}
-          </p>
-        </div>
-      </main>
-    </div>
+          <Typography
+            component="p"
+            sx={{ mt: 12, borderTop: "1px solid var(--ds-role-outline-variant)", pt: 4, typography: "caption", color: muted }}
+          >
+            <T k="global.ui.footer.disclaimer" />
+            {status ? ` ${t("global.ui.footer.version", { version: status.version })}` : ""}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
   );
 }

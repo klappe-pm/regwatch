@@ -25,6 +25,7 @@ site/
 /web/.next/
 /web/out/
 /web/site/
+/web/dist/
 /web/.vercel/
 /local/
 /.impeccable/review/

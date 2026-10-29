@@ -18,7 +18,9 @@ from conftest import ROOT
 TERMS_FILE_VARIABLE = "REGWATCH_FORBIDDEN_TERMS_FILE"
 
 FORBIDDEN = {
-    "owner login": "kl" + "appe" + r"(?!-pm\b)",
+    # The GitHub owner (klappe-pm) and the shared design package the web app depends on, by its
+    # npm scope and its vendored tarball's name, are published names, not owner details.
+    "owner login": "kl" + "appe" + r"(?!-pm\b|/design-system\b|-design-system-\d)",
     "owner email": "kevin" + r"\d+",
     "owner name": "Kevin" + r"\s+Lap" + "pe",
     "work item code": r"\bW" + r"I-\d+",
@@ -109,6 +111,16 @@ def test_the_scan_finds_each_kind_of_term(tmp_path: Path) -> None:
         path.write_text(line + "\n", encoding="utf-8")
         hits = scan([path], tmp_path)
         assert any(label in hit for hit in hits), (label, hits)
+
+
+def test_the_design_package_names_are_not_owner_logins(tmp_path: Path) -> None:
+    scope = "@" + "kl" + "appe" + "/design-system"
+    tarball = "kl" + "appe" + "-design-system-0.1.4.tgz"
+    path = tmp_path / "package.json"
+    path.write_text(f'"{scope}": "file:vendor/{tarball}"\n', encoding="utf-8")
+    assert scan([path], tmp_path) == []
+    path.write_text(f'"@{"kl" + "appe"}/other": "1.0.0"\n', encoding="utf-8")
+    assert scan([path], tmp_path)
 
 
 def test_the_package_owner_is_allowed_only_where_a_licence_needs_one(tmp_path: Path) -> None:
