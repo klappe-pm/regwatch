@@ -25,6 +25,8 @@ site/
 /web/.next/
 /web/out/
 /web/site/
+/web/.site-verified-*/
+/web/.site-before-managed-*/
 /web/.vercel/
 /local/
 /.impeccable/review/
@@ -33,6 +35,7 @@ site/
 /web/tsconfig.tsbuildinfo
 # a user-level rule that ignores folders starting with an underscore must not hide the hashed chunks
 !/regwatch/web/_next/
+!/regwatch/web/_next/static/chunks/app/_not-found/
 
 # secrets
 .env

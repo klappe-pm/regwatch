@@ -1,0 +1,18 @@
+{
+  "hub": "http://127.0.0.1:4400",
+  "project": "regwatch",
+  "cmsDir": "web/content",
+  "copyFolders": ["pages", "global"],
+  "designFile": "DESIGN.md",
+  "tokensDir": "web/design",
+  "credentialRef": "secret://product-feedback/hub-api-key",
+  "generate": [{ "out": "web/src/lib/copy.generated.ts" }],
+  "localApply": { "inputs": ["DESIGN.md", "web"] },
+  "sourceGeneration": {
+    "commands": [["npm", "--prefix", "web", "ci", "--offline", "--ignore-scripts"], ["node", "web/scripts/managed.mjs"], ["npm", "--prefix", "web", "run", "build"], ["npm", "--prefix", "web", "run", "build:site"]],
+    "outputs": ["web/src/lib/copy.generated.ts", "web/design/tokens.json", "web/design/tokens.css", "web/design/components.css", "web/next-env.d.ts", "web/src/lib/icons.generated.ts"],
+    "outputRoots": ["regwatch/web", "web/site"],
+    "handlesTokens": true,
+    "timeoutMs": 120000
+  }
+}
