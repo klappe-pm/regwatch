@@ -3,6 +3,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -47,6 +48,50 @@ test("onboarding marker styles exclude the managed label span at desktop and mob
   assert.match(spanRules[0][2], /width: 28px; height: 28px/);
   assert.match(spanRules[2][2], /font-size: 12px/);
   assert.match(styles, /\.bw-onboard-grid li \{ margin: 0; font-size: 0; \}/);
+});
+
+test("workspace subtitle styles exclude the managed company-name span", () => {
+  const source = readFileSync(join(webRoot, "src/app/workspace/page.tsx"), "utf8");
+  const page = ts.createSourceFile("workspace.tsx", source, ts.ScriptTarget.Latest, true);
+  let company;
+  function find(node) {
+    if (ts.isJsxElement(node) && node.openingElement.attributes.properties.some(attribute =>
+      ts.isJsxAttribute(attribute) && attribute.name.getText(page) === "className" &&
+      attribute.initializer && ts.isStringLiteral(attribute.initializer) && attribute.initializer.text === "bw-company"
+    )) company = node;
+    ts.forEachChild(node, find);
+  }
+  find(page);
+  assert.ok(company, "the company block exists in the actual workspace markup");
+  const elements = company.children.filter(ts.isJsxElement);
+  const title = elements.find(node => node.openingElement.tagName.getText(page) === "strong");
+  const subtitle = elements.find(node => node.openingElement.tagName.getText(page) === "span");
+  assert.ok(title && subtitle, "the company name and subtitle keep separate elements");
+  assert.match(title.getText(page), /<Copy\b/, "the default company name contains a managed text span");
+  assert.match(subtitle.getText(page), /<Copy\b/, "the subtitle contains managed text");
+  const styles = readFileSync(join(webRoot, "src/app/globals.css"), "utf8");
+  const spanRules = [...styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector]) => selector.includes(".bw-company") && /\bspan\b/.test(selector));
+  assert.equal(spanRules.length, 1, "only the subtitle has a company span rule");
+  assert.match(spanRules[0][1], /\.bw-company\s*>\s*span\s*$/, "subtitle styling must exclude nested company-name spans");
+  assert.match(spanRules[0][2], /font-size: 11px/);
+});
+
+test("packaged Next not-found chunks remain visible under underscore directory ignores", () => {
+  const fixture = mkdtempSync(join(tmpdir(), "regwatch-export-ignore-"));
+  try {
+    const globalIgnore = join(fixture, "global-ignore");
+    writeFileSync(globalIgnore, "**/_*/\n");
+    const ignored = path => {
+      const result = spawnSync("git", ["-C", join(webRoot, ".."), "-c", `core.excludesFile=${globalIgnore}`, "check-ignore", "--no-index", "--quiet", path], { encoding: "utf8" });
+      assert.ok(result.status === 0 || result.status === 1, result.stderr || "git check-ignore failed");
+      return result.status === 0;
+    };
+    assert.equal(ignored("regwatch/web/_next/static/chunks/app/_not-found/page-example.js"), false, "the required not-found chunk must be stageable without forcing ignored files");
+    assert.equal(ignored("regwatch/web/_next/static/chunks/app/_other/page-example.js"), true, "other underscore directory ignores remain active");
+    assert.equal(ignored("web/.env.production.local"), true, "the export exception must not unignore environment files");
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 function copyComponentUrl(generated) {

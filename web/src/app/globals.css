@@ -288,7 +288,7 @@ table {
 .bw-sidebar > .bw-brand { padding-left: 10px; }
 .bw-company { display: flex; flex-direction: column; gap: 3px; padding: 25px 12px 23px; margin-block: 20px 12px; border-block: 1px solid var(--ds-color-bw-line); }
 .bw-company strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
-.bw-company span { color: var(--ds-color-bw-muted); font-size: 11px; }
+.bw-company > span { color: var(--ds-color-bw-muted); font-size: 11px; }
 .bw-sidebar nav { display: grid; gap: 5px; }
 .bw-sidebar nav a { display: flex; align-items: center; gap: var(--ds-space-control-gap); padding: 11px 12px; border-radius: var(--ds-radius-field); font-size: 13px; color: var(--ds-color-bw-muted); }
 .bw-sidebar nav a:hover { background: var(--ds-color-nav-hover); }
