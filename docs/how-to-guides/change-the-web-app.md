@@ -32,6 +32,7 @@ To edit only the public website, `npm --prefix ~/regwatch/web run dev` serves th
 Follow the design rules the existing pages follow:
 
 - Build every part from Material UI. A part that DESIGN.md describes renders through `Piece` (the design system's `Part`, tagged with `data-part` so the hub finds it in the built pages); add a component to DESIGN.md with `material:` and `selector: '[data-part="name"]'` for a new one.
+- A part's look (colour, fill, border, radius, type, padding, shadow, opacity and its hover, selected and disabled states) comes only from its DESIGN.md component, so a hub edit to the component changes the page. The `sx` beside a part only lays it out: display, grid and flex, position, size, margins, overflow, breakpoint overrides and rules for its children. When one use of a part looks different, add a second component (such as `panel-compact`) and pass it as the part's `modifier`; its selector is `'[data-part~="name"]'`.
 - Colours come only from `var(--ds-*)` variables and the theme. Do not write a colour in a component; `ds lint --strict` fails on one. Light blue marks structure and selection; the warm accent marks priority only (act now, suspicious, failing).
 - Do not write text in a component; add it to the copy document and look it up. `ds lint --strict` fails on literal text in JSX.
 - No text is smaller than 12 pixels, and body text is 15. Spacing is a multiple of the 3.75 pixel unit in DESIGN.md. Tables use tabular numerals.
@@ -49,7 +50,7 @@ npm --prefix ~/regwatch/web run check
 
 ## Test Page Logic
 
-Logic that decides what a page shows, such as how the Sources page lays out the catalogue, lives in plain modules under `web/src/lib/` that import nothing from React or the `@/` alias, so Node can load them directly. Their tests are in `web/tests/`, one `*.test.mjs` file per module, and run with Node's built-in test runner, which strips the TypeScript types itself (Node 22.18 or newer). `web/tests/copy.test.mjs` checks that every copy key the pages use exists.
+Logic that decides what a page shows, such as how the Sources page lays out the catalogue, lives in plain modules under `web/src/lib/` that import nothing from React or the `@/` alias, so Node can load them directly. Their tests are in `web/tests/`, one `*.test.mjs` file per module, and run with Node's built-in test runner, which strips the TypeScript types itself (Node 22.18 or newer). `web/tests/copy.test.mjs` checks that every copy key the pages use exists. Tests never pin a value the hub can edit: they read text by copy key and design values from `design/spec.json` or DESIGN.md through `web/tests/design-values.mjs`.
 
 ```bash
 npm --prefix ~/regwatch/web test
@@ -57,7 +58,7 @@ npm --prefix ~/regwatch/web test
 
 The Python suite runs the same tests through `tests/test_web_logic.py` when such a Node and the web dependencies are present, and skips them otherwise.
 
-After a build, two more suites check the exports: `test:build` reads the built files (every page, link and style sheet resolves, no copy key shows, the parts carry their `data-part`), and `test:browser` opens every page in Chromium under the server's policy, in light and dark mode.
+After a build, two more suites check the exports: `test:build` reads the built files (every page, link and style sheet resolves, no copy key shows, the parts carry their `data-part`), and `test:browser` opens every page in Chromium under the server's policy, in light and dark mode. `test:browser` also rebuilds the local application in a temporary folder from a copy of the project with one copy entry and one DESIGN.md component edited, and checks that both edits render.
 
 ```bash
 npm --prefix ~/regwatch/web run build:site

@@ -219,6 +219,9 @@ components:
   button-primary-hover:
     backgroundColor: "var(--ds-role-primary)"
     opacity: "0.9"
+  button-primary-disabled:
+    textColor: "inherit"
+    opacity: "0.6"
   button-secondary:
     material: Button:outlined
     selector: '[data-part="button-secondary"]'
@@ -232,6 +235,9 @@ components:
   button-secondary-hover:
     backgroundColor: "var(--ds-role-secondary-container)"
     border: "1px solid var(--ds-role-outline)"
+  button-secondary-disabled:
+    textColor: "inherit"
+    opacity: "0.6"
   button-quiet:
     material: Button:text
     selector: '[data-part="button-quiet"]'
@@ -243,12 +249,27 @@ components:
     typography: "{typography.control}"
   button-quiet-hover:
     backgroundColor: "var(--ds-role-secondary-container)"
+  button-quiet-disabled:
+    textColor: "inherit"
+    opacity: "0.6"
   text-link:
     material: Link
     selector: '[data-part="text-link"]'
     textColor: "var(--ds-role-primary)"
     textDecoration: underline
     textUnderlineOffset: "2px"
+  text-link-small:
+    material: Link
+    selector: '[data-part~="text-link-small"]'
+    typography: "{typography.caption}"
+  text-link-quiet:
+    material: Link
+    selector: '[data-part~="text-link-quiet"]'
+    textColor: "var(--ds-role-on-surface)"
+    textDecoration: "none"
+  text-link-quiet-hover:
+    textColor: "var(--ds-role-primary)"
+    textDecoration: underline
   control-input:
     material: none
     selector: '[data-part="control-input"]'
@@ -258,6 +279,13 @@ components:
     rounded: "{rounded.default}"
     minHeight: "30px"
     typography: "{typography.small}"
+    padding: "0 7.5px"
+  control-input-disabled:
+    opacity: "0.6"
+  control-input-swatch:
+    material: none
+    selector: '[data-part~="control-input-swatch"]'
+    padding: "1.875px"
   field-label:
     material: Typography
     selector: '[data-part="field-label"]'
@@ -279,12 +307,17 @@ components:
     rounded: "{rounded.default}"
     minHeight: "37.5px"
     typography: "{typography.small}"
+    padding: "8px 7.5px"
   nav-link-hover:
     backgroundColor: "var(--ds-role-secondary-container)"
   nav-link-selected:
     backgroundColor: "var(--ds-role-secondary-container)"
     textColor: "var(--ds-role-primary)"
     fontWeight: "600"
+  nav-link-compact:
+    material: ListItemButton
+    selector: '[data-part~="nav-link-compact"]'
+    padding: "8px 0"
   search-panel:
     material: none
     selector: '[data-part="search-panel"]'
@@ -301,6 +334,8 @@ components:
     selector: '[data-part="table-heading"]'
     textColor: "var(--ds-role-on-surface-variant)"
     typography: "{typography.overline}"
+    borderBottom: "1px solid var(--ds-role-outline-variant)"
+    padding: "7.5px"
   figures:
     material: none
     selector: '[data-part="figures"]'
@@ -311,6 +346,20 @@ components:
     selector: '[data-part="panel"]'
     backgroundColor: "var(--ds-role-surface-container-lowest)"
     border: "1px solid var(--ds-role-outline-variant)"
+    padding: "15px"
+  panel-compact:
+    material: none
+    selector: '[data-part~="panel-compact"]'
+    padding: "7.5px 15px"
+    typography: "{typography.small}"
+  panel-roomy:
+    material: none
+    selector: '[data-part~="panel-roomy"]'
+    padding: "22.5px 15px"
+  panel-flush:
+    material: none
+    selector: '[data-part~="panel-flush"]'
+    padding: "0"
   empty-state:
     material: none
     selector: '[data-part="empty-state"]'
@@ -332,6 +381,7 @@ components:
     rounded: "{rounded.default}"
     padding: "0 3.75px"
     typography: "{typography.mono}"
+    fontSize: "13px"
   generated-tag:
     material: none
     selector: '[data-part="generated-tag"]'
@@ -339,6 +389,7 @@ components:
     border: "1px solid var(--ds-role-outline)"
     padding: "0 3.75px"
     typography: "{typography.caption}"
+    fontWeight: "500"
   severity-act-now:
     material: none
     selector: '[data-part="severity-act-now"]'
@@ -385,8 +436,11 @@ components:
     padding: "12px 22px"
     minHeight: "48px"
     typography: "{typography.action}"
+    textDecoration: "none"
   public-button-hover:
     backgroundColor: "{colors.button-hover}"
+  public-button-disabled:
+    opacity: "0.6"
   public-button-small:
     material: Button:contained
     selector: '[data-part="public-button-small"]'
@@ -396,8 +450,11 @@ components:
     padding: "10px 18px"
     minHeight: "42px"
     typography: "{typography.action}"
+    textDecoration: "none"
   public-button-small-hover:
     backgroundColor: "{colors.button-hover}"
+  public-button-small-disabled:
+    opacity: "0.6"
   public-button-light:
     material: Button:contained
     selector: '[data-part="public-button-light"]'
@@ -407,8 +464,11 @@ components:
     padding: "12px 22px"
     minHeight: "48px"
     typography: "{typography.action}"
+    textDecoration: "none"
   public-button-light-hover:
     backgroundColor: "{colors.light-hover}"
+  public-button-light-disabled:
+    opacity: "0.6"
   public-button-outline:
     material: Button:outlined
     selector: '[data-part="public-button-outline"]'
@@ -418,14 +478,32 @@ components:
     padding: "12px 22px"
     minHeight: "48px"
     typography: "{typography.action}"
+    textDecoration: "none"
   public-button-outline-hover:
     backgroundColor: "{colors.outline-hover}"
     border: "1px solid {colors.outline-border}"
+  public-button-outline-disabled:
+    opacity: "0.6"
   public-text-link:
     material: Link
     selector: '[data-part="public-text-link"]'
     textColor: "{colors.text-link}"
     typography: "{typography.action}"
+    background: "none"
+    border: "0"
+    padding: "0"
+    textDecoration: underline
+    textDecorationColor: transparent
+    textUnderlineOffset: "4px"
+  public-text-link-hover:
+    textDecorationColor: currentColor
+  public-text-link-inline:
+    material: Link
+    selector: '[data-part~="public-text-link-inline"]'
+    textColor: "inherit"
+    fontSize: "11px"
+    fontWeight: "400"
+    textDecoration: underline
   public-field:
     material: none
     selector: '[data-part="public-field"]'
@@ -435,6 +513,8 @@ components:
     rounded: "{rounded.field}"
     padding: "10px 12px"
     minHeight: "46px"
+    fontSize: "14px"
+    fontWeight: "400"
   public-tag:
     material: none
     selector: '[data-part="public-tag"]'
@@ -442,6 +522,9 @@ components:
     textColor: "{colors.tag-ink}"
     rounded: "{rounded.tag}"
     padding: "3px 8px"
+    fontSize: "11px"
+    fontWeight: "650"
+    lineHeight: "1.5"
   public-tag-priority:
     material: none
     selector: '[data-part="public-tag-priority"]'
@@ -449,12 +532,16 @@ components:
     textColor: "{colors.priority-ink}"
     rounded: "{rounded.tag}"
     padding: "3px 8px"
+    fontSize: "11px"
+    fontWeight: "650"
+    lineHeight: "1.5"
   choice:
     material: none
     selector: '[data-part="choice"]'
     border: "1px solid {colors.choice-border}"
     rounded: "{rounded.control}"
     padding: "13px"
+    fontSize: "13px"
   choice-selected:
     backgroundColor: "{colors.choice-selected-surface}"
     border: "1px solid {colors.choice-selected-border}"
@@ -472,6 +559,7 @@ components:
     textColor: "{colors.note-ink}"
     rounded: "{rounded.control}"
     padding: "18px"
+    fontSize: "13px"
   public-error:
     material: none
     selector: '[data-part="public-error"]'
@@ -479,6 +567,7 @@ components:
     textColor: "{colors.error-ink}"
     rounded: "{rounded.control}"
     padding: "14px 18px"
+    fontSize: "13px"
   public-notice:
     material: none
     selector: '[data-part="public-notice"]'
@@ -486,12 +575,14 @@ components:
     textColor: "{colors.notice-ink}"
     rounded: "{rounded.control}"
     padding: "12px 16px"
+    fontSize: "13px"
   briefing-preview:
     material: Card
     selector: '[data-part="briefing-preview"]'
     backgroundColor: "{colors.white}"
     rounded: "{rounded.feature}"
     boxShadow: "0 20px 60px {colors.preview-shadow}"
+    border: "0"
   plan-card:
     material: Card
     selector: '[data-part="plan-card"]'
@@ -504,6 +595,7 @@ components:
     textColor: "{colors.bw-muted}"
     rounded: "{rounded.field}"
     padding: "11px 12px"
+    fontSize: "13px"
   workspace-nav-link-hover:
     backgroundColor: "{colors.nav-hover}"
   workspace-nav-link-selected:
@@ -516,9 +608,13 @@ components:
     textColor: "{colors.bw-muted}"
     rounded: "{rounded.field}"
     padding: "8px 12px"
+    fontSize: "12px"
+    fontWeight: "400"
+    lineHeight: "1.65"
   filter-tab-selected:
     backgroundColor: "{colors.tab-selected}"
     textColor: "{colors.bw-navy}"
+    fontWeight: "600"
   context-panel:
     material: none
     selector: '[data-part="context-panel"]'
@@ -537,11 +633,18 @@ components:
     backgroundColor: "{colors.monogram-surface}"
     textColor: "{colors.monogram-ink}"
     rounded: "{rounded.control}"
+    fontSize: "13px"
+    fontWeight: "650"
   brand:
     material: Link
     selector: '[data-part="brand"]'
     textColor: "{colors.bw-navy}"
     typography: "{typography.wordmark}"
+    textDecoration: "none"
+  brand-local:
+    material: Link
+    selector: '[data-part~="brand-local"]'
+    textColor: "var(--ds-role-primary)"
   public-header:
     material: none
     selector: '[data-part="public-header"]'
@@ -572,6 +675,8 @@ This record captures the public website, five-step onboarding, browser-local pre
 ## Tokens
 
 Colors carry Material roles for the local application: `roles` holds the light scheme and `rolesDark` the dark one, and every local component refers to a role through its `--ds-role-*` variable so it follows the system setting. The public website and preview refer to fixed `colors` only. Spacing has an explicit unit of 3.75px, the 0.25rem step at the application's 15px root size, so a spacing of 2 in a component is 7.5px. Each component names the Material UI component it renders as (`material`) and the selector that finds it in the built pages (`selector`); every rendered part carries a matching `data-part` attribute.
+
+These components are the only source of each part's look: colors, fill, border, radius, typography, padding, shadow and opacity, with their hover, selected and disabled states. Every part renders through `Piece` in [the shared parts](web/src/components/ui.tsx), which applies its component's style, so a component edited here or in the hub changes the rendered pages after `ds sync` and a build. A part that differs from its component by more than layout names a second component as its `modifier` (for example `panel-compact`, `text-link-quiet` or `brand-local`); the modifier's style and states apply over the component's, and its name joins the element's `data-part`, which is why a modifier's selector matches with `~=`. The sx a page passes beside a part keeps only what a component cannot express: display, grid and flex layout, position, sizing, margins and overflow; breakpoint overrides; descendant rules for a part's children; transitions and the cursor. [Application Styles](web/styles/app.css) hold no component style, only the focus ring, tabular numbers, print and reduced-motion rules, all from `--ds-*` variables. The local application ships prebuilt in `regwatch/web/`, so `hub.config.json` declares `sourceGeneration`: a hub publish runs `ds sync` and the build, and its pull request carries the rebuilt pages that CI compares with a fresh build.
 
 ## Colors
 

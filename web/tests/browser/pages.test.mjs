@@ -111,6 +111,7 @@ test("onboarding checks each step and saves the watchlist in the browser", async
   await page.getByRole("heading", { name: step(3) }).waitFor();
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("bev-watch.workspace.v1")));
   assert.equal(stored.company, "Example Beverages");
+  // The stored market is the workspace's own identifier (MARKETS in src/lib/bev-watch.ts), not copy, so it stays literal.
   assert.deepEqual(stored.markets, ["United States"]);
   assert.deepEqual(problems, []);
   await context.close();

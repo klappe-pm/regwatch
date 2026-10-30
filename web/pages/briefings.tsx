@@ -16,7 +16,7 @@ const KINDS: [string, string][] = ["tiered", "daily", "weekly"].map((kind) => [k
 
 function Rendered({ document }: { document: BriefingDocument }) {
   return (
-    <Piece name="panel" component="article" sx={{ px: { xs: 4, md: 8 }, py: 6, overflowWrap: "anywhere" }}>
+    <Piece name="panel" modifier="panel-roomy" component="article" sx={{ px: { md: 8 }, overflowWrap: "anywhere" }}>
       <Typography component="h2" sx={{ fontSize: "24px", lineHeight: "32px", fontWeight: 600 }}>
         {document.title}
       </Typography>

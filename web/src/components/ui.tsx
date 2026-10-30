@@ -1,6 +1,8 @@
 // The shared parts of the local application, built from Material UI and styled by the components
-// in DESIGN.md. Every part renders through `Piece`; `Part` tags it with data-part for the hub.
-import { Part, T, type PartProps } from "@klappe/design-system";
+// in DESIGN.md. Every part renders through `Piece`; `Part` tags it with data-part for the hub. A part's
+// look (colour, fill, border, radius, type, padding, shadow, opacity and its states) comes only from its
+// DESIGN.md component, so a hub edit changes the page; the sx given here only lays the part out.
+import { Part, T, partSx, useDesignSpec, useParts, type PartProps } from "@klappe/design-system";
 import Box from "@mui/material/Box";
 import InputBase, { type InputBaseProps } from "@mui/material/InputBase";
 import NativeSelect from "@mui/material/NativeSelect";
@@ -18,9 +20,15 @@ import { ICON_PATHS, type IconName } from "@/lib/icons.generated";
 import { SEVERITY, words } from "@/lib/labels";
 import { t } from "@/lib/text";
 
-/** A part from DESIGN.md. `Part` marks it with data-part, so the hub's usage scan finds it in the built pages. */
-export function Piece(props: PartProps) {
-  return <Part {...props} />;
+/**
+ * A part from DESIGN.md. `Part` marks it with data-part, so the hub's usage scan finds it in the built pages.
+ * `modifier` names a second DESIGN.md component (such as panel-compact) whose style, states included, is
+ * applied over the part's own and whose name joins its data-part.
+ */
+export function Piece({ modifier, sx, ...props }: PartProps & { modifier?: string }) {
+  const spec = useDesignSpec();
+  if (!modifier) return <Part {...props} sx={sx} />;
+  return <Part {...props} data-part={modifier} sx={[partSx(spec, modifier), ...(Array.isArray(sx) ? sx : sx ? [sx] : [])]} />;
 }
 
 /** A Material Symbols Outlined icon at weight 400, drawn inline. Decorative unless labelled. */
@@ -39,9 +47,9 @@ export function Icon({ name, size = 20, label, sx }: { name: IconName; size?: nu
 }
 
 /** A link inside the application, rendered by Material UI with Next's client navigation. */
-export function TextLink({ href, children, sx }: { href: string; children: ReactNode; sx?: SxProps<Theme> }) {
+export function TextLink({ href, children, quiet = false }: { href: string; children: ReactNode; quiet?: boolean }) {
   return (
-    <Piece name="text-link" component={NextLink} href={href} sx={sx}>
+    <Piece name="text-link" modifier={quiet ? "text-link-quiet" : undefined} component={NextLink} href={href}>
       {children}
     </Piece>
   );
@@ -89,7 +97,7 @@ export function Section({ title, actions, children, id }: { title: string; actio
 
 export function Command({ children }: { children: string }) {
   return (
-    <Piece name="command" component="code" sx={{ fontSize: "13px" }}>
+    <Piece name="command" component="code">
       {children}
     </Piece>
   );
@@ -112,7 +120,7 @@ export function EmptyState({ children, command }: { children: ReactNode; command
 /** A premium feature shown, not hidden, while premium is off. */
 export function Locked({ feature, onSettings = false }: { feature: string; onSettings?: boolean }) {
   return (
-    <Piece name="panel" sx={{ display: "flex", alignItems: "flex-start", gap: 2, p: 4 }}>
+    <Piece name="panel" sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
       <Icon name="lock" sx={{ mt: "2px", color: "var(--ds-role-on-surface-variant)" }} />
       {onSettings ? (
         <Typography component="p">
@@ -135,7 +143,7 @@ export function Locked({ feature, onSettings = false }: { feature: string; onSet
 /** A quiet label, such as "Generated" beside text a language model wrote. */
 export function Tag({ children }: { children: ReactNode }) {
   return (
-    <Piece name="generated-tag" component="span" sx={{ display: "inline-block", fontWeight: 500 }}>
+    <Piece name="generated-tag" component="span" sx={{ display: "inline-block" }}>
       {children}
     </Piece>
   );
@@ -241,22 +249,11 @@ export function DataTable({ children, label }: { children: ReactNode; label: str
 type Hide = "sm" | "md";
 const shown = (hide?: Hide) => (hide ? { display: { xs: "none", [hide]: "table-cell" } } : {});
 
+/** A column heading, styled by the table-heading component. */
 export function Th({ children, numeric = false, hide }: { children?: ReactNode; numeric?: boolean; hide?: Hide }) {
+  const part = useParts(["table-heading"], { ...shown(hide), whiteSpace: "nowrap", textAlign: numeric ? "right" : "left" });
   return (
-    <TableCell
-      component="th"
-      scope="col"
-      sx={{
-        ...shown(hide),
-        whiteSpace: "nowrap",
-        px: 2,
-        py: 2,
-        borderBottom: "1px solid var(--ds-role-outline-variant)",
-        textAlign: numeric ? "right" : "left",
-        color: "var(--ds-role-on-surface-variant)",
-        typography: "overline",
-      }}
-    >
+    <TableCell component="th" scope="col" {...part}>
       {children}
     </TableCell>
   );
@@ -337,7 +334,7 @@ export function Button({
       disabled={disabled}
       aria-label={label}
       disableElevation
-      sx={{ gap: 1, minWidth: 0, "&.Mui-disabled": { opacity: 0.6, cursor: "not-allowed", color: "inherit" } }}
+      sx={{ gap: 1, minWidth: 0, "&.Mui-disabled": { cursor: "not-allowed" } }}
     >
       {children}
     </Piece>
@@ -364,16 +361,15 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 const CONTROL_SX = {
-  px: 2,
   "& input, & select": { p: 0, height: "28px", fontSize: "13px" },
-  "&.Mui-disabled": { opacity: 0.6 },
 };
 
-/** A text box in the application's compact control style. */
-export function ControlInput({ sx, ...props }: InputBaseProps) {
+/** A text box in the application's compact control style; `modifier` names a variant such as control-input-swatch. */
+export function ControlInput({ sx, modifier, ...props }: InputBaseProps & { modifier?: string }) {
   return (
     <Piece
       name="control-input"
+      modifier={modifier}
       component={InputBase}
       {...props}
       sx={[CONTROL_SX, ...(Array.isArray(sx) ? sx : sx ? [sx] : [])]}
@@ -476,7 +472,7 @@ export function ExternalLink({ href, children, small = false }: { href: string; 
       href={href}
       target="_blank"
       rel="noreferrer noopener"
-      sx={small ? { typography: "caption", fontSize: "12px" } : undefined}
+      modifier={small ? "text-link-small" : undefined}
     >
       {children}
     </Piece>

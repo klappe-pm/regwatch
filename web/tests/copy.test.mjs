@@ -63,7 +63,7 @@ test("no copy entry is empty", () => {
 test("a missing key throws instead of showing the key", async () => {
   const { t } = await import("../src/lib/text.ts");
   assert.throws(() => t("pages.nowhere.missing"), /Missing copy/);
-  assert.equal(t("global.preview-data.brand.home", { name: "Bev Watch" }), "Bev Watch home");
+  assert.equal(t("global.preview-data.brand.home", { name: "Bev Watch" }), copy["global.preview-data.brand.home"].replace("{name}", "Bev Watch"));
 });
 
 test("the shared modules read their words from the copy", async () => {
@@ -71,7 +71,7 @@ test("the shared modules read their words from the copy", async () => {
   assert.equal(SEVERITY["act-now"], copy["global.labels.severity.act-now"]);
   assert.deepEqual(TIERS.map(([, name]) => name), ["v1", "v2", "v3"].map((id) => copy[`global.labels.tiers.${id}`]));
   assert.equal(outcome(3), copy["global.labels.outcome.changes"]);
-  assert.equal(outcome(9), "Exit 9");
+  assert.equal(outcome(9), copy["global.labels.outcome.exit"].replace("{code}", "9"));
   assert.equal(cadence("daily"), copy["global.labels.cadence.daily"]);
   const { SOURCES, SAMPLE_UPDATES, categoryName } = await import("../src/lib/bev-watch.ts");
   assert.equal(SOURCES[0].name, copy["global.preview-data.sources.fda.name"]);

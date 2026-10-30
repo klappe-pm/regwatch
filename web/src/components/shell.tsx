@@ -128,7 +128,7 @@ function Search({ compact }: { compact: boolean }) {
   }
 
   const input = (
-    <Piece name="control-input" sx={{ display: "flex", height: "30px", alignItems: "center", gap: 1, px: 2 }}>
+    <Piece name="control-input" sx={{ display: "flex", height: "30px", alignItems: "center", gap: 1 }}>
       <Icon name="search" size={18} sx={{ color: muted }} />
       <InputBase
         inputRef={inputRef}
@@ -286,14 +286,13 @@ export function Shell({ children }: { children: ReactNode }) {
             borderBottom: "1px solid var(--ds-role-outline-variant)",
             width: "100%",
             ...(compact ? { justifyContent: "center" } : { px: 4 }),
-            "& [data-part='brand']": { color: "var(--ds-role-primary)" },
           }}
         >
           {compact ? (
-            <Brand compact />
+            <Brand compact local />
           ) : (
             <Box sx={{ minWidth: 0 }}>
-              <Brand />
+              <Brand local />
               <Typography component="p" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", typography: "caption", color: muted }}>
                 {status ? status.project : " "}
               </Typography>
@@ -312,13 +311,14 @@ export function Shell({ children }: { children: ReactNode }) {
               <li key={item.href}>
                 <Piece
                   name="nav-link"
+                  modifier={compact ? "nav-link-compact" : undefined}
                   component={NextLink}
                   href={item.href}
                   selected={current}
                   aria-current={current ? "page" : undefined}
                   title={compact ? text : undefined}
                   aria-label={compact ? (locked ? t("global.ui.locked.premium-suffix", { label: text }) : text) : undefined}
-                  sx={{ my: "1.875px", gap: 2, px: compact ? 0 : 2, justifyContent: compact ? "center" : "flex-start" }}
+                  sx={{ my: "1.875px", gap: 2, justifyContent: compact ? "center" : "flex-start" }}
                 >
                   <Icon name={item.icon} />
                   {compact ? null : <Box component="span" sx={{ flex: 1 }}>{text}</Box>}

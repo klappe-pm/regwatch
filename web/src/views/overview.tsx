@@ -95,7 +95,7 @@ export function OverviewView() {
                         <Td>
                           <TextLink
                             href={`/changes/?q=${encodeURIComponent(impact.obligation_id)}`}
-                            sx={{ color: "var(--ds-role-on-surface)", textDecoration: "none", "&:hover": { color: "var(--ds-role-primary)", textDecoration: "underline" } }}
+                            quiet
                           >
                             {impact.obligation_title}
                           </TextLink>

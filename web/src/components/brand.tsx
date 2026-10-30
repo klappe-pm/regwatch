@@ -21,10 +21,12 @@ export function BrandMark({ size = 32 }: { size?: number }) {
   );
 }
 
-export function Brand({ compact = false }: { compact?: boolean }) {
+/** The wordmark. `local` uses the brand-local colour of the local application's navigation rail. */
+export function Brand({ compact = false, local = false }: { compact?: boolean; local?: boolean }) {
   return (
     <Piece
       name="brand"
+      modifier={local ? "brand-local" : undefined}
       component={NextLink}
       href="/"
       aria-label={t("global.preview-data.brand.home", { name: BRAND })}
@@ -34,7 +36,6 @@ export function Brand({ compact = false }: { compact?: boolean }) {
         alignItems: "center",
         gap: "10px",
         whiteSpace: "nowrap",
-        textDecoration: "none",
         "@media (max-width: 540px)": { fontSize: "20px", gap: "8px", "& svg": { width: 28, height: 28 } },
       }}
     >

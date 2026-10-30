@@ -344,7 +344,7 @@ export default function WorkspacePage() {
               href={`/workspace/?view=${n.id}`}
               selected={view === n.id}
               aria-current={view === n.id ? "page" : undefined}
-              sx={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px", flexGrow: 0 }}
+              sx={{ display: "flex", alignItems: "center", gap: "12px", flexGrow: 0 }}
             >
               <Icon name={n.icon} size={21} />
               <span>{p(`nav.${n.id}`)}</span>
@@ -577,7 +577,7 @@ export default function WorkspacePage() {
                           aria-pressed={filter === id}
                           className={filter === id ? "Mui-selected" : undefined}
                           onClick={() => setFilter(id)}
-                          sx={{ fontSize: "12px", fontWeight: filter === id ? 600 : 400, minWidth: 0, lineHeight: 1.65 }}
+                          sx={{ minWidth: 0 }}
                         >
                           {p(`updates.${id}`)}
                         </Piece>
@@ -738,7 +738,7 @@ export default function WorkspacePage() {
                           <Piece
                             name="source-monogram"
                             component="span"
-                            sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 66, height: 60, fontSize: "13px", fontWeight: 650, flexShrink: 0 }}
+                            sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 66, height: 60, flexShrink: 0 }}
                           >
                             {s.short}
                           </Piece>

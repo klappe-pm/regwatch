@@ -70,10 +70,11 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
       <Stack direction="row" sx={{ alignItems: "center", gap: 2 }}>
         <ControlInput
           type="color"
+          modifier="control-input-swatch"
           inputProps={{ "aria-label": p("design.picker", { label }) }}
           value={ratio === null ? designSpec.colors.black : value.toLowerCase()}
           onChange={(event) => onChange(event.target.value)}
-          sx={{ height: "30px", width: "37.5px", flexShrink: 0, cursor: "pointer", p: "1.875px", "& input": { p: 0, height: "100%", cursor: "pointer" } }}
+          sx={{ height: "30px", width: "37.5px", flexShrink: 0, cursor: "pointer", "& input": { p: 0, height: "100%", cursor: "pointer" } }}
         />
         <ControlInput
           value={value}
@@ -119,7 +120,7 @@ function DesignForm({ design, onSaved }: { design: DesignSettings; onSaved: Save
   const documentMuted = "var(--ds-color-muted)";
 
   return (
-    <Piece name="panel" component="form" onSubmit={save} sx={{ p: 4 }}>
+    <Piece name="panel" component="form" onSubmit={save}>
       <Box sx={{ display: "grid", gap: 4, gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "minmax(0, 1fr) minmax(0, 330px)" } }}>
         <Box sx={{ display: "grid", gap: 3, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))" } }}>
           <TextField label={p("design.title-format")} value={values.title_format} onChange={set("title_format")} hint={p("design.title-format-hint")} />
@@ -272,7 +273,7 @@ function LlmForm({ llm, onSaved }: { llm: LlmSettings; onSaved: Saved }) {
   }
 
   return (
-    <Piece name="panel" sx={{ p: 4 }}>
+    <Piece name="panel">
       <Stack direction="row" sx={{ mb: 4, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
         <Box sx={{ maxWidth: "640px" }}>
           <Typography component="p" id="llm-label" sx={{ fontWeight: 500 }}>
@@ -349,7 +350,7 @@ function FocusAreas({ settings, onSaved }: { settings: Settings; onSaved: Saved 
       <Typography component="p" sx={{ mb: 2, typography: "small", color: muted }}>
         {p("focus.intro")}
       </Typography>
-      <Piece name="panel" component="fieldset" sx={{ m: 0, p: 0, minWidth: 0 }}>
+      <Piece name="panel" modifier="panel-flush" component="fieldset" sx={{ m: 0, minWidth: 0 }}>
         <Box component="legend" sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0,0,0,0)" }}>
           {p("focus.legend")}
         </Box>
@@ -408,7 +409,7 @@ function Premium({ enabled, onSaved }: { enabled: boolean; onSaved: Saved }) {
 
   return (
     <Section title={p("premium.title")} id="premium">
-      <Piece name="panel" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 4, p: 4 }}>
+      <Piece name="panel" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
         <Box sx={{ maxWidth: "640px" }}>
           <Typography component="p" id="premium-label" sx={{ fontWeight: 500 }}>
             {p("premium.label")}

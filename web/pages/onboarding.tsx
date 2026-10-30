@@ -335,7 +335,7 @@ export default function OnboardingPage() {
           </Box>
           <Box component="p" sx={{ fontSize: "11px", mt: "26px", ...muted, "& a": { textDecoration: "underline", ml: "5px" } }}>
             {p("actions.footer")}
-            <TextAction href="/privacy/" sx={{ fontSize: "11px", fontWeight: 400, color: "inherit", textDecoration: "underline", ml: "5px" }}>
+            <TextAction href="/privacy/" modifier="public-text-link-inline" sx={{ ml: "5px" }}>
               {p("actions.your-data")}
             </TextAction>
           </Box>

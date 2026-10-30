@@ -98,7 +98,7 @@ export function PublicHome() {
           <Piece
             name="briefing-preview"
             aria-label={p("preview.label")}
-            sx={{ overflow: "hidden", border: 0, "@media (max-width: 800px)": { maxWidth: "540px", width: "100%", mx: "auto" } }}
+            sx={{ overflow: "hidden", "@media (max-width: 800px)": { maxWidth: "540px", width: "100%", mx: "auto" } }}
           >
             <Box
               sx={{

@@ -123,8 +123,7 @@ export function ActionButton({
           gap: "12px",
           textAlign: "center",
           transition: "background-color .18s ease-out",
-          textDecoration: "none",
-          "&.Mui-disabled": { opacity: 0.6, cursor: "not-allowed" },
+          "&.Mui-disabled": { cursor: "not-allowed" },
         },
         sx,
       )}
@@ -167,13 +166,6 @@ export function TextAction({
           alignItems: "center",
           gap: "8px",
           cursor: "pointer",
-          background: "none",
-          border: 0,
-          p: 0,
-          textDecoration: "underline",
-          textDecorationColor: "transparent",
-          textUnderlineOffset: "4px",
-          "&:hover": { textDecorationColor: "currentColor" },
         },
         sx,
       )}
@@ -189,7 +181,7 @@ export function PublicTag({ priority = false, children }: { priority?: boolean; 
     <Piece
       name={priority ? "public-tag-priority" : "public-tag"}
       component="span"
-      sx={{ display: "inline-block", fontSize: "11px", fontWeight: 650, lineHeight: 1.5 }}
+      sx={{ display: "inline-block" }}
     >
       {children}
     </Piece>
@@ -310,8 +302,6 @@ export function FeatureList({ size = 20, sx }: { size?: number; sx?: object }) {
 const fieldSx = {
   width: "100%",
   minWidth: 0,
-  fontSize: "14px",
-  fontWeight: 400,
   "& input, & textarea, & select": { p: 0, fontSize: "14px", "&::placeholder": { color: c("placeholder"), opacity: 1 } },
   "& textarea": { resize: "vertical" },
 };
@@ -364,7 +354,7 @@ export function Choice({
       name="choice"
       component="label"
       className={checked ? "Mui-selected" : undefined}
-      sx={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "58px", fontSize: "13px", cursor: "pointer" }}
+      sx={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "58px", cursor: "pointer" }}
     >
       <Box component="input" type={type} name={name} checked={checked} onChange={onChange} sx={{ width: "17px", height: "17px", flexShrink: 0, m: 0 }} />
       {children}
@@ -375,7 +365,7 @@ export function Choice({
 /** A pale note with an icon, for what the preview does not do. */
 export function PublicNote({ icon, children }: { icon?: IconName; children: ReactNode }) {
   return (
-    <Piece name="public-note" sx={{ display: "flex", alignItems: "start", gap: "12px", fontSize: "13px", my: "24px" }}>
+    <Piece name="public-note" sx={{ display: "flex", alignItems: "start", gap: "12px", my: "24px" }}>
       {icon ? <Icon name={icon} /> : null}
       {children}
     </Piece>
@@ -384,7 +374,7 @@ export function PublicNote({ icon, children }: { icon?: IconName; children: Reac
 
 export function PublicError({ children }: { children: ReactNode }) {
   return (
-    <Piece name="public-error" component="p" role="alert" sx={{ fontSize: "13px", mb: "20px" }}>
+    <Piece name="public-error" component="p" role="alert" sx={{ mb: "20px" }}>
       {children}
     </Piece>
   );
@@ -392,7 +382,7 @@ export function PublicError({ children }: { children: ReactNode }) {
 
 export function PublicNotice({ children, live = true }: { children: ReactNode; live?: boolean }) {
   return (
-    <Piece name="public-notice" component="p" role={live ? "status" : undefined} sx={{ fontSize: "13px", mb: "20px" }}>
+    <Piece name="public-notice" component="p" role={live ? "status" : undefined} sx={{ mb: "20px" }}>
       {children}
     </Piece>
   );

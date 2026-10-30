@@ -103,7 +103,7 @@ export default function KeysPage() {
         </EmptyState>
       ) : null}
       {data && data.keys.length > 0 && !data.keychain_available ? (
-        <Piece name="panel" sx={{ mb: 4, px: 4, py: 2, typography: "small" }}>
+        <Piece name="panel" modifier="panel-compact" sx={{ mb: 4 }}>
           {p("no-keychain.before")}{" "}
           <Box component="code" sx={{ typography: "mono", fontSize: "13px" }}>
             {p("no-keychain.command")}

@@ -81,7 +81,7 @@ export default function AutomationsPage() {
         <>
           <Section title={p("schedule.title")} id="schedule">
             {schedule.installed ? (
-              <Piece name="panel" sx={{ p: 4 }}>
+              <Piece name="panel">
                 <Details
                   rows={[
                     [p("schedule.runs"), cadence(schedule.every)],

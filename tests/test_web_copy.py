@@ -63,10 +63,14 @@ def not_title_case(text: str) -> bool:
 
 
 def test_the_pages_have_headings_to_check() -> None:
-    found = [heading for path in PAGES for heading in headings(path)]
-    assert "Why It Was Flagged" in found
-    assert "Impacts on Your Products" in found
-    assert "Make This Workspace Yours." in found
+    # The headings are found by copy key, so a hub edit to their wording keeps this check.
+    found = {key for path in PAGES for key in heading_keys(path)}
+    for key in (
+        "pages.changes.detail.why",
+        "pages.obligations.detail.impacts",
+        "pages.workspace.overview.setup-title",
+    ):
+        assert key in found, key
 
 
 def test_every_heading_key_is_in_the_copy() -> None:

@@ -200,7 +200,7 @@ export default function ChangesPage() {
                   component="aside"
                   aria-label={p("impacts.selected")}
                   aria-live="polite"
-                  sx={{ alignSelf: "start", p: 4, position: { lg: "sticky" }, top: { lg: "22.5px" } }}
+                  sx={{ alignSelf: "start", position: { lg: "sticky" }, top: { lg: "22.5px" } }}
                 >
                   <Detail impact={chosen} />
                 </Piece>
