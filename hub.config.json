@@ -2,6 +2,10 @@
   "hub": "http://127.0.0.1:4400",
   "project": "regwatch",
   "cmsDir": "docs/content-management-system",
+  "copyFolders": ["pages", "global"],
+  "designFile": "DESIGN.md",
+  "credentialRef": "secret://product-feedback/hub-api-key",
+  "localApply": { "inputs": ["DESIGN.md", "docs/content-management-system", "web"] },
   "sourceGeneration": {
     "commands": [
       ["npm", "--prefix", "web", "ci", "--offline", "--ignore-scripts"],

@@ -1,5 +1,5 @@
 // Build the public website without replacing the Python package's local application.
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, renameSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -18,10 +18,23 @@ for (const args of steps) {
 }
 // dist/ rather than site/: ds skips dist/ when it reads the custom properties of the
 // project's CSS, so a public build left in place cannot make design/spec.json look stale.
+// The export is staged beside dist/ and swapped in, so a failed copy leaves the previous site.
 const site = join(web, "dist");
-rmSync(site, { recursive: true, force: true });
-mkdirSync(site, { recursive: true });
-for (const name of ["index.html", "404.html", "404", "_next", "icon.svg", "pricing", "privacy", "onboarding", "workspace"]) {
-  if (existsSync(join(web, "out", name))) cpSync(join(web, "out", name), join(site, name), { recursive: true });
+const staged = mkdtempSync(join(web, ".dist-next-"));
+const previous = `${staged}-previous`;
+try {
+  for (const name of ["index.html", "404.html", "404", "_next", "icon.svg", "pricing", "privacy", "onboarding", "workspace"]) {
+    if (existsSync(join(web, "out", name))) cpSync(join(web, "out", name), join(staged, name), { recursive: true });
+  }
+  if (existsSync(site)) renameSync(site, previous);
+  try {
+    renameSync(staged, site);
+  } catch (reason) {
+    if (existsSync(previous)) renameSync(previous, site);
+    throw reason;
+  }
+  rmSync(previous, { recursive: true, force: true });
+} finally {
+  rmSync(staged, { recursive: true, force: true });
 }
 console.log("Public website ready in web/dist. Local engine routes are excluded.");

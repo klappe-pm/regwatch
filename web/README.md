@@ -36,6 +36,10 @@ The public workspace uses the versioned `Workspace` schema in `src/lib/bev-watch
 
 Regulatory examples are synthetic and explicitly labeled. Source links navigate to official websites; they do not verify or substantiate the invented updates. The preview performs no scheduled monitoring and sends no emails. It does not create accounts, synchronize data between devices, collect payments, or grant paid entitlements.
 
+## Managed Content and Design
+
+Category, market, and cadence labels are editable copy while their stored workspace values remain stable. After a copy or design edit, `npm run sync` regenerates `design/`; `npm run check` fails when the committed files are stale. `hub.config.json` and `product-feedback.config.json` at the repository root point the hub and the review workspace at `DESIGN.md` and `docs/content-management-system/`, and a hub publish rebuilds `regwatch/web/` with them.
+
 ## Commercial Launch Requirements
 
 Subscription pricing, payment provider, account service, hosted storage, and monitoring jobs remain undecided. Connect and verify those services before offering a paid subscription. A client-side premium flag or checkout return URL must never grant subscription access.

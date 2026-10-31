@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "Bev Watch",
+  "repo": "klappe-pm/regwatch",
+  "workspace": {
+    "url": "http://127.0.0.1:4178",
+    "staticDir": "web/dist"
+  },
+  "paths": {
+    "cms": "docs/content-management-system",
+    "feedback": "local/feedback",
+    "queue": "local/feedback/queue",
+    "work": "local/feedback/work"
+  },
+  "tokens": { "css": "web/design/ds.css" },
+  "content": { "sourceRoots": ["web/pages", "web/src"], "skipFiles": ["web/src/lib/icons.generated.ts"] },
+  "pipeline": { "verify": ["npm", "--prefix", "web", "test"], "install": null },
+  "review": { "pipeline": false }
+}
