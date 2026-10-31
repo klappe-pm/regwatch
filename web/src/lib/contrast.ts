@@ -2,6 +2,8 @@
 // WCAG 2.2 formula regwatch.toml is checked with. Kept free of React so node --test
 // can check it.
 
+import { t } from "./text.ts";
+
 /** True for a colour written #rrggbb. */
 export function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
@@ -26,9 +28,9 @@ export const AA_CONTRAST = 4.5;
 /** A warning for a colour that is not #rrggbb or is too light for text, or null when it is fine. */
 export function colorWarning(label: string, value: string): string | null {
   const ratio = contrastWithWhite(value);
-  if (ratio === null) return `${label} must be a colour written #rrggbb.`;
+  if (ratio === null) return t("global.labels.contrast.not-hex", { label });
   if (ratio < AA_CONTRAST) {
-    return `${label} has a contrast of ${ratio.toFixed(2)}:1 against white; text needs at least ${AA_CONTRAST}:1, so choose a darker colour.`;
+    return t("global.labels.contrast.too-light", { label, ratio: ratio.toFixed(2), minimum: AA_CONTRAST });
   }
   return null;
 }

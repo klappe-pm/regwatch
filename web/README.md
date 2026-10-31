@@ -2,16 +2,25 @@
 
 Bev Watch is the beverage-focused public website and browser-local preview built around the Regwatch engine. The engine retains its package name, CLI, authenticated loopback server, and existing API contracts.
 
+## How It Is Built
+
+The pages are a Next.js app (Pages Router, webpack, static export) built from Material UI and the shared design and content framework `@klappe/design-system`, vendored in `vendor/`.
+
+- Design: the frontmatter of the repository's `DESIGN.md` holds the colours with their Material roles, type, spacing, corner radii and components. `ds sync` writes `design/` from it (`spec.json`, `ds.css`, `tailwind.css`); the theme and every part are built from those files.
+- Copy: every visible string is in a copy document under `docs/content-management-system/` (`pages/` per page, `global/` for shared words). `ds sync` compiles them to `design/copy.json`, and the pages look words up through `createCopy(..., { onMissing: "throw" })`, `T` and `Lines`.
+- `ds.config.json` sets where `ds` reads and writes; run `ds` from this folder (`npm run sync`, and `npm run check` for the checks).
+- Content security: the local server sends `style-src 'self'` and allows inline scripts only by hash. `createCspEmotionCache` from `@klappe/design-system/emotion` writes Material UI's styles into constructed style sheets in the browser, and `ds csp out` moves the styles rendered at build time into style sheet files and fails on any inline style or script.
+
 ## Public Build
 
-The public build sets a non-secret display mode at compile time and writes only the website routes into `web/site/`. It does not replace the Python package's built local UI.
+The public build sets a non-secret display mode at compile time and writes only the website routes into `web/dist/`. It does not replace the Python package's built local UI.
 
 ```bash
-npm --prefix "$HOME/projects/regwatch/web" ci
+npm --prefix "$HOME/projects/regwatch/web" ci --include=dev
 npm --prefix "$HOME/projects/regwatch/web" run build:site
 ```
 
-Deploy with `web/` as the project root. `vercel.json` selects a static deployment and the `site` output directory. Public routes are `/`, `/onboarding/`, `/workspace/`, `/pricing/`, and `/privacy/`. The website publishes no `/api/*` handlers or local engine routes.
+Deploy with `web/` as the project root. `vercel.json` selects a static deployment and the `dist` output directory. Public routes are `/`, `/onboarding/`, `/workspace/`, `/pricing/`, and `/privacy/`. The website publishes no `/api/*` handlers or local engine routes.
 
 ## Local Engine Build
 
@@ -29,21 +38,7 @@ Regulatory examples are synthetic and explicitly labeled. Source links navigate 
 
 ## Managed Content and Design
 
-Editable public text lives in [content](content/pages/landing.md), with page documents under `content/pages/` and shared documents under `content/global/`. Each bullet has a stable key and its visible value. The generated [copy module](src/lib/copy.generated.ts) exposes typed `t()` keys, and the [text component](src/components/copy.tsx) puts those keys on rendered elements for in-page review. Category, market, and cadence labels are editable while their stored workspace values remain stable.
-
-The fenced YAML map in [DESIGN.md](../DESIGN.md) owns colors, typography, spacing, radii, and component properties. The generated [token snapshot](design/tokens.json), [token stylesheet](design/tokens.css), and [component stylesheet](design/components.css) drive the public pages, onboarding, and workspace. Existing `--bw-*` color variables alias the `--ds-color-*` tokens. Component metadata uses the canonical names in the design map, such as `button-primary`, `field`, and `tag`.
-
-Regenerate the snapshots after a content or design edit. Both build modes, development startup, and type checking run this command automatically. The committed snapshots and build script need no content service, credentials, private package, or build-time network request.
-
-```bash
-npm --prefix /path/to/regwatch/web run managed
-```
-
-Check that committed snapshots match their editable sources without changing a file:
-
-```bash
-npm --prefix /path/to/regwatch/web run managed:check
-```
+Category, market, and cadence labels are editable copy while their stored workspace values remain stable. After a copy or design edit, `npm run sync` regenerates `design/`; `npm run check` fails when the committed files are stale. `hub.config.json` and `product-feedback.config.json` at the repository root point the hub and the review workspace at `DESIGN.md` and `docs/content-management-system/`, and a hub publish rebuilds `regwatch/web/` with them.
 
 ## Commercial Launch Requirements
 
@@ -52,8 +47,12 @@ Subscription pricing, payment provider, account service, hosted storage, and mon
 ## Verification
 
 ```bash
+npm --prefix "$HOME/projects/regwatch/web" run check
 npm --prefix "$HOME/projects/regwatch/web" test
-npm --prefix "$HOME/projects/regwatch/web" run typecheck
+npm --prefix "$HOME/projects/regwatch/web" run build
+npm --prefix "$HOME/projects/regwatch/web" run build:site
+npm --prefix "$HOME/projects/regwatch/web" run test:build
+npm --prefix "$HOME/projects/regwatch/web" run test:browser
 ```
 
-Build checks validate static routes and TypeScript. Frontend tests cover workspace validation, persistence failures, synthetic briefing labels, and import/undo integrity. Desktop, mobile, keyboard, and full onboarding interaction checks require an enabled browser and remain separate from build success.
+`check` confirms the generated design and copy files are current, finds no hard-coded colour or text, and checks the types. The logic tests cover workspace validation, persistence failures, synthetic briefing labels, import/undo integrity, and that every copy key the pages use exists. The export tests check every page, link and style sheet of both builds, and the browser tests open every page in Chromium under the local server's content security policy, in light and dark mode, and walk through onboarding, the review queue and the navigation rail.

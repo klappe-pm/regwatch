@@ -67,7 +67,7 @@ Nothing is scheduled without the user saying yes, and `regwatch schedule --remov
 
 `regwatch ui` starts a local server and opens the browser at it. The server is the standard library's `http.server`, bound to `127.0.0.1` on a free port. The command puts a random token in the URL it opens; the token works once, and the first browser to present it gets a separate session cookie that every later request must carry. It serves the built pages and a small JSON interface over the same files the command line reads and writes. Nothing is sent anywhere else, and the pages load no remote font, script or image.
 
-The pages are built with Next.js and Tailwind CSS as a static export, and the build output ships inside the wheel, so a user needs no Node. Contributors need Node to change the pages; the release workflow builds them before it builds the wheel.
+The pages are built with Next.js and Material UI on the shared design and content framework as a static export, and the build output ships inside the wheel, so a user needs no Node. Contributors need Node to change the pages; the release workflow builds them before it builds the wheel.
 
 ### Layout
 

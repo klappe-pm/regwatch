@@ -1,5 +1,8 @@
 // The line the Newsletters and Documents pages show after Generate. Kept free of
 // React so node --test can check it.
+import { t } from "./text.ts";
+
+const G = "global.labels.generate";
 
 export interface GenerateOutcome {
   dropped: string[];
@@ -11,10 +14,8 @@ export interface GenerateOutcome {
  * carries its logo as a data address, which mail programs drop from pasted HTML.
  */
 export function copyNotice(what: "HTML" | "text", html: string): string {
-  if (what === "HTML" && html.includes('src="data:image/')) {
-    return "Copied the HTML. A mail program drops the logo from pasted HTML; open the .eml download to keep it.";
-  }
-  return `Copied the ${what}.`;
+  if (what === "HTML" && html.includes('src="data:image/')) return t(`${G}.copied-html-logo`);
+  return t(what === "HTML" ? `${G}.copied-html` : `${G}.copied-text`);
 }
 
 /**
@@ -24,9 +25,9 @@ export function copyNotice(what: "HTML" | "text", html: string): string {
 export function generateNotice(result: GenerateOutcome): string {
   if (result.notice) return result.notice;
   const left = result.dropped.length;
-  if (!left) return "Generated. Check each passage against the facts listed under it.";
-  const what = left === 1 ? "One passage was" : `${left} passages were`;
+  if (!left) return t(`${G}.generated`);
+  const what = left === 1 ? t(`${G}.one-left-out`) : t(`${G}.many-left-out`, { count: left });
   // Each reason says why: a fact it was not given, a number or link it made up, a
   // section the output does not show, and so on.
-  return `Generated. ${what} left out: ${result.dropped.join("; ")}. Check the rest against the facts listed under each.`;
+  return t(`${G}.left-out`, { what, reasons: result.dropped.join("; ") });
 }

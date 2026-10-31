@@ -1,6 +1,8 @@
 // How the Sources page lays out catalogue entries. Kept free of React and of the
 // "@/" path alias so `node --test` can load it directly (web/tests/).
 
+import { t } from "./text.ts";
+
 export interface CatalogueGroup<T> {
   id: string;
   name: string;
@@ -26,7 +28,7 @@ export function catalogueGroups<T extends { category: string }>(
 ): CatalogueGroup<T>[] {
   if (query.trim() !== "") {
     return entries.length
-      ? [{ id: RANKED_GROUP, name: "Best Matches First", ranked: true, entries }]
+      ? [{ id: RANKED_GROUP, name: t("global.labels.catalogue.best-matches"), ranked: true, entries }]
       : [];
   }
   const known = new Set(categories.map(([id]) => id));

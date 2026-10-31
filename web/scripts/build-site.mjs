@@ -6,25 +6,35 @@ import { spawnSync } from "node:child_process";
 
 const web = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const env = { ...process.env, NEXT_PUBLIC_BEV_WATCH_MODE: "hosted-preview" };
-for (const args of [[join(web,"scripts/managed.mjs")],[join(web,"scripts/make-icons.mjs")],[join(web,"node_modules/next/dist/bin/next"),"build"]]) {
+const steps = [
+  [join(web, "scripts/make-icons.mjs")],
+  [join(web, "node_modules/@klappe/design-system/bin/ds.mjs"), "check"],
+  [join(web, "node_modules/next/dist/bin/next"), "build", "--webpack"],
+  [join(web, "node_modules/@klappe/design-system/bin/ds.mjs"), "csp", "out"],
+];
+for (const args of steps) {
   const result = spawnSync(process.execPath, args, { cwd: web, env, stdio: "inherit" });
   if (result.status !== 0) process.exit(result.status || 1);
 }
-const site = join(web,"site");
-const staged = mkdtempSync(join(web,".site-next-"));
+// dist/ rather than site/: ds skips dist/ when it reads the custom properties of the
+// project's CSS, so a public build left in place cannot make design/spec.json look stale.
+// The export is staged beside dist/ and swapped in, so a failed copy leaves the previous site.
+const site = join(web, "dist");
+const staged = mkdtempSync(join(web, ".dist-next-"));
 const previous = `${staged}-previous`;
 try {
-  for (const name of ["index.html","index.txt","404.html","404","_next","icon.svg","pricing","privacy","onboarding","workspace"]) {
-    cpSync(join(web,"out",name),join(staged,name),{recursive:true});
+  for (const name of ["index.html", "404.html", "404", "_next", "icon.svg", "pricing", "privacy", "onboarding", "workspace"]) {
+    if (existsSync(join(web, "out", name))) cpSync(join(web, "out", name), join(staged, name), { recursive: true });
   }
-  if (existsSync(site)) renameSync(site,previous);
-  try { renameSync(staged,site); }
-  catch (reason) {
-    if (existsSync(previous)) renameSync(previous,site);
+  if (existsSync(site)) renameSync(site, previous);
+  try {
+    renameSync(staged, site);
+  } catch (reason) {
+    if (existsSync(previous)) renameSync(previous, site);
     throw reason;
   }
-  rmSync(previous,{recursive:true,force:true});
+  rmSync(previous, { recursive: true, force: true });
 } finally {
-  rmSync(staged,{recursive:true,force:true});
+  rmSync(staged, { recursive: true, force: true });
 }
-console.log("Public website ready in web/site. Local engine routes are excluded.");
+console.log("Public website ready in web/dist. Local engine routes are excluded.");

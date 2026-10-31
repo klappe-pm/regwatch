@@ -4,16 +4,16 @@
   "repo": "klappe-pm/regwatch",
   "workspace": {
     "url": "http://127.0.0.1:4178",
-    "staticDir": "web/site"
+    "staticDir": "web/dist"
   },
   "paths": {
-    "cms": "web/content",
+    "cms": "docs/content-management-system",
     "feedback": "local/feedback",
     "queue": "local/feedback/queue",
     "work": "local/feedback/work"
   },
-  "tokens": { "css": "web/design/tokens.css" },
-  "content": { "sourceRoots": ["web/src"], "skipFiles": ["web/src/lib/copy.generated.ts"] },
+  "tokens": { "css": "web/design/ds.css" },
+  "content": { "sourceRoots": ["web/pages", "web/src"], "skipFiles": ["web/src/lib/icons.generated.ts"] },
   "pipeline": { "verify": ["npm", "--prefix", "web", "test"], "install": null },
   "review": { "pipeline": false }
 }

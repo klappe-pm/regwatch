@@ -1,100 +1,151 @@
-import Link from "next/link";
+// The shared parts of the local application, built from Material UI and styled by the components
+// in DESIGN.md. Every part renders through `Piece`; `Part` tags it with data-part for the hub. A part's
+// look (colour, fill, border, radius, type, padding, shadow, opacity and its states) comes only from its
+// DESIGN.md component, so a hub edit changes the page; the sx given here only lays the part out.
+import { Part, T, partSx, useDesignSpec, useParts, type PartProps } from "@klappe/design-system";
+import Box from "@mui/material/Box";
+import InputBase, { type InputBaseProps } from "@mui/material/InputBase";
+import NativeSelect from "@mui/material/NativeSelect";
+import Stack from "@mui/material/Stack";
+import SvgIcon from "@mui/material/SvgIcon";
+import Table from "@mui/material/Table";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import Typography from "@mui/material/Typography";
+import type { SxProps, Theme } from "@mui/material/styles";
+import NextLink from "next/link";
 import type { ReactNode } from "react";
 
+import { ICON_PATHS, type IconName } from "@/lib/icons.generated";
 import { SEVERITY, words } from "@/lib/labels";
+import { t } from "@/lib/text";
 
-import { Icon } from "./icon";
+/**
+ * A part from DESIGN.md. `Part` marks it with data-part, so the hub's usage scan finds it in the built pages.
+ * `modifier` names a second DESIGN.md component (such as panel-compact) whose style, states included, is
+ * applied over the part's own and whose name joins its data-part.
+ */
+export function Piece({ modifier, sx, ...props }: PartProps & { modifier?: string }) {
+  const spec = useDesignSpec();
+  if (!modifier) return <Part {...props} sx={sx} />;
+  return <Part {...props} data-part={modifier} sx={[partSx(spec, modifier), ...(Array.isArray(sx) ? sx : sx ? [sx] : [])]} />;
+}
 
-export function PageHeader({
-  title,
-  description,
-  actions,
-}: {
-  title: string;
-  description?: ReactNode;
-  actions?: ReactNode;
-}) {
+/** A Material Symbols Outlined icon at weight 400, drawn inline. Decorative unless labelled. */
+export function Icon({ name, size = 20, label, sx }: { name: IconName; size?: number; label?: string; sx?: SxProps<Theme> }) {
   return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-4">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description ? <p className="mt-1 max-w-3xl text-muted">{description}</p> : null}
-      </div>
-      {actions ? <div className="no-print flex flex-wrap items-center gap-2">{actions}</div> : null}
-    </header>
+    <SvgIcon
+      viewBox="0 -960 960 960"
+      titleAccess={label}
+      aria-hidden={label ? undefined : true}
+      focusable="false"
+      sx={[{ width: size, height: size, fontSize: size, flexShrink: 0 }, ...(Array.isArray(sx) ? sx : sx ? [sx] : [])]}
+    >
+      <path d={ICON_PATHS[name]} />
+    </SvgIcon>
   );
 }
 
-export function Section({
-  title,
-  actions,
-  children,
-  id,
-}: {
-  title: string;
-  actions?: ReactNode;
-  children: ReactNode;
-  id?: string;
-}) {
+/** A link inside the application, rendered by Material UI with Next's client navigation. */
+export function TextLink({ href, children, quiet = false }: { href: string; children: ReactNode; quiet?: boolean }) {
   return (
-    <section className="mb-8 min-w-0" aria-labelledby={id}>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 id={id} className="text-lg font-semibold">
-          {title}
-        </h2>
-        {actions}
-      </div>
+    <Piece name="text-link" modifier={quiet ? "text-link-quiet" : undefined} component={NextLink} href={href}>
       {children}
-    </section>
+    </Piece>
+  );
+}
+
+export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+  return (
+    <Piece
+      name="page-header"
+      component="header"
+      sx={{ mb: 6, pb: 4, display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 4 }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography component="h1" sx={{ typography: "page-title", m: 0 }}>
+          {title}
+        </Typography>
+        {description ? (
+          <Typography component="p" sx={{ mt: 1, maxWidth: "720px", color: "var(--ds-role-on-surface-variant)" }}>
+            {description}
+          </Typography>
+        ) : null}
+      </Box>
+      {actions ? (
+        <Stack className="no-print" direction="row" sx={{ flexWrap: "wrap", alignItems: "center", gap: 2 }}>
+          {actions}
+        </Stack>
+      ) : null}
+    </Piece>
+  );
+}
+
+export function Section({ title, actions, children, id }: { title: string; actions?: ReactNode; children: ReactNode; id?: string }) {
+  return (
+    <Box component="section" aria-labelledby={id} sx={{ mb: 8, minWidth: 0 }}>
+      <Stack direction="row" sx={{ mb: 2, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+        <Typography component="h2" id={id} sx={{ typography: "section-title", m: 0 }}>
+          {title}
+        </Typography>
+        {actions}
+      </Stack>
+      {children}
+    </Box>
   );
 }
 
 export function Command({ children }: { children: string }) {
   return (
-    <code className="rounded-sm border border-line bg-raised px-1 font-mono text-sm">{children}</code>
+    <Piece name="command" component="code">
+      {children}
+    </Piece>
   );
 }
 
-/** What a page or a section will show, and which command fills it. */
+/** What a page or a section will show, and which command fills it (a key under global.ui.commands). */
 export function EmptyState({ children, command }: { children: ReactNode; command?: string }) {
   return (
-    <div className="border border-dashed border-line bg-raised px-4 py-4 text-muted">
-      <p>{children}</p>
+    <Piece name="empty-state">
+      <Typography component="p">{children}</Typography>
       {command ? (
-        <p className="mt-2 text-sm">
-          Filled by <Command>{command}</Command>
-        </p>
+        <Typography component="p" sx={{ mt: 2, typography: "small" }}>
+          <T k="global.ui.state.filled-by" /> <Command>{t(`global.ui.commands.${command}`)}</Command>
+        </Typography>
       ) : null}
-    </div>
+    </Piece>
   );
 }
 
 /** A premium feature shown, not hidden, while premium is off. */
 export function Locked({ feature, onSettings = false }: { feature: string; onSettings?: boolean }) {
   return (
-    <div className="flex items-start gap-2 border border-line bg-raised px-4 py-4">
-      <Icon name="lock" className="mt-0.5 text-muted" />
+    <Piece name="panel" sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+      <Icon name="lock" sx={{ mt: "2px", color: "var(--ds-role-on-surface-variant)" }} />
       {onSettings ? (
-        <p>{feature} is a premium feature. Turn on premium features above to use it.</p>
+        <Typography component="p">
+          <T k="global.ui.locked.on-settings" vars={{ feature }} />
+        </Typography>
       ) : (
-        <p>
-          {feature} is a premium feature. Turn premium on in{" "}
-          <Link className="text-structure underline underline-offset-2" href="/settings/">
-            Settings
-          </Link>{" "}
-          or with <Command>regwatch premium on</Command>.
-        </p>
+        <Typography component="p">
+          <T k="global.ui.locked.before-link" vars={{ feature }} />{" "}
+          <TextLink href="/settings/">
+            <T k="global.ui.locked.link" />
+          </TextLink>{" "}
+          <T k="global.ui.locked.between" /> <Command>{t("global.ui.locked.command")}</Command>
+          <T k="global.ui.locked.after" />
+        </Typography>
       )}
-    </div>
+    </Piece>
   );
 }
 
 /** A quiet label, such as "Generated" beside text a language model wrote. */
 export function Tag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-block border border-control px-1 text-xs font-medium leading-4 text-muted">
+    <Piece name="generated-tag" component="span" sx={{ display: "inline-block" }}>
       {children}
-    </span>
+    </Piece>
   );
 }
 
@@ -106,12 +157,14 @@ export function Tag({ children }: { children: ReactNode }) {
  */
 export function Preview({ src, title }: { src: string; title: string }) {
   return (
-    <iframe
+    <Piece
+      name="preview-frame"
+      component="iframe"
       title={title}
       sandbox=""
       referrerPolicy="no-referrer"
       src={src}
-      className="block h-[70vh] min-h-[480px] w-full border border-line bg-white"
+      sx={{ display: "block", height: "70vh", minHeight: "480px", width: "100%" }}
     />
   );
 }
@@ -119,26 +172,26 @@ export function Preview({ src, title }: { src: string; title: string }) {
 /** A short status line after an action, read out by screen readers. */
 export function Notice({ message }: { message: string | null }) {
   return message ? (
-    <p role="status" className="mb-4 text-sm">
+    <Typography component="p" role="status" sx={{ mb: 4, typography: "small" }}>
       {message}
-    </p>
+    </Typography>
   ) : null;
 }
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <div role="alert" className="flex items-start gap-2 border border-accent bg-accent-soft px-4 py-2">
-      <Icon name="error" className="mt-0.5 text-accent" />
-      <p>{message}</p>
-    </div>
+    <Piece name="error-note" role="alert" sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+      <Icon name="error" sx={{ mt: "2px", color: "var(--ds-role-error)" }} />
+      <Typography component="p">{message}</Typography>
+    </Piece>
   );
 }
 
 export function Loading() {
   return (
-    <p className="text-muted" aria-live="polite">
-      Loading
-    </p>
+    <Typography component="p" aria-live="polite" sx={{ color: "var(--ds-role-on-surface-variant)" }}>
+      <T k="global.ui.state.loading" />
+    </Typography>
   );
 }
 
@@ -146,95 +199,117 @@ const ATTENTION = new Set(["SUSPICIOUS", "ERROR", "MISSING"]);
 
 /** A source status. The accent marks only the states that need attention. */
 export function StatusLabel({ status }: { status: string }) {
-  if (!status) return <span className="text-muted">Not checked</span>;
+  if (!status) {
+    return (
+      <Box component="span" sx={{ color: "var(--ds-role-on-surface-variant)" }}>
+        <T k="global.ui.state.not-checked" />
+      </Box>
+    );
+  }
   const attention = ATTENTION.has(status);
   const flagged = status === "NEW" || status === "CHANGED";
   return (
-    <span
-      className={`inline-flex items-center gap-1 text-sm font-medium ${
-        attention ? "text-accent" : flagged ? "text-structure" : "text-muted"
-      }`}
+    <Box
+      component="span"
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 1,
+        typography: "small",
+        fontWeight: 500,
+        color: attention ? "var(--ds-role-error)" : flagged ? "var(--ds-role-primary)" : "var(--ds-role-on-surface-variant)",
+      }}
     >
       {attention ? <Icon name="warning" size={16} /> : null}
       {words(status.toLowerCase())}
-    </span>
+    </Box>
   );
 }
 
 /** A severity. The accent marks only "act now". */
 export function SeverityLabel({ severity }: { severity: string }) {
-  const urgent = severity === "act-now";
+  const part = severity === "act-now" ? "severity-act-now" : severity === "high" ? "severity-high" : "severity-watch";
   return (
-    <span
-      className={`inline-block whitespace-nowrap border px-1 text-xs font-semibold uppercase tracking-wide ${
-        urgent
-          ? "border-accent bg-accent-soft text-accent"
-          : severity === "high"
-            ? "border-control text-ink"
-            : "border-line text-muted"
-      }`}
-    >
+    <Piece name={part} component="span" sx={{ display: "inline-block", whiteSpace: "nowrap" }}>
       {SEVERITY[severity] ?? severity}
-    </span>
+    </Piece>
   );
 }
 
-export function Table({ children, label }: { children: ReactNode; label: string }) {
+export function DataTable({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div className="overflow-x-auto border border-line bg-raised">
-      <table className="w-full border-collapse text-left text-sm" aria-label={label}>
+    <Piece name="data-table" component={TableContainer} sx={{ overflowX: "auto" }}>
+      <Table aria-label={label} sx={{ borderCollapse: "collapse", typography: "small", textAlign: "left" }}>
         {children}
-      </table>
-    </div>
+      </Table>
+    </Piece>
   );
 }
 
-export function Th({
-  children,
-  numeric = false,
-  className = "",
-}: {
-  children?: ReactNode;
-  numeric?: boolean;
-  className?: string;
-}) {
+type Hide = "sm" | "md";
+const shown = (hide?: Hide) => (hide ? { display: { xs: "none", [hide]: "table-cell" } } : {});
+
+/** A column heading, styled by the table-heading component. */
+export function Th({ children, numeric = false, hide }: { children?: ReactNode; numeric?: boolean; hide?: Hide }) {
+  const part = useParts(["table-heading"], { ...shown(hide), whiteSpace: "nowrap", textAlign: numeric ? "right" : "left" });
   return (
-    <th
-      scope="col"
-      className={`whitespace-nowrap border-b border-line px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted ${
-        numeric ? "text-right" : ""
-      } ${className}`}
-    >
+    <TableCell component="th" scope="col" {...part}>
       {children}
-    </th>
+    </TableCell>
   );
 }
 
 export function Td({
   children,
   numeric = false,
-  className = "",
+  hide,
+  muted = false,
+  colSpan,
+  sx,
 }: {
   children?: ReactNode;
   numeric?: boolean;
-  className?: string;
+  hide?: Hide;
+  muted?: boolean;
+  colSpan?: number;
+  sx?: SxProps<Theme>;
 }) {
   return (
-    <td
-      className={`border-b border-line px-2 py-2 align-top ${
-        numeric ? "numeric text-right whitespace-nowrap" : ""
-      } ${className}`}
+    <TableCell
+      colSpan={colSpan}
+      className={numeric ? "numeric" : undefined}
+      sx={[
+        {
+          ...shown(hide),
+          px: 2,
+          py: 2,
+          verticalAlign: "top",
+          borderBottom: "1px solid var(--ds-role-outline-variant)",
+          color: muted ? "var(--ds-role-on-surface-variant)" : "inherit",
+          typography: "small",
+          ...(numeric ? { textAlign: "right", whiteSpace: "nowrap" } : {}),
+        },
+        ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
+      ]}
     >
       {children}
-    </td>
+    </TableCell>
   );
 }
 
-const BUTTON = {
-  primary: "bg-structure text-on-structure border border-structure hover:opacity-90",
-  secondary: "bg-raised text-ink border border-control hover:bg-selection",
-  quiet: "text-structure border border-transparent hover:bg-selection",
-};
+/** A second line under a table cell's main text. */
+export function Sub({ children, mono = false }: { children: ReactNode; mono?: boolean }) {
+  return (
+    <Box
+      component="span"
+      sx={{ display: "block", typography: mono ? "mono" : "caption", fontSize: "12px", lineHeight: "16px", color: "var(--ds-role-on-surface-variant)" }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+const BUTTON_PART = { primary: "button-primary", secondary: "button-secondary", quiet: "button-quiet" } as const;
 
 export function Button({
   children,
@@ -246,100 +321,181 @@ export function Button({
 }: {
   children: ReactNode;
   onClick?: () => void;
-  variant?: keyof typeof BUTTON;
+  variant?: keyof typeof BUTTON_PART;
   type?: "button" | "submit";
   disabled?: boolean;
   label?: string;
 }) {
   return (
-    <button
+    <Piece
+      name={BUTTON_PART[variant]}
       type={type}
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className={`inline-flex h-8 items-center gap-1 rounded-sm px-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${BUTTON[variant]}`}
+      disableElevation
+      sx={{ gap: 1, minWidth: 0, "&.Mui-disabled": { cursor: "not-allowed" } }}
     >
       {children}
-    </button>
+    </Piece>
   );
 }
 
-export function ButtonLink({
-  children,
-  href,
-  download = false,
-}: {
-  children: ReactNode;
-  href: string;
-  download?: boolean;
-}) {
+export function ButtonLink({ children, href, download = false }: { children: ReactNode; href: string; download?: boolean }) {
   return (
-    <a
-      href={href}
-      download={download || undefined}
-      className={`inline-flex h-8 items-center gap-1 rounded-sm px-2 text-sm font-medium ${BUTTON.secondary}`}
-    >
+    <Piece name="button-secondary" component="a" href={href} download={download || undefined} sx={{ gap: 1, minWidth: 0 }}>
       {children}
-    </a>
+    </Piece>
   );
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex min-w-0 flex-col gap-1 text-sm">
-      <span className="font-medium text-muted">{label}</span>
+    <Box component="label" sx={{ display: "flex", minWidth: 0, flexDirection: "column", gap: 1 }}>
+      <Piece name="field-label" component="span">
+        {label}
+      </Piece>
       {children}
-    </label>
+    </Box>
   );
 }
 
-export const CONTROL =
-  "h-8 min-w-0 rounded-sm border border-control bg-raised px-2 text-sm text-ink disabled:opacity-60";
+const CONTROL_SX = {
+  "& input, & select": { p: 0, height: "28px", fontSize: "13px" },
+};
+
+/** A text box in the application's compact control style; `modifier` names a variant such as control-input-swatch. */
+export function ControlInput({ sx, modifier, ...props }: InputBaseProps & { modifier?: string }) {
+  return (
+    <Piece
+      name="control-input"
+      modifier={modifier}
+      component={InputBase}
+      {...props}
+      sx={[CONTROL_SX, ...(Array.isArray(sx) ? sx : sx ? [sx] : [])]}
+    />
+  );
+}
 
 export function Select({
   value,
   onChange,
   options,
   disabled = false,
+  label,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: [string, string][];
   disabled?: boolean;
+  label?: string;
 }) {
   return (
-    <select
-      className={CONTROL}
+    <NativeSelect
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
+      inputProps={label ? { "aria-label": label } : undefined}
+      input={<ControlInput />}
     >
       {options.map(([id, text]) => (
         <option key={id} value={id}>
           {text}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
 
 /** Counts in one aligned row, divided by thin rules. */
 export function Figures({ items }: { items: { label: string; value: ReactNode; urgent?: boolean }[] }) {
   return (
-    <dl className="mb-8 grid grid-cols-2 border border-line bg-raised sm:grid-cols-3 lg:grid-cols-5">
+    <Piece
+      name="figures"
+      component="dl"
+      sx={{
+        mb: 8,
+        mt: 0,
+        display: "grid",
+        gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(3, 1fr)", lg: "repeat(5, 1fr)" },
+        "& > div": { borderRight: "1px solid var(--ds-role-outline-variant)", borderBottom: "1px solid var(--ds-role-outline-variant)", px: 4, py: 2 },
+        "& > div:last-of-type": { gridColumn: { xs: "span 2", sm: "span 1" }, borderRight: 0 },
+      }}
+    >
       {items.map((item) => (
-        <div
-          key={item.label}
-          className="border-b border-r border-line px-4 py-2 last:col-span-2 last:border-r-0 sm:last:col-span-1"
-        >
-          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">{item.label}</dt>
-          <dd
-            className={`numeric text-2xl font-semibold ${item.urgent ? "text-accent" : "text-ink"}`}
+        <div key={item.label}>
+          <Typography component="dt" sx={{ typography: "overline", color: "var(--ds-role-on-surface-variant)" }}>
+            {item.label}
+          </Typography>
+          <Typography
+            component="dd"
+            className="numeric"
+            sx={{ m: 0, typography: "figure", color: item.urgent ? "var(--ds-role-error)" : "var(--ds-role-on-surface)" }}
           >
             {item.value}
-          </dd>
+          </Typography>
         </div>
       ))}
-    </dl>
+    </Piece>
+  );
+}
+
+/** Definition rows (a label and its value) laid out in two columns. */
+export function Details({ rows, sx }: { rows: [ReactNode, ReactNode, boolean?][]; sx?: SxProps<Theme> }) {
+  return (
+    <Box
+      component="dl"
+      sx={[
+        { m: 0, display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 4, rowGap: 1, typography: "small", "& dd": { m: 0 } },
+        ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
+      ]}
+    >
+      {rows.map(([term, value, mono], index) => (
+        <Box key={index} sx={{ display: "contents" }}>
+          <Box component="dt" sx={{ color: "var(--ds-role-on-surface-variant)" }}>
+            {term}
+          </Box>
+          <Box component="dd" sx={mono ? { typography: "mono", fontSize: "12px", lineHeight: "20px" } : undefined}>
+            {value}
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+/** A link that opens an official or provider page in a new tab. */
+export function ExternalLink({ href, children, small = false }: { href: string; children: ReactNode; small?: boolean }) {
+  return (
+    <Piece
+      name="text-link"
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      modifier={small ? "text-link-small" : undefined}
+    >
+      {children}
+    </Piece>
+  );
+}
+
+/** Filters in one row on wide screens. */
+export function FilterRow({ children, columns = 4 }: { children: ReactNode; columns?: number }) {
+  return (
+    <Box
+      className="no-print"
+      sx={{ mb: 4, display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))", lg: `repeat(${columns}, minmax(0, 1fr))` } }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+/** A row of controls that wraps on narrow screens. */
+export function ControlRow({ children, end = false }: { children: ReactNode; end?: boolean }) {
+  return (
+    <Stack className="no-print" direction="row" sx={{ mb: 4, flexWrap: "wrap", alignItems: end ? "flex-end" : "center", gap: 2 }}>
+      {children}
+    </Stack>
   );
 }

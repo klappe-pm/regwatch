@@ -1,0 +1,88 @@
+# Check the web app and the Python package on every pull request and on main.
+#
+#   web     installs web/ from its lockfile, checks the design, copy and types, runs the logic
+#           tests, builds the local application and confirms it matches the copy committed in
+#           regwatch/web/, builds the public website, and tests both exports in Chromium.
+#   python  runs the test suite from the source tree, with Node and the web dependencies
+#           installed so the web logic tests run too.
+name: web
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: install the web app from the lockfile
+        run: npm --prefix web ci --include=dev --ignore-scripts --no-audit --no-fund
+      - name: generate the icon module
+        run: npm --prefix web run icons
+      - name: design, copy and type checks
+        run: npm --prefix web run check
+      - name: logic and copy tests
+        run: npm --prefix web test
+      - name: build the local application
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm --prefix web run build
+      - name: the committed web app matches the build
+        run: |
+          git diff --exit-code --stat -- regwatch/web || {
+            echo "regwatch/web/ differs from a fresh build; run scripts/build-web.sh and commit it"
+            exit 1
+          }
+          test -z "$(git status --porcelain -- regwatch/web)" || {
+            echo "the build added files under regwatch/web/ that are not committed"
+            exit 1
+          }
+      - name: keep the CI build of the web app when the check fails
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-build
+          path: regwatch/web/
+          if-no-files-found: ignore
+      - name: build the public website
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm --prefix web run build:site
+      - name: export tests
+        run: npm --prefix web run test:build
+      - name: install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: browser tests
+        run: npm --prefix web run test:browser
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: install the web app from the lockfile
+        run: npm --prefix web ci --include=dev --ignore-scripts --no-audit --no-fund
+      - name: install the test tools
+        run: python -m pip install --require-hashes -r requirements/ci.txt
+      - name: test
+        run: python -m pytest -q

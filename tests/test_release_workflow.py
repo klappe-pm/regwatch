@@ -34,7 +34,7 @@ def run_commands(block: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if "pip install" in line]
 
 
-def test_only_the_release_workflow_exists() -> None:
+def test_only_the_release_and_web_workflows_exist() -> None:
     workflows = []
     git = shutil.which("git")
     if git is not None:
@@ -45,7 +45,22 @@ def test_only_the_release_workflow_exists() -> None:
             )
     if not workflows:
         workflows = sorted(p.name for p in WORKFLOW.parent.iterdir())
-    assert workflows == ["release.yml"]
+    assert workflows == ["release.yml", "web.yml"]
+
+
+def test_the_web_workflow_pins_its_actions_and_installs_from_the_locks() -> None:
+    """The pull request checks hold the same line as the release: pinned actions, no kept
+    credentials, read-only permissions, hash-pinned Python tools and the web lockfile."""
+    text = (WORKFLOW.parent / "web.yml").read_text(encoding="utf-8")
+    uses = re.findall(r"uses:\s*(\S+)", text)
+    assert uses, "the web workflow uses no action"
+    assert all(re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", ref) for ref in uses), uses
+    assert text.count("persist-credentials: false") == text.count("actions/checkout@")
+    assert "permissions:\n  contents: read" in text
+    assert "id-token" not in text
+    for line in run_commands(text):
+        assert "--require-hashes" in line, line
+    assert "npm --prefix web ci --include=dev --ignore-scripts" in text
 
 
 def test_workflow_inventory_uses_resolved_git_and_the_program_runner(
@@ -59,14 +74,14 @@ def test_workflow_inventory_uses_resolved_git_and_the_program_runner(
 
     def run(args: list[str]) -> CommandResult:
         calls.append(args)
-        return CommandResult(0, ".github/workflows/release.yml\n")
+        return CommandResult(0, ".github/workflows/release.yml\n.github/workflows/web.yml\n")
 
     monkeypatch.setattr(f"{__name__}.ROOT", tmp_path)
     monkeypatch.setattr(f"{__name__}.WORKFLOW", folder / "release.yml")
     monkeypatch.setattr(shutil, "which", lambda name: "/synthetic/bin/git")
     monkeypatch.setattr(f"{__name__}.run_command", run, raising=False)
 
-    test_only_the_release_workflow_exists()
+    test_only_the_release_and_web_workflows_exist()
 
     assert calls == [["/synthetic/bin/git", "-C", str(tmp_path), "ls-files", ".github/workflows"]]
 

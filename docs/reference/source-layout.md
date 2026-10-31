@@ -8,14 +8,14 @@ This page describes the repository tree and every module in the `regwatch` packa
 regwatch/
   README.md  LICENSE  CHANGELOG.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  SECURITY.md  SUPPORT.md
   pyproject.toml  .editorconfig  .gitattributes  .gitignore
-  .github/             issue and pull request templates, the banner, workflows/release.yml
+  .github/             issue and pull request templates, the banner, workflows/release.yml and web.yml
   scripts/             make-banner.py, which draws the README banner, and build-web.sh
   regwatch/            the package
     data/              packaged data: schema.json, focus-areas.json, example-jurisdictions.json,
                        source-catalogue.json, jurisdiction-names.json
     web/               the built web app, made by scripts/build-web.sh and committed
     py.typed           marks the package as typed
-  web/                 the source of the web app: Next.js, Tailwind CSS, package-lock.json
+  web/                 the source of the web app: Next.js, Material UI, package-lock.json
   tests/               the test suite
     fixtures/          small hostile and ordinary inputs
   examples/            the synthetic register, snapshots and ingest response

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { colorWarning, contrastWithWhite, isHexColor } from "../src/lib/contrast.ts";
+import { copyText } from "./design-values.mjs";
 
 test("only #rrggbb is a colour", () => {
   assert.equal(isHexColor("#1d5a92"), true);
@@ -24,6 +25,7 @@ test("the ratio is the WCAG ratio against white", () => {
 
 test("a light colour or a bad value gets a warning, a dark one none", () => {
   assert.equal(colorWarning("Primary colour", "#1d5a92"), null);
-  assert.match(colorWarning("Primary colour", "#ffff00"), /1\.07:1 against white/);
-  assert.match(colorWarning("Accent colour", "#zzzzzz"), /#rrggbb/);
+  // The warnings are copy entries; the colours here are regwatch.toml input, not DESIGN.md values.
+  assert.equal(colorWarning("Primary colour", "#ffff00"), copyText("global.labels.contrast.too-light", { label: "Primary colour", ratio: "1.07", minimum: 4.5 }));
+  assert.equal(colorWarning("Accent colour", "#zzzzzz"), copyText("global.labels.contrast.not-hex", { label: "Accent colour" }));
 });

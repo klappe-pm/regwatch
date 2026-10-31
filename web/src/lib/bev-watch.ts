@@ -1,24 +1,62 @@
-import { t, type CopyKey } from "./copy.generated.ts";
+// The public preview's data: the workspace schema kept in browser storage, the sources and the
+// synthetic updates. The stored values (categories, markets, source ids) are the schema and stay
+// fixed; what the pages show for them comes from the copy documents.
+import { t } from "./text.ts";
 
-export const BRAND = t("global.preview.bev-watch");
+const DATA = "global.preview-data";
+
+export const BRAND = t(`${DATA}.brand.name`);
 export const WORKSPACE_STORAGE = "bev-watch.workspace.v1";
 export function isPublicPage(pathname: string): boolean {
   if (process.env.NEXT_PUBLIC_BEV_WATCH_MODE === "hosted-preview") return true;
   const normalized = pathname.replace(/\/?$/, "/");
   return ["/pricing/", "/onboarding/", "/workspace/", "/privacy/"].includes(normalized);
 }
-export const CATEGORIES = ["Non-alcoholic beverages", "Beer & cider", "Wine", "Spirits", "Functional beverages", "Cannabis & hemp beverages"];
-export const MARKETS = ["United States", "Canada", "United Kingdom", "European Union", "Australia & New Zealand"];
-const SOURCE_COPY = [
-  { id: "fda", nameCopy: "global.preview.food-drug-administration", shortCopy: "global.preview.fda", market: "United States", topicCopy: "global.preview.ingredients-labeling-food-safety", url: "https://www.fda.gov/food" },
-  { id: "ttb", nameCopy: "global.preview.alcohol-and-tobacco-tax-and-trade-bureau", shortCopy: "global.preview.ttb", market: "United States", topicCopy: "global.preview.alcohol-labeling-formulas-permits", url: "https://www.ttb.gov/" },
-  { id: "fr", nameCopy: "global.preview.federal-register", shortCopy: "global.preview.fr", market: "United States", topicCopy: "global.preview.proposed-and-final-federal-rules", url: "https://www.federalregister.gov/" },
-  { id: "hc", nameCopy: "global.preview.health-canada", shortCopy: "global.preview.hc", market: "Canada", topicCopy: "global.preview.food-standards-product-labeling", url: "https://www.canada.ca/en/health-canada.html" },
-  { id: "fsa", nameCopy: "global.preview.food-standards-agency", shortCopy: "global.preview.fsa", market: "United Kingdom", topicCopy: "global.preview.food-safety-guidance-alerts", url: "https://www.food.gov.uk/" },
-  { id: "eu", nameCopy: "global.preview.eur-lex", shortCopy: "global.preview.eu", market: "European Union", topicCopy: "global.preview.european-union-legislation", url: "https://eur-lex.europa.eu/" },
-  { id: "fsanz", nameCopy: "global.preview.food-standards-australia-new-zealand", shortCopy: "global.preview.fsanz", market: "Australia & New Zealand", topicCopy: "global.preview.food-standards-consultations", url: "https://www.foodstandards.gov.au/" },
-] as const;
-export const SOURCES = SOURCE_COPY.map(source => ({ ...source, name: t(source.nameCopy), short: t(source.shortCopy), topic: t(source.topicCopy) }));
+
+/** Stored category values, with the copy key that names each one. */
+const CATEGORY_KEYS: [string, string][] = [
+  ["Non-alcoholic beverages", "non-alcoholic"],
+  ["Beer & cider", "beer-cider"],
+  ["Wine", "wine"],
+  ["Spirits", "spirits"],
+  ["Functional beverages", "functional"],
+  ["Cannabis & hemp beverages", "cannabis-hemp"],
+];
+const MARKET_KEYS: [string, string][] = [
+  ["United States", "us"],
+  ["Canada", "ca"],
+  ["United Kingdom", "uk"],
+  ["European Union", "eu"],
+  ["Australia & New Zealand", "anz"],
+];
+export const CATEGORIES = CATEGORY_KEYS.map(([value]) => value);
+export const MARKETS = MARKET_KEYS.map(([value]) => value);
+
+function named(pairs: [string, string][], group: string, value: string): string {
+  const key = pairs.find(([stored]) => stored === value)?.[1];
+  return key ? t(`${DATA}.${group}.${key}`) : value;
+}
+export const categoryName = (value: string): string => named(CATEGORY_KEYS, "categories", value);
+export const marketName = (value: string): string => named(MARKET_KEYS, "markets", value);
+
+export interface Source { id: string; name: string; short: string; market: string; topic: string; url: string }
+const source = (id: string, market: string, url: string): Source => ({
+  id,
+  market,
+  url,
+  name: t(`${DATA}.sources.${id}.name`),
+  short: t(`${DATA}.sources.${id}.short`),
+  topic: t(`${DATA}.sources.${id}.topic`),
+});
+export const SOURCES: Source[] = [
+  source("fda", "United States", "https://www.fda.gov/food"),
+  source("ttb", "United States", "https://www.ttb.gov/"),
+  source("fr", "United States", "https://www.federalregister.gov/"),
+  source("hc", "Canada", "https://www.canada.ca/en/health-canada.html"),
+  source("fsa", "United Kingdom", "https://www.food.gov.uk/"),
+  source("eu", "European Union", "https://eur-lex.europa.eu/"),
+  source("fsanz", "Australia & New Zealand", "https://www.foodstandards.gov.au/"),
+];
 export interface Product { id: string; name: string; category: string; ingredients: string; markets: string[] }
 export interface Workspace { version: 1; company: string; categories: string[]; markets: string[]; sources: string[]; cadence: "Daily" | "Weekly"; products: Product[]; reviewed: string[]; saved: string[]; completed: boolean }
 export function emptyWorkspace(): Workspace {
@@ -39,12 +77,8 @@ export function parseWorkspace(value: unknown): Workspace | null {
 export function loadWorkspace(): Workspace {
   try { return parseWorkspace(JSON.parse(localStorage.getItem(WORKSPACE_STORAGE) || "null")) || emptyWorkspace(); } catch { return emptyWorkspace(); }
 }
-export class ManagedError extends Error {
-  readonly copyKey: CopyKey;
-  constructor(copyKey: CopyKey) { super(t(copyKey)); this.copyKey = copyKey; }
-}
-export class WorkspaceConflict extends ManagedError {
-  constructor() { super("global.preview.this-workspace-changed-in-another-tab-reload"); }
+export class WorkspaceConflict extends Error {
+  constructor() { super(t(`${DATA}.messages.conflict`)); }
 }
 /** Ordinary saves check their loaded snapshot; an explicit import can replace it. */
 export function saveWorkspace(workspace: Workspace, expected?: Workspace): boolean {
@@ -66,39 +100,38 @@ export function toggleValue(values: string[], value: string): string[] { return 
 export function restoreProduct(products: Product[], product: Product): Product[] {
   return products.some(p=>p.id===product.id) ? products : [...products,product];
 }
-const UPDATE_COPY = [
-  { id: "label", titleCopy: "global.preview.a-labeling-proposal-appears-in-your-market", sourceCopy: "global.preview.fda", market: "United States", categoryCopy: "global.preview.labeling", priority: "Review first", summaryCopy: "global.preview.an-illustrative-proposal-would-change-how-a", actionCopy: "global.preview.review-affected-labels-and-record-a-decision", url: "https://www.fda.gov/food/food-labeling-nutrition" },
-  { id: "ingredient", titleCopy: "global.preview.an-ingredient-consultation-opens-for-comment", sourceCopy: "global.preview.fr", market: "United States", categoryCopy: "global.preview.ingredients", priority: "Watch", summaryCopy: "global.preview.this-sample-consultation-demonstrates-how-an-ingredient", actionCopy: "global.preview.check-whether-the-ingredient-is-used-in", url: "https://www.federalregister.gov/" },
-  { id: "alcohol", titleCopy: "global.preview.alcohol-label-guidance-is-revised", sourceCopy: "global.preview.ttb", market: "United States", categoryCopy: "global.preview.alcohol", priority: "Review first", summaryCopy: "global.preview.an-invented-guidance-change-shows-how-alcohol", actionCopy: "global.preview.compare-your-label-approval-workflow-with-the", url: "https://www.ttb.gov/" },
-  { id: "canada", titleCopy: "global.preview.a-food-standard-changes-in-a-second", sourceCopy: "global.preview.hc", market: "Canada", categoryCopy: "global.preview.standards", priority: "Watch", summaryCopy: "global.preview.this-synthetic-example-illustrates-cross-market-monitoring", actionCopy: "global.preview.assign-a-reviewer-for-products-sold-in", url: "https://www.canada.ca/en/health-canada.html" },
-] as const;
-export const SAMPLE_UPDATES = UPDATE_COPY.map(update => ({ ...update, title: t(update.titleCopy), source: t(update.sourceCopy), category: t(update.categoryCopy), summary: t(update.summaryCopy), action: t(update.actionCopy) }));
-export const PLAN_FEATURES = ["global.preview.a-workspace-for-your-beverage-portfolio", "global.preview.market-and-source-selection", "global.preview.a-prioritized-review-queue", "global.preview.briefing-export", "global.preview.saved-review-decisions"] as const;
+export interface SampleUpdate { id: string; title: string; source: string; market: string; category: string; priority: string; first: boolean; summary: string; action: string; url: string }
+const update = (id: string, sourceId: string, market: string, first: boolean, url: string): SampleUpdate => ({
+  id,
+  market,
+  first,
+  url,
+  source: t(`${DATA}.sources.${sourceId}.short`),
+  priority: t(`${DATA}.priorities.${first ? "first" : "watch"}`),
+  title: t(`${DATA}.updates.${id}.title`),
+  category: t(`${DATA}.updates.${id}.category`),
+  summary: t(`${DATA}.updates.${id}.summary`),
+  action: t(`${DATA}.updates.${id}.action`),
+});
+export const SAMPLE_UPDATES: SampleUpdate[] = [
+  update("label", "fda", "United States", true, "https://www.fda.gov/food/food-labeling-nutrition"),
+  update("ingredient", "fr", "United States", false, "https://www.federalregister.gov/"),
+  update("alcohol", "ttb", "United States", true, "https://www.ttb.gov/"),
+  update("canada", "hc", "Canada", false, "https://www.canada.ca/en/health-canada.html"),
+];
+export const PLAN_FEATURES = ["1-workspace", "2-markets", "3-queue", "4-export", "5-decisions"].map((key) => t(`${DATA}.plan-features.${key}`));
 export function briefingText(workspace: Workspace): string {
-  return [`${BRAND} | ${workspace.company || t("global.preview.your-workspace")}`, t("global.preview.preview-briefing-all-regulatory-updates-below-are"), `${t("global.preview.briefing-markets")} ${workspace.markets.map(publicLabel).join(", ") || t("global.preview.not-selected")}`, `${t("global.preview.briefing-products")} ${workspace.products.map(p => p.name).join(", ") || t("global.preview.no-products-added")}`, ...SAMPLE_UPDATES.map(u => `${u.title}\n${u.summary}\n${t("global.preview.briefing-review")} ${u.action}\n${t("global.preview.briefing-source")} ${u.url}`), t("global.preview.for-human-review-not-legal-advice-no")].join("\n\n");
+  const b = (key: string, vars?: Record<string, string>) => t(`${DATA}.briefing-export.${key}`, vars);
+  return [
+    b("heading", { brand: BRAND, company: workspace.company || b("your-workspace") }),
+    b("intro"),
+    b("markets", { markets: workspace.markets.map(marketName).join(", ") || b("not-selected") }),
+    b("products", { products: workspace.products.map(p => p.name).join(", ") || b("no-products") }),
+    ...SAMPLE_UPDATES.map(u => `${u.title}\n${u.summary}\n${b("suggested", { action: u.action })}\n${b("source", { url: u.url })}`),
+    b("closing"),
+  ].join("\n\n");
 }
 export function downloadText(filename: string, content: string, type = "text/plain") {
   const url = URL.createObjectURL(new Blob([content], { type })); const a = document.createElement("a");
   a.href = url; a.download = filename; a.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-export const LABEL_KEYS: Record<string, CopyKey> = {
-  "Non-alcoholic beverages": "global.preview.non-alcoholic-beverages",
-  "Beer & cider": "global.preview.beer-cider",
-  "Wine": "global.preview.wine",
-  "Spirits": "global.preview.spirits",
-  "Functional beverages": "global.preview.functional-beverages",
-  "Cannabis & hemp beverages": "global.preview.cannabis-hemp-beverages",
-  "United States": "global.preview.united-states",
-  "Canada": "global.preview.canada",
-  "United Kingdom": "global.preview.united-kingdom",
-  "European Union": "global.preview.european-union",
-  "Australia & New Zealand": "global.preview.australia-new-zealand",
-  "Daily": "global.preview.daily",
-  "Weekly": "global.preview.weekly",
-  "Review first": "global.preview.review-first",
-  "Watch": "global.preview.watch"
-};
-export function publicLabel(value: string): string {
-  return LABEL_KEYS[value] ? t(LABEL_KEYS[value]) : value;
 }

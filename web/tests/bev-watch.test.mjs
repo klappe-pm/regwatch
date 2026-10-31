@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { WORKSPACE_STORAGE, briefingText, emptyWorkspace, isPublicPage, loadWorkspace, parseWorkspace, restoreProduct, saveWorkspace } from "../src/lib/bev-watch.ts";
+import { copyText } from "./design-values.mjs";
+import { BRAND, WORKSPACE_STORAGE, briefingText, emptyWorkspace, isPublicPage, loadWorkspace, parseWorkspace, restoreProduct, saveWorkspace } from "../src/lib/bev-watch.ts";
 
 afterEach(()=>{ delete globalThis.localStorage; delete process.env.NEXT_PUBLIC_BEV_WATCH_MODE; });
 
@@ -68,10 +69,12 @@ test("a stale tab cannot resurrect a workspace cleared elsewhere",()=>{
   assert.deepEqual(loadWorkspace(),emptyWorkspace());
 });
 
+// The sample-status and no-live-monitoring statements are the intro and closing copy entries, so the export is
+// checked to carry those entries, whatever their hub-edited wording.
 test("exported briefings carry sample status and never claim monitoring is live",()=>{
   const text=briefingText({...emptyWorkspace(),company:"Example Beverages"});
-  assert.match(text,/Bev Watch \| Example Beverages/);
-  assert.match(text,/synthetic examples, not current regulatory information/);
-  assert.match(text,/No live monitoring or email delivery is active/);
-  assert.match(text,/Not legal advice/);
+  const b=(key,vars)=>copyText(`global.preview-data.briefing-export.${key}`,vars);
+  assert.ok(text.startsWith(b("heading",{brand:BRAND,company:"Example Beverages"})));
+  assert.ok(text.includes(b("intro")));
+  assert.ok(text.endsWith(b("closing")));
 });

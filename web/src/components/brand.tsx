@@ -1,12 +1,53 @@
-import { Copy } from "@/components/copy";
-import { t } from "@/lib/copy.generated";
-import Link from "next/link";
-export function Brand({ compact = false }: { compact?: boolean }) {
-  return <Link href="/" className="bw-brand" data-component="brand" data-component-name="brand" aria-label={t("global.brand.home-label")}><svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--ds-color-brand-red)"/><path d="M8 11h5.5a5 5 0 0 1 0 10H8V11Zm5.5 0H24l-4 10h-6.5M8 16h12" stroke="var(--ds-color-raised)" strokeWidth="2" strokeLinejoin="round"/></svg>{!compact && <span><Copy k="global.brand.bev" /> <span className="bw-brand-light"><Copy k="global.brand.watch" /></span></span>}</Link>;
+import Box from "@mui/material/Box";
+import SvgIcon from "@mui/material/SvgIcon";
+import NextLink from "next/link";
+
+import { BRAND } from "@/lib/bev-watch";
+import { t } from "@/lib/text";
+
+import { Piece } from "./ui";
+
+/** The red beverage mark: a rounded square with a white line symbol. */
+export function BrandMark({ size = 32 }: { size?: number }) {
+  return (
+    <SvgIcon viewBox="0 0 32 32" aria-hidden focusable="false" sx={{ width: size, height: size, fontSize: size, flexShrink: 0 }}>
+      <Box component="rect" width="32" height="32" rx="9" sx={{ fill: "var(--ds-color-brand-red)" }} />
+      <Box
+        component="path"
+        d="M8 11h5.5a5 5 0 0 1 0 10H8V11Zm5.5 0H24l-4 10h-6.5M8 16h12"
+        sx={{ fill: "none", stroke: "var(--ds-color-white)", strokeWidth: 2, strokeLinejoin: "round" }}
+      />
+    </SvgIcon>
+  );
 }
-export function PublicHeader() {
-  return <header className="bw-header"><div className="bw-container bw-header-inner"><Brand/><nav data-component="public-navigation" data-component-name="public-navigation" aria-label={t("global.brand.website")}><Link href="/#how-it-works"><Copy k="global.brand.how-it-works" /></Link><Link href="/pricing/"><Copy k="global.brand.membership" /></Link><Link href="/workspace/" className="bw-header-workspace"><Copy k="global.brand.workspace" /></Link><Link href="/onboarding/" className="bw-button bw-button-small" data-component="button-primary" data-component-name="button-primary"><Copy k="global.brand.get-started" /></Link></nav></div></header>;
-}
-export function PublicFooter() {
-  return <footer className="bw-footer bw-container"><Brand/><p><Copy k="global.brand.beverage-regulation-in-focus" /></p><nav data-component="public-navigation" data-component-name="public-navigation" aria-label={t("global.brand.footer")}><Link href="/pricing/"><Copy k="global.brand.membership" /></Link><Link href="/privacy/"><Copy k="global.brand.privacy" /></Link><Link href="/workspace/"><Copy k="global.brand.explore-the-preview" /></Link></nav><small><Copy k="global.brand.for-human-review-not-legal-advice" /></small></footer>;
+
+/** The wordmark. `local` uses the brand-local colour of the local application's navigation rail. */
+export function Brand({ compact = false, local = false }: { compact?: boolean; local?: boolean }) {
+  return (
+    <Piece
+      name="brand"
+      modifier={local ? "brand-local" : undefined}
+      component={NextLink}
+      href="/"
+      aria-label={t("global.preview-data.brand.home", { name: BRAND })}
+      underline="none"
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "10px",
+        whiteSpace: "nowrap",
+        "@media (max-width: 540px)": { fontSize: "20px", gap: "8px", "& svg": { width: 28, height: 28 } },
+      }}
+    >
+      <BrandMark />
+      {compact ? null : (
+        <span>
+          {t("global.preview-data.brand.name-first")}{" "}
+          <Box component="span" sx={{ fontWeight: 400 }}>
+            {t("global.preview-data.brand.name-second")}
+          </Box>
+        </span>
+      )}
+    </Piece>
+  );
 }
