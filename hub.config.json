@@ -4,7 +4,7 @@
   "cmsDir": "docs/content-management-system",
   "copyFolders": ["pages", "global"],
   "designFile": "DESIGN.md",
-  "credentialRef": "secret://product-feedback/hub-api-key",
+  "credentialRef": "secret://hub/api-key",
   "localApply": { "inputs": ["DESIGN.md", "docs/content-management-system", "web"] },
   "sourceGeneration": {
     "commands": [
