@@ -22,9 +22,12 @@ COPY = json.loads((WEB / "design" / "copy.json").read_text(encoding="utf-8"))
 PREFIX = re.compile(r"const p = \([^)]*\) => t\(`([\w.-]+)\.\$\{key\}`")
 LOOKUP = r"\{(p|t)\(\"([\w.-]+)\""
 HEADING = re.compile(
-    r"component=\"h[1-4]\"[^>]*>\s*" + LOOKUP
-    + r"|<Heading\b[^>]*>\s*" + LOOKUP
-    + r"|<(?:Section|PageHeader)\s+title=" + LOOKUP
+    r"component=\"h[1-4]\"[^>]*>\s*"
+    + LOOKUP
+    + r"|<Heading\b[^>]*>\s*"
+    + LOOKUP
+    + r"|<(?:Section|PageHeader)\s+title="
+    + LOOKUP
 )
 # Fragments of a display heading split over lines (the public pages' "title-1", "title-2" and
 # "title-emphasis") are sentences, as the literal headings with <br/> inside them were.
