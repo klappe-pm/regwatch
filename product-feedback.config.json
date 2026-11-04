@@ -4,7 +4,13 @@
   "repo": "klappe-pm/regwatch",
   "workspace": {
     "url": "http://127.0.0.1:4178",
-    "staticDir": "web/dist"
+    "staticDir": "web/dist",
+    "issueWorkflow": {
+      "provider": "github",
+      "createOnSubmit": false,
+      "monitor": false,
+      "agentTrigger": "disabled"
+    }
   },
   "paths": {
     "cms": "docs/content-management-system",
