@@ -19,6 +19,8 @@ build/
 dist/
 site/
 *.whl
+# the export tests are source, not a build output
+!/web/tests/build/
 
 # web app: dependencies and Next.js working folders; the export ships in regwatch/web/
 /web/node_modules/

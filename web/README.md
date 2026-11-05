@@ -13,11 +13,13 @@ The pages are a Next.js app (Pages Router, webpack, static export) built from Ma
 
 ## Public Build
 
+The commands below assume the checkout is at `~/regwatch`; replace that with the path of your checkout.
+
 The public build sets a non-secret display mode at compile time and writes only the website routes into `web/dist/`. It does not replace the Python package's built local UI.
 
 ```bash
-npm --prefix "$HOME/projects/regwatch/web" ci --include=dev
-npm --prefix "$HOME/projects/regwatch/web" run build:site
+npm --prefix ~/regwatch/web ci --include=dev
+npm --prefix ~/regwatch/web run build:site
 ```
 
 Deploy with `web/` as the project root. `vercel.json` selects a static deployment and the `dist` output directory. Public routes are `/`, `/onboarding/`, `/workspace/`, `/pricing/`, and `/privacy/`. The website publishes no `/api/*` handlers or local engine routes.
@@ -27,7 +29,7 @@ Deploy with `web/` as the project root. `vercel.json` selects a static deploymen
 The existing build keeps the local overview at `/` and copies the static export into the Python package. Run this before committing a local UI change.
 
 ```bash
-npm --prefix "$HOME/projects/regwatch/web" run build
+npm --prefix ~/regwatch/web run build
 ```
 
 ## Preview Data Contract
@@ -47,12 +49,12 @@ Subscription pricing, payment provider, account service, hosted storage, and mon
 ## Verification
 
 ```bash
-npm --prefix "$HOME/projects/regwatch/web" run check
-npm --prefix "$HOME/projects/regwatch/web" test
-npm --prefix "$HOME/projects/regwatch/web" run build
-npm --prefix "$HOME/projects/regwatch/web" run build:site
-npm --prefix "$HOME/projects/regwatch/web" run test:build
-npm --prefix "$HOME/projects/regwatch/web" run test:browser
+npm --prefix ~/regwatch/web run check
+npm --prefix ~/regwatch/web test
+npm --prefix ~/regwatch/web run build
+npm --prefix ~/regwatch/web run build:site
+npm --prefix ~/regwatch/web run test:build
+npm --prefix ~/regwatch/web run test:browser
 ```
 
 `check` confirms the generated design and copy files are current, finds no hard-coded colour or text, and checks the types. The logic tests cover workspace validation, persistence failures, synthetic briefing labels, import/undo integrity, and that every copy key the pages use exists. The export tests check every page, link and style sheet of both builds, and the browser tests open every page in Chromium under the local server's content security policy, in light and dark mode, and walk through onboarding, the review queue and the navigation rail.
