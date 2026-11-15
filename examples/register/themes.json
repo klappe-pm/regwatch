@@ -1,0 +1,18 @@
+{
+  "themes": [
+    {
+      "key": "sweeteners",
+      "title": "Sweeteners and added sugar",
+      "categories": ["sweeteners"],
+      "why": "Sweetener rules reach both low-sugar claims and school channel sales, so one product can be exposed twice.",
+      "action": "Confirm sweetener disclosures and watch the regional bills."
+    },
+    {
+      "key": "allergens",
+      "title": "Allergen declarations",
+      "categories": ["allergens"],
+      "why": "An allergen order changes label artwork for every pack that contains a named allergen.",
+      "action": "Inventory allergen content by product and schedule label updates."
+    }
+  ]
+}

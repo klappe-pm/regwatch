@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>East Region gazette: food</title>
+  <style>body { font-family: serif; }</style>
+  <script>var tracking = "ignored by regwatch";</script>
+</head>
+<body>
+  <h1>Food notices</h1>
+  <ul>
+    <li>Bill 14, Sweetener Labeling: referred to committee.</li>
+    <li>Notice 22: market inspection schedule.</li>
+  </ul>
+</body>
+</html>

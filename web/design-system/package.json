@@ -1,0 +1,64 @@
+{
+  "name": "regwatch-design",
+  "version": "0.1.9",
+  "private": true,
+  "description": "The design system parts the regwatch web app uses, kept in this repository.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./emotion": {
+      "types": "./dist/emotion.d.ts",
+      "import": "./dist/emotion.js"
+    },
+    "./core": {
+      "types": "./src/core/index.d.mts",
+      "import": "./src/core/index.mjs"
+    },
+    "./node": {
+      "types": "./src/core/node.d.mts",
+      "import": "./src/core/node.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "ds": "bin/ds.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "peerDependencies": {
+    "@emotion/cache": "^11.14.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/material": "^9.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@emotion/cache": {
+      "optional": true
+    },
+    "@emotion/react": {
+      "optional": true
+    },
+    "@emotion/styled": {
+      "optional": true
+    },
+    "@mui/material": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  }
+}

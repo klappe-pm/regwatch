@@ -1,0 +1,9 @@
+{
+  "categories": [
+    {"category_id": "allergens", "label": "Allergen declarations", "definition": "Rules on declaring ingredients that commonly cause allergic reactions.", "examples": ["peanut", "sesame", "milk"]},
+    {"category_id": "colorants", "label": "Colorants", "definition": "Rules on added colours in food.", "examples": ["carmine"]},
+    {"category_id": "sweeteners", "label": "Sweeteners", "definition": "Rules on added sugars and non-sugar sweeteners.", "examples": ["sucralose", "aspartame"]},
+    {"category_id": "origin-labeling", "label": "Origin labeling", "definition": "Rules on stating where a product or ingredient comes from.", "examples": []},
+    {"category_id": "nutrition-claims", "label": "Nutrition claims", "definition": "Rules on wording such as low sugar or high fiber.", "examples": ["low-sugar", "high-fiber"]}
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "count": 2,
+  "results": [
+    {"publication_date": "2026-10-01", "document_number": "SV-2026-114", "title": "Nutrition Claims Regulation (draft)"},
+    {"publication_date": "2026-08-20", "document_number": "SV-2026-097", "title": "Origin Labeling Act"}
+  ]
+}

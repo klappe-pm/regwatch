@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "description": "The shipped catalogue of focus areas. A focus area is a named set of terms. regwatch ranks candidates that mention one of the terms ahead of candidates that mention none. Copy this file, edit it, and point [profile] catalogue at the copy to change the areas or their terms.",
+  "focus_areas": [
+    {
+      "focus_id": "non-alcoholic-beverages",
+      "label": "Non-alcoholic beverages",
+      "description": "Soft drinks, juices, waters, teas, coffees and other drinks sold without alcohol.",
+      "terms": [
+        "soft drink",
+        "carbonated drink",
+        "soda",
+        "juice",
+        "energy drink",
+        "sports drink",
+        "bottled water",
+        "mineral water",
+        "tea",
+        "coffee",
+        "kombucha",
+        "non-alcoholic",
+        "alcohol-free",
+        "dealcoholized",
+        "plant-based milk",
+        "sugar-sweetened beverage",
+        "caffeine",
+        "beverage container"
+      ]
+    },
+    {
+      "focus_id": "alcoholic-beverages",
+      "label": "Alcoholic beverages",
+      "description": "Beer, wine, spirits, ciders and other drinks that contain alcohol.",
+      "terms": [
+        "alcoholic beverage",
+        "alcohol by volume",
+        "abv",
+        "beer",
+        "malt beverage",
+        "wine",
+        "sulfite",
+        "spirits",
+        "distilled spirits",
+        "liquor",
+        "cider",
+        "mead",
+        "hard seltzer",
+        "brewery",
+        "distillery",
+        "winery",
+        "excise duty"
+      ]
+    },
+    {
+      "focus_id": "cannabis-and-hemp-products",
+      "label": "Cannabis and hemp products",
+      "description": "Cannabis, hemp and cannabinoid products, including edibles, oils and topicals.",
+      "terms": [
+        "cannabis",
+        "marijuana",
+        "hemp",
+        "hemp-derived",
+        "cbd",
+        "cannabidiol",
+        "thc",
+        "tetrahydrocannabinol",
+        "cannabinoid",
+        "delta-8",
+        "delta-9",
+        "pre-roll"
+      ]
+    },
+    {
+      "focus_id": "traditional-foods",
+      "label": "Traditional foods",
+      "description": "Heritage, artisanal, regional and culturally specific foods, including fermented and cured products.",
+      "terms": [
+        "traditional food",
+        "heritage food",
+        "artisanal",
+        "handmade",
+        "ethnic food",
+        "regional specialty",
+        "geographical indication",
+        "protected designation of origin",
+        "traditional specialty guaranteed",
+        "fermented food",
+        "cured meat",
+        "pickled",
+        "raw milk",
+        "wild-harvested",
+        "foraged",
+        "indigenous food"
+      ]
+    },
+    {
+      "focus_id": "dietary-supplements",
+      "label": "Dietary supplements",
+      "description": "Vitamins, minerals, botanicals, probiotics and other products sold as supplements.",
+      "terms": [
+        "dietary supplement",
+        "food supplement",
+        "nutraceutical",
+        "vitamin",
+        "mineral supplement",
+        "probiotic",
+        "herbal supplement",
+        "botanical",
+        "protein powder",
+        "omega-3",
+        "melatonin",
+        "dietary ingredient",
+        "structure function claim",
+        "health claim"
+      ]
+    },
+    {
+      "focus_id": "infant-food",
+      "label": "Infant food",
+      "description": "Infant formula, baby food and nutrition products for infants and young children.",
+      "terms": [
+        "infant formula",
+        "follow-on formula",
+        "growing-up milk",
+        "baby food",
+        "infant",
+        "toddler",
+        "young children",
+        "complementary food",
+        "weaning food",
+        "human milk fortifier",
+        "baby cereal",
+        "pediatric nutrition"
+      ]
+    },
+    {
+      "focus_id": "pet-food",
+      "label": "Pet food",
+      "description": "Food, treats and supplements for companion animals, and the feed ingredients used in them.",
+      "terms": [
+        "pet food",
+        "dog food",
+        "cat food",
+        "pet treat",
+        "pet supplement",
+        "companion animal",
+        "animal feed",
+        "feed additive",
+        "feed ingredient",
+        "complete and balanced"
+      ]
+    },
+    {
+      "focus_id": "cosmetics",
+      "label": "Cosmetics",
+      "description": "Cosmetics and personal care products, including their ingredients and labeling.",
+      "terms": [
+        "cosmetic",
+        "cosmetic ingredient",
+        "personal care",
+        "skin care",
+        "hair care",
+        "sunscreen",
+        "fragrance",
+        "perfume",
+        "lipstick",
+        "shampoo",
+        "deodorant",
+        "soap",
+        "nail polish",
+        "microplastic",
+        "talc"
+      ]
+    }
+  ]
+}

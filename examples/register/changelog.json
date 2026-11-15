@@ -1,0 +1,34 @@
+{
+  "events": [
+    {
+      "date": "2026-09-01",
+      "jurisdiction": "nl",
+      "agency": "Northland regulator",
+      "obligation_id": "nl-allergen-order",
+      "headline": "Allergen Declaration Order published",
+      "what_happened": "The regulator published the final order with an effective date of 2027-03-01.",
+      "citations": [{"citation": "Northland Allergen Declaration Order", "url": "https://regulator.nl.example/orders/allergen"}],
+      "source_url": "https://regulator.nl.example/orders/allergen"
+    },
+    {
+      "date": "2026-10-01",
+      "jurisdiction": "sv",
+      "agency": "Southvale rules registry",
+      "obligation_id": "sv-nutrition-claims",
+      "headline": "Nutrition Claims Regulation opened for comment",
+      "what_happened": "A draft regulation on nutrition claim wording opened for public comment.",
+      "citations": [],
+      "source_url": "https://registry.sv.example/rules/claims"
+    },
+    {
+      "date": "2026-08-20",
+      "jurisdiction": "sv",
+      "agency": "Southvale parliament",
+      "obligation_id": "sv-origin-labeling",
+      "headline": "Origin Labeling Act passed",
+      "what_happened": "The act passed and takes effect on 2027-07-01.",
+      "citations": [],
+      "source_url": ""
+    }
+  ]
+}
