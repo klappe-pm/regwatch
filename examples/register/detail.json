@@ -1,0 +1,32 @@
+{
+  "topics_vocabulary": ["allergens", "colorants", "sweeteners", "origin", "claims"],
+  "detail": {
+    "nl-allergen-order": {
+      "summary": "Requires a plain statement of named allergens on the front or back of the pack.",
+      "impacts": "Every pack that contains a named allergen needs a revised label.",
+      "implications": "Label artwork and print runs must change before the effective date.",
+      "action": "Inventory allergen content by product and schedule label updates.",
+      "topics": ["allergens"],
+      "citations": [{"citation": "Northland Allergen Declaration Order", "url": "https://regulator.nl.example/orders/allergen"}],
+      "backlinks": [{"label": "Northland regulator", "url": "https://regulator.nl.example/orders/allergen"}]
+    },
+    "nl-colorant-guidance": {
+      "summary": "Asks producers to stop using a listed set of colorants by the end of the year.",
+      "impacts": "Products that use a listed colorant are named in follow-up reviews.",
+      "implications": "A colour change is also a claims event, not only a recipe change.",
+      "action": "List colorant sources by product and route any swap through claims review.",
+      "topics": ["colorants", "claims"],
+      "citations": [],
+      "backlinks": [{"label": "Northland regulator", "url": "https://regulator.nl.example/guidance/colorants"}]
+    },
+    "sv-origin-labeling": {
+      "summary": "Restricts when a pack may say it is a product of Southvale.",
+      "impacts": "Packs that make an origin claim need documented ingredient sourcing.",
+      "implications": "Sourcing records become part of label approval.",
+      "action": "Collect supplier origin statements for products that make the claim.",
+      "topics": ["origin", "claims"],
+      "citations": [{"citation": "Southvale Origin Labeling Act", "url": ""}],
+      "backlinks": []
+    }
+  }
+}

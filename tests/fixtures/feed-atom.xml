@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Synthetic Atom feed</title>
+  <entry>
+    <title>Second entry</title>
+    <link href="https://regulator.example/second"/>
+    <id>urn:example:2</id>
+    <updated>2026-10-02T00:00:00Z</updated>
+  </entry>
+  <entry>
+    <title>First entry</title>
+    <link href="https://regulator.example/first"/>
+    <id>urn:example:1</id>
+    <updated>2026-10-01T00:00:00Z</updated>
+  </entry>
+</feed>

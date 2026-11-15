@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-29T11:09:38Z",
+  "title": "Design System: Bev Watch",
+  "extensions": {
+    "colorMeta": {
+      "bw-navy": {
+        "role": "primary",
+        "displayName": "Muted Navy"
+      },
+      "brand-red": {
+        "role": "secondary",
+        "displayName": "Beverage Mark Red"
+      },
+      "bw-paper": {
+        "role": "neutral",
+        "displayName": "Pale Blue-Gray Paper"
+      },
+      "bw-ink": {
+        "role": "neutral",
+        "displayName": "Deep Blue-Gray Ink"
+      },
+      "bw-muted": {
+        "role": "neutral",
+        "displayName": "Muted Blue-Gray Text"
+      },
+      "bw-line": {
+        "role": "neutral",
+        "displayName": "Pale Divider"
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Raised White"
+      },
+      "priority-surface": {
+        "role": "secondary",
+        "displayName": "Warm Priority Surface"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Public Display",
+        "purpose": "Landing introduction."
+      },
+      "headline": {
+        "displayName": "Public Headline",
+        "purpose": "Public explanatory section heading."
+      },
+      "title": {
+        "displayName": "Workspace Title",
+        "purpose": "Preview page headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base typography across the documented Bev Watch surfaces."
+      },
+      "label": {
+        "displayName": "Field Label",
+        "purpose": "Form labels and legends."
+      },
+      "editorial": {
+        "displayName": "Georgia Accent",
+        "purpose": "Italic public emphasis and briefing-paper heading."
+      }
+    },
+    "shadows": [
+      {
+        "name": "landing-preview",
+        "value": "0 20px 60px #17395119",
+        "purpose": "Landing briefing preview only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-background",
+        "value": "background-color .18s ease-out",
+        "purpose": "Primary, light, and outline button background transitions."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }",
+        "purpose": "Global reduced-motion behavior from the stylesheet."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "public-wide",
+        "value": "1100px",
+        "purpose": "Narrower public gutters and single-column workspace overview."
+      },
+      {
+        "name": "public-stacked",
+        "value": "800px",
+        "purpose": "Single-column public sections, horizontal onboarding progress, and top workspace navigation."
+      },
+      {
+        "name": "public-narrow",
+        "value": "540px",
+        "purpose": "Narrow type, gutters, fields, and stacked action rows."
+      },
+      {
+        "name": "local-shell-compact",
+        "value": "767px",
+        "purpose": "Separate inherited local shell navigation behavior."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Navy primary action used for onboarding and workspace tasks.",
+      "html": "<a class=\"ds-button\" href=\"#continue\">Continue</a>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 48px; padding: 12px 22px; border-radius: 6px; background: #183e56; color: #fff; font-weight: 600; font-size: 14px; line-height: 1.4; cursor: pointer; text-align: center; transition: background-color .18s ease-out; text-decoration: none; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-button:hover { background: #285c79; } .ds-button:focus-visible { outline: 2px solid var(--focus, #1d5a92); outline-offset: 2px; } .ds-button:disabled { opacity: .6; cursor: not-allowed; } @media (prefers-reduced-motion: reduce) { .ds-button { transition: none !important; } }"
+    },
+    {
+      "name": "Light Button",
+      "kind": "button",
+      "refersTo": "button-light",
+      "description": "Light primary variant used in the navy closing section.",
+      "html": "<div class=\"ds-dark-surface\"><a class=\"ds-button\" href=\"#onboarding\">Build your watchlist</a></div>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 48px; padding: 12px 22px; border-radius: 6px; background: #183e56; color: #fff; font-weight: 600; font-size: 14px; line-height: 1.4; cursor: pointer; text-align: center; transition: background-color .18s ease-out; text-decoration: none; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-dark-surface { background: #183e56; padding: 24px; } .ds-button { background: #fff; color: #183e56; } .ds-button:hover { background: #e9f1f5; } .ds-button:focus-visible { outline: 2px solid var(--focus, #1d5a92); outline-offset: 2px; } @media (prefers-reduced-motion: reduce) { .ds-button { transition: none !important; } }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action used for saving and selecting preview content.",
+      "html": "<button class=\"ds-button\" type=\"button\">Save for later</button>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 48px; padding: 12px 22px; border-radius: 6px; background: #183e56; color: #fff; font-weight: 600; font-size: 14px; line-height: 1.4; cursor: pointer; text-align: center; transition: background-color .18s ease-out; text-decoration: none; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-button { color: #183e56; border: 1px solid #7a8e9c; background: transparent; } .ds-button:hover { background: #eaf0f4; } .ds-button:focus-visible { outline: 2px solid var(--focus, #1d5a92); outline-offset: 2px; } .ds-button:disabled { opacity: .6; cursor: not-allowed; } @media (prefers-reduced-motion: reduce) { .ds-button { transition: none !important; } }"
+    },
+    {
+      "name": "Text Action",
+      "kind": "button",
+      "description": "Inline text action with hover underline.",
+      "html": "<a class=\"ds-text-link\" href=\"#preview\">Explore the preview</a>",
+      "css": ".ds-text-link { display: inline-flex; align-items: center; gap: 8px; color: #1d5a79; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-text-link:hover { text-decoration-color: currentColor; } .ds-text-link:focus-visible { outline: 2px solid var(--focus, #1d5a92); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Labeled onboarding field with the global keyboard focus outline.",
+      "html": "<label class=\"ds-field\">Business name<input autocomplete=\"organization\" maxlength=\"100\" placeholder=\"Your beverage business\" required></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 24px; color: var(--bw-ink, #1b303c); font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-field input { min-width: 0; width: 100%; min-height: 46px; background: #fff; border: 1px solid #8b9da9; border-radius: 5px; padding: 10px 12px; font-weight: 400; font-size: 14px; color: #1b303c; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-field input::placeholder { color: #5d6f7b; } .ds-field input:focus-visible { outline: 2px solid var(--focus, #1d5a92); outline-offset: 2px; }"
+    },
+    {
+      "name": "Public Navigation",
+      "kind": "nav",
+      "description": "Public header links with a small primary action.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Website\"><a href=\"#how-it-works\">How it works</a><a href=\"#membership\">Membership</a><a class=\"ds-workspace\" href=\"#workspace\">Workspace</a><a class=\"ds-button\" href=\"#onboarding\">Get started</a></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 32px; font-size: 14px; font-weight: 500; color: var(--bw-ink, #1b303c); font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-nav a { color: inherit; text-decoration: none; } .ds-nav a:hover { text-decoration: underline; text-underline-offset: 5px; } .ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 48px; padding: 12px 22px; border-radius: 6px; background: #183e56; color: #fff; font-weight: 600; font-size: 14px; line-height: 1.4; cursor: pointer; text-align: center; transition: background-color .18s ease-out; text-decoration: none; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-nav .ds-button { min-height: 42px; padding: 10px 18px; color: #fff; text-decoration: none; } .ds-nav .ds-button:hover { background: #285c79; } .ds-nav a:focus-visible { outline: 2px solid var(--focus, #1d5a92); outline-offset: 2px; } @media (max-width: 1100px) { .ds-nav { gap: 20px; } } @media (max-width: 800px) { .ds-workspace { display: none; } } @media (max-width: 540px) { .ds-nav { gap: 12px; font-size: 12px; } .ds-nav > a:first-child { display: none; } .ds-nav .ds-button { min-height: 40px; font-size: 12px; padding: 10px 12px; } } @media (prefers-reduced-motion: reduce) { .ds-button { transition: none !important; } }"
+    },
+    {
+      "name": "Review Tags",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Static review labels, with a warm priority variant.",
+      "html": "<div class=\"ds-tags\"><span class=\"ds-tag ds-tag-warm\">Review first</span><span class=\"ds-tag\">Watch</span></div>",
+      "css": ".ds-tags { display: flex; gap: 8px; } .ds-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #e7f0f5; color: #24536d; font-size: 11px; font-weight: 650; line-height: 1.5; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-tag-warm { background: #f8ebe5; color: #8d4026; }"
+    },
+    {
+      "name": "Onboarding Choice",
+      "kind": "input",
+      "refersTo": "choice-selected",
+      "description": "Native checkbox row using the implemented selected state.",
+      "html": "<label class=\"ds-choice ds-selected\"><input type=\"checkbox\" checked><span>Non-alcoholic beverages</span></label>",
+      "css": ".ds-choice { display: flex; align-items: center; gap: 10px; border: 1px solid #a9bac4; border-radius: 6px; padding: 13px; min-height: 58px; font-size: 13px; cursor: pointer; color: var(--bw-ink, #1b303c); font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-selected { border-color: #376d8a; background: #edf4f8; } .ds-choice input { width: 17px; height: 17px; flex-shrink: 0; accent-color: var(--bw-navy, #183e56); } .ds-choice input:focus-visible { outline: 2px solid var(--focus, #1d5a92); outline-offset: 2px; }"
+    },
+    {
+      "name": "Briefing Preview",
+      "kind": "card",
+      "description": "Landing briefing card with the actual synthetic sample wording and feature shadow.",
+      "html": "<article class=\"ds-preview\" aria-label=\"Illustrative Bev Watch briefing\"><div class=\"ds-preview-top\"><span class=\"ds-dot\"></span>Your beverage briefing<span>PREVIEW</span></div><div class=\"ds-preview-body\"><div class=\"ds-preview-date\">A clearer view of what needs review</div><h2>Your portfolio.<br>Your priorities.</h2><div class=\"ds-preview-entry\"><span class=\"ds-tag\">Review first</span><h3>A Labeling Proposal Appears in Your Market</h3><p>Connect the source to the product, then decide what needs a closer look.</p></div><p class=\"ds-sample\">Synthetic examples. No current regulatory claims.</p></div></article>",
+      "css": ".ds-preview { overflow: hidden; background: white; border-radius: 14px; box-shadow: 0 20px 60px #17395119; color: var(--bw-ink, #1b303c); font-size: 15px; line-height: 1.65; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-preview-top { display: flex; align-items: center; gap: 9px; background: #183e56; color: #fff; padding: 15px 24px; font-size: 13px; } .ds-preview-top > span:last-child { margin-left: auto; color: #d6e6ee; font-size: 10px; letter-spacing: .08em; } .ds-dot { width: 6px; height: 6px; border-radius: 50%; background: #bad7e6; } .ds-preview-body { padding: 25px 30px 16px; } .ds-preview-date { font-size: 12px; color: var(--bw-muted, #526674); margin-bottom: 14px; } .ds-preview h2 { font-size: 34px; font-weight: 550; line-height: 1.1; letter-spacing: -.035em; text-wrap: balance; margin: 0; } .ds-preview-entry { padding-block: 20px; border-top: 1px solid var(--bw-line, #d8e1e6); } .ds-preview-entry h3 { font-size: 17px; line-height: 1.45; font-weight: 600; margin: 10px 0; } .ds-preview-entry p { font-size: 13px; color: var(--bw-muted, #526674); margin: 0; } .ds-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #f8ebe5; color: #8d4026; font-size: 11px; font-weight: 650; line-height: 1.5; } .ds-sample { font-size: 10px; color: #526674; padding-block: 7px; margin: 0; } @media (max-width: 540px) { .ds-preview-body { padding: 24px 22px 12px; } .ds-preview-top { padding-inline: 20px; font-size: 12px; } }"
+    },
+    {
+      "name": "Brand",
+      "kind": "custom",
+      "description": "Implemented compact red beverage mark and two-weight wordmark.",
+      "html": "<a class=\"ds-brand\" href=\"#home\" aria-label=\"Bev Watch home\"><svg width=\"32\" height=\"32\" viewBox=\"0 0 32 32\" fill=\"none\" aria-hidden=\"true\"><rect width=\"32\" height=\"32\" rx=\"9\" fill=\"#b33a36\"/><path d=\"M8 11h5.5a5 5 0 0 1 0 10H8V11Zm5.5 0H24l-4 10h-6.5M8 16h12\" stroke=\"white\" stroke-width=\"2\" stroke-linejoin=\"round\"/></svg><span>Bev <span class=\"ds-brand-light\">Watch</span></span></a>",
+      "css": ".ds-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 22px; line-height: 1; font-weight: 700; letter-spacing: -.025em; white-space: nowrap; color: var(--bw-navy, var(--structure, #183e56)); text-decoration: none; font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif); } .ds-brand svg { flex-shrink: 0; } .ds-brand-light { font-weight: 400; } .ds-brand:focus-visible { outline: 2px solid var(--focus, #1d5a92); outline-offset: 2px; } @media (max-width: 540px) { .ds-brand { font-size: 20px; gap: 8px; } .ds-brand svg { width: 28px; height: 28px; } }"
+    }
+  ],
+  "narrative": {
+    "overview": "Bev Watch extends the existing application's blue and neutral interface with a compact red beverage mark. The implemented system combines large, tightly tracked public headings with a denser workspace built from lists, restrained panels, visible labels, and source context.\n\nThis record captures the public website, five-step onboarding, and browser-local preview from source. Those surfaces explicitly use a light color scheme. The existing local application retains its separate semantic light and dark theme tokens. No rendered verification was available for this documentation pass.",
+    "keyCharacteristics": [
+      "Navy actions and selection treatments on pale blue-gray surfaces.",
+      "System sans typography with Georgia emphasis on public headings and briefing paper.",
+      "Thin dividers, compact tags, and modest corner radii.",
+      "Larger public composition and compact task-oriented workspace density."
+    ],
+    "rules": [],
+    "dos": [
+      "Do reuse the navy action, pale selection, and neutral surface roles.",
+      "Do preserve visible labels, keyboard focus, semantic selection states, and synthetic-preview labeling.",
+      "Do follow the implemented responsive changes for progress, navigation, lists, and forms."
+    ],
+    "donts": [
+      "Don't apply the inherited local application's dark tokens to the explicitly light public and preview surfaces.",
+      "Don't turn the landing preview's shadow into the default treatment for every workspace panel.",
+      "Don't present sample regulatory content as current findings."
+    ]
+  }
+}

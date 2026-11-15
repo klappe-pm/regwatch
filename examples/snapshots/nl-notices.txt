@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Northland regulator notices</title>
+    <link>https://regulator.nl.example/</link>
+    <description>Orders and guidance (synthetic example feed)</description>
+    <item>
+      <title>Allergen Declaration Order published</title>
+      <link>https://regulator.nl.example/orders/allergen</link>
+      <guid>nl-notice-2026-0901</guid>
+      <pubDate>Tue, 01 Sep 2026 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Voluntary colorant guidance reissued</title>
+      <link>https://regulator.nl.example/guidance/colorants</link>
+      <guid>nl-notice-2026-0715</guid>
+      <pubDate>Wed, 15 Jul 2026 09:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

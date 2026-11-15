@@ -1,0 +1,17 @@
+{
+  "reference_url": "https://regulator.nl.example/enforcement",
+  "themes": [
+    {
+      "theme": "Undeclared allergens",
+      "what_triggers": "A product contains a named allergen that the label does not declare.",
+      "note": "Usually found through consumer complaints and routine sampling.",
+      "citations": [{"citation": "Northland Allergen Declaration Order", "url": "https://regulator.nl.example/orders/allergen"}]
+    },
+    {
+      "theme": "Unsupported nutrition claims",
+      "what_triggers": "A pack says low sugar or high fiber without meeting the stated threshold.",
+      "note": "",
+      "citations": []
+    }
+  ]
+}

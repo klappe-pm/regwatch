@@ -1,0 +1,47 @@
+{
+  "name": "regwatch-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The pages behind regwatch ui, built to static files that ship inside the Python package.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "sync": "ds sync",
+    "icons": "node scripts/make-icons.mjs",
+    "check": "ds check && ds lint --strict && tsc --noEmit",
+    "typecheck": "node scripts/make-icons.mjs && tsc --noEmit",
+    "build": "node scripts/make-icons.mjs && ds check && next build --webpack && ds csp out && node scripts/copy-export.mjs",
+    "build:site": "node scripts/build-site.mjs",
+    "dev": "ds sync && node scripts/make-icons.mjs && next dev --webpack",
+    "test": "node --test tests/*.test.mjs",
+    "test:build": "node --test tests/build/*.test.mjs",
+    "test:browser": "node --test tests/browser/*.test.mjs"
+  },
+  "dependencies": {
+    "@emotion/cache": "11.14.0",
+    "@emotion/react": "11.14.0",
+    "@emotion/server": "11.11.0",
+    "@emotion/styled": "11.14.1",
+    "regwatch-design": "file:design-system",
+    "@mui/material": "9.5.0",
+    "@mui/material-nextjs": "9.5.0",
+    "next": "16.4.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@material-symbols/svg-400": "0.47.5",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "playwright": "1.64.1",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.29"
+    }
+  }
+}

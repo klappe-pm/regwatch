@@ -1,0 +1,7 @@
+# What the test job installs besides the built wheel. pip-compile turns this file into ci.txt with hashes.
+# markdown-it-py with linkify and cmarkgfm (the renderer GitHub uses) are used by tests that check
+# Markdown output for links, which skip without them.
+pytest>=9.0.3
+pytest-cov>=7
+markdown-it-py[linkify]
+cmarkgfm

@@ -1,0 +1,6 @@
+{
+  "designFile": "../DESIGN.md",
+  "cmsDir": "../docs/content-management-system",
+  "out": "design",
+  "src": ["src", "pages", "styles"]
+}

@@ -1,0 +1,35 @@
+name: Bug report
+description: Regwatch did something other than what the documentation says.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran, what you expected and what happened instead. Do not attach your register, which may be confidential; a cut-down synthetic register that reproduces the problem is the most useful thing to attach.
+      placeholder: "I ran `regwatch check` and expected ..., but ..."
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Paste the command output as text. Remove anything that looks like a credential.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Regwatch version
+      description: The output of `regwatch --version`.
+    validations:
+      required: true
+  - type: input
+    id: mechanism
+    attributes:
+      label: Source mechanism
+      description: The mechanism of the source involved, if any, for example api, rss, html, email-list or manual.
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Operating system and Python version.
