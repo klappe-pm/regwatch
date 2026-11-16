@@ -35,7 +35,7 @@ site/
 /web/.site-before-managed-*/
 /web/.vercel/
 /local/
-/.impeccable/review/
+/.impeccable/
 /web/next-env.d.ts
 /web/src/lib/icons.generated.ts
 /web/tsconfig.tsbuildinfo
