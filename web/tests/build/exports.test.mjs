@@ -67,6 +67,17 @@ const keys = Object.keys(copy);
 const parts = new Set(Object.keys(spec.components));
 
 for (const [name, { root, pages, hint }] of Object.entries(EXPORTS)) {
+  test(`${name} export retains font and source licenses`, (t) => {
+    if (!existsSync(join(root, "index.html"))) return t.skip(hint);
+    for (const file of ["LICENSE", "NOTICE", "inter-license.txt", "source-serif-license.txt"]) {
+      assert.deepEqual(
+        readFileSync(join(root, "licenses", "intent", file)),
+        readFileSync(join(web, "public", "licenses", "intent", file)),
+        `${name} retains ${file}`,
+      );
+    }
+  });
+
   test(`${name} export has every page`, (t) => {
     if (!existsSync(join(root, "index.html"))) return t.skip(hint);
     for (const page of pages) {

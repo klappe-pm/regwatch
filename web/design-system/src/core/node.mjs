@@ -127,7 +127,7 @@ function skipper(root, cfg) {
 function cssVars(root, cfg) {
   const vars = new Map()
   const skip = skipper(root, cfg)
-  for (const f of walk(root, (p) => p.endsWith('.css') && !skip(p))) {
+  for (const f of cfg.src.flatMap((dir) => walk(resolve(root, dir), (p) => p.endsWith('.css') && !skip(p)))) {
     for (const m of readFileSync(f, 'utf8').matchAll(/(--[a-zA-Z0-9-]+)\s*:\s*([^;}]+)[;}]/g)) if (!vars.has(m[1])) vars.set(m[1], m[2].trim())
   }
   return vars

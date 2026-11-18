@@ -23,7 +23,7 @@ const site = join(web, "dist");
 const staged = mkdtempSync(join(web, ".dist-next-"));
 const previous = `${staged}-previous`;
 try {
-  for (const name of ["index.html", "404.html", "404", "_next", "icon.svg", "pricing", "privacy", "onboarding", "workspace"]) {
+  for (const name of ["index.html", "404.html", "404", "_next", "icon.svg", "licenses", "pricing", "privacy", "onboarding", "workspace"]) {
     if (existsSync(join(web, "out", name))) cpSync(join(web, "out", name), join(staged, name), { recursive: true });
   }
   if (existsSync(site)) renameSync(site, previous);

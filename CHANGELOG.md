@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Added
 
+- Intent visual defaults for the website and local UI: neutral surfaces, chartreuse primary actions, 8px corners and self-hosted Inter and Source Serif 4 fonts, with upstream and font licenses included.
 - Managed website copy and design sources with reproducible, service-independent snapshots. Public pages, onboarding, workspace labels, sample updates, and briefing text use editable copy documents; design values and component styles rebuild from the existing design specification. Review metadata links rendered elements to their source records, with optional local design and content service configuration.
 - Bev Watch public website, five-step beverage onboarding, and a browser-local preview workspace with portfolio editing, source preferences, sample review decisions, backup import/export, and synthetic briefing export. Membership screens explain that pricing, checkout, hosted accounts, monitoring, and email delivery are not active. The separate static website build excludes the local engine routes and preserves the authenticated Python UI.
 - Preview workspace and onboarding saves detect changes already saved by another tab and prompt a reload instead of overwriting them. Explicit backup imports and confirmed clearing remain replacement operations.

@@ -8,13 +8,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "sync": "ds sync",
+    "sync": "node design-system/bin/ds.mjs sync",
     "icons": "node scripts/make-icons.mjs",
-    "check": "ds check && ds lint --strict && tsc --noEmit",
+    "check": "node design-system/bin/ds.mjs check && node design-system/bin/ds.mjs lint --strict && tsc --noEmit",
     "typecheck": "node scripts/make-icons.mjs && tsc --noEmit",
-    "build": "node scripts/make-icons.mjs && ds check && next build --webpack && ds csp out && node scripts/copy-export.mjs",
+    "build": "node scripts/make-icons.mjs && node design-system/bin/ds.mjs check && next build --webpack && node design-system/bin/ds.mjs csp out && node scripts/copy-export.mjs",
     "build:site": "node scripts/build-site.mjs",
-    "dev": "ds sync && node scripts/make-icons.mjs && next dev --webpack",
+    "dev": "node design-system/bin/ds.mjs sync && node scripts/make-icons.mjs && next dev --webpack",
     "test": "node --test tests/*.test.mjs",
     "test:build": "node --test tests/build/*.test.mjs",
     "test:browser": "node --test tests/browser/*.test.mjs"

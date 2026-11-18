@@ -11,6 +11,7 @@ import { themeOptions, themeSpec } from "@/design";
 import { isPublicPage } from "@/lib/bev-watch";
 import { t } from "@/lib/text";
 
+import "../styles/intent-fonts.css";
 import "../design/ds.css";
 import "../styles/app.css";
 

@@ -1,198 +1,242 @@
 ---
 name: Bev Watch
-description: The blue and neutral visual system for Bev Watch, the public website and the local regwatch ui.
+description: Intent neutral surfaces, chartreuse actions and self-hosted
+  typography for Bev Watch.
 colors:
-  surface: "#f6f8fa"
-  raised: "#ffffff"
-  ink: "#17212b"
-  muted: "#4b5866"
-  line: "#d6dee7"
-  control: "#768799"
-  selection: "#e3eef9"
-  structure: "#1d5a92"
-  on-structure: "#ffffff"
+  surface: "hsl(0, 0%, 100%)"
+  raised: "hsl(0, 0%, 100%)"
+  ink: "hsl(0, 0%, 0%)"
+  muted: "hsl(60, 0.826446281%, 27.7254901961%)"
+  line: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  control: "hsl(0, 0%, 0%)"
+  selection: "hsl(0, 0%, 94%)"
+  structure: "hsl(66, 60%, 28%)"
+  on-structure: "hsl(67, 40%, 12%)"
   accent: "#a8481a"
   accent-soft: "#fbede4"
   ok: "#2e6b3f"
-  surface-dark: "#0f151b"
-  raised-dark: "#151d26"
-  ink-dark: "#e5ecf3"
-  muted-dark: "#a5b3c2"
-  line-dark: "#2a3642"
-  control-dark: "#6c7f93"
-  selection-dark: "#1b3550"
-  structure-dark: "#86bdee"
-  on-structure-dark: "#0f151b"
+  surface-dark: "hsl(0, 0%, 10.1960784314%)"
+  raised-dark: "hsl(0, 0%, 10.1960784314%)"
+  ink-dark: "hsl(0, 0%, 100%)"
+  muted-dark: "hsl(20, 4.7619047619%, 83.6470588235%)"
+  line-dark: "hsl(60, 0.826446281%, 23.7254901961%)"
+  control-dark: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  selection-dark: "hsl(0, 0%, 18%)"
+  structure-dark: "hsl(67, 78%, 68%)"
+  on-structure-dark: "hsl(154, 25%, 9%)"
   accent-dark: "#f2a06a"
   accent-soft-dark: "#3a2416"
   ok-dark: "#86c79a"
   black: "#000000"
   white: "#ffffff"
   brand-red: "#b33a36"
-  bw-navy: "#183e56"
-  bw-ink: "#1b303c"
-  bw-muted: "#526674"
-  bw-line: "#d8e1e6"
-  bw-paper: "#f7f9fa"
-  bw-focus: "#1d5a92"
-  button-hover: "#285c79"
-  light-hover: "#e9f1f5"
-  outline-border: "#7a8e9c"
-  outline-hover: "#eaf0f4"
-  control-border: "#8b9da9"
-  placeholder: "#5d6f7b"
-  tag-surface: "#e7f0f5"
-  tag-ink: "#24536d"
+  bw-navy: "hsl(0, 0%, 0%)"
+  bw-ink: "hsl(0, 0%, 0%)"
+  bw-muted: "hsl(60, 0.826446281%, 27.7254901961%)"
+  bw-line: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  bw-paper: "hsl(0, 0%, 100%)"
+  bw-focus: "hsl(217.2, 91.2%, 59.8%)"
+  button-hover: "hsl(0, 0%, 0%)"
+  light-hover: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  outline-border: "hsl(0, 0%, 0%)"
+  outline-hover: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  control-border: "hsl(0, 0%, 0%)"
+  placeholder: "hsl(60, 0.826446281%, 27.7254901961%)"
+  tag-surface: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  tag-ink: "hsl(0, 0%, 0%)"
   priority-surface: "#f8ebe5"
   priority-ink: "#8d4026"
-  choice-border: "#a9bac4"
-  choice-selected-border: "#376d8a"
-  choice-selected-surface: "#edf4f8"
+  choice-border: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  choice-selected-border: "hsl(0, 0%, 0%)"
+  choice-selected-surface: "hsl(0, 0%, 94%)"
   error-surface: "#fff0e9"
   error-ink: "#933e25"
   notice-surface: "#e8f3ed"
   notice-ink: "#285d46"
-  emphasis: "#2a617b"
-  text-link: "#1d5a79"
-  text-selection: "#dcebf3"
-  scrollbar-thumb: "#9babb5"
+  emphasis: "hsl(66, 60%, 28%)"
+  text-link: "hsl(66, 60%, 28%)"
+  text-selection: "hsl(66.4, 67%, 64.3%)"
+  scrollbar-thumb: "hsl(20, 4.7619047619%, 87.6470588235%)"
   preview-shadow: "#17395119"
-  preview-label: "#d6e6ee"
-  live-dot: "#bad7e6"
-  strip-surface: "#f0f4f6"
-  step-number: "#607481"
-  close-emphasis: "#c6dce8"
-  close-text: "#d8e6ee"
-  check-icon: "#2b647c"
-  plan-surface: "#ecf2f6"
-  note-surface: "#edf3f7"
-  note-ink: "#31536a"
-  banner-border: "#d5e2ea"
-  banner-surface: "#eef4f7"
-  banner-ink: "#34566c"
-  nav-hover: "#f2f6f8"
-  row-hover: "#286d91"
-  context-surface: "#edf2f5"
-  tab-selected: "#dfebf2"
-  update-ink: "#435c6c"
-  empty-icon: "#698391"
-  monogram-surface: "#e5edf2"
-  monogram-ink: "#335a71"
+  preview-label: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  live-dot: "hsl(66.4, 67%, 64.3%)"
+  strip-surface: "hsl(0, 0%, 96%)"
+  step-number: "hsl(60, 0.826446281%, 27.7254901961%)"
+  close-emphasis: "hsl(66.4, 67%, 64.3%)"
+  close-text: "hsl(0, 0%, 100%)"
+  check-icon: "hsl(66, 60%, 28%)"
+  plan-surface: "hsl(0, 0%, 96%)"
+  note-surface: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  note-ink: "hsl(0, 0%, 0%)"
+  banner-border: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  banner-surface: "hsl(0, 0%, 96%)"
+  banner-ink: "hsl(0, 0%, 0%)"
+  nav-hover: "hsl(0, 0%, 94%)"
+  row-hover: "hsl(0, 0%, 0%)"
+  context-surface: "hsl(0, 0%, 96%)"
+  tab-selected: "hsl(0, 0%, 94%)"
+  update-ink: "hsl(60, 0.826446281%, 27.7254901961%)"
+  empty-icon: "hsl(60, 0.826446281%, 27.7254901961%)"
+  monogram-surface: "hsl(20, 4.7619047619%, 87.6470588235%)"
+  monogram-ink: "hsl(0, 0%, 0%)"
 roles:
-  primary: "{colors.structure}"
-  on-primary: "{colors.on-structure}"
-  secondary-container: "{colors.selection}"
-  on-secondary-container: "{colors.structure}"
-  tertiary: "{colors.ok}"
-  error: "{colors.accent}"
-  on-error: "{colors.on-structure}"
-  error-container: "{colors.accent-soft}"
-  on-error-container: "{colors.accent}"
-  background: "{colors.surface}"
-  surface: "{colors.surface}"
-  surface-container-lowest: "{colors.raised}"
-  on-surface: "{colors.ink}"
-  on-surface-variant: "{colors.muted}"
-  outline: "{colors.control}"
-  outline-variant: "{colors.line}"
+  primary: hsl(66.4, 67%, 64.3%)
+  primary-ink: hsl(66, 60%, 28%)
+  on-primary: hsl(67, 40%, 12%)
+  primary-container: hsl(66.4, 67%, 64.3%)
+  on-primary-container: hsl(67, 40%, 12%)
+  secondary-container: hsl(0, 0%, 94%)
+  on-secondary-container: hsl(0, 0%, 0%)
+  tertiary: hsl(145, 67%, 28%)
+  error: hsl(0, 63%, 31%)
+  on-error: hsl(0, 0%, 100%)
+  error-container: hsl(0, 65%, 94%)
+  on-error-container: hsl(0, 63%, 31%)
+  background: hsl(0, 0%, 100%)
+  on-background: hsl(0, 0%, 0%)
+  surface: hsl(0, 0%, 100%)
+  surface-container-lowest: hsl(0, 0%, 100%)
+  surface-container-low: hsl(0, 0%, 98.8235294118%)
+  surface-container: hsl(0, 0%, 100%)
+  surface-container-high: hsl(0, 0%, 100%)
+  on-surface: hsl(0, 0%, 0%)
+  on-surface-variant: hsl(60, 0.826446281%, 27.7254901961%)
+  outline: hsl(20, 4.7619047619%, 87.6470588235%)
+  outline-variant: hsl(20, 4.7619047619%, 87.6470588235%)
+  input: hsl(0, 0%, 0%)
+  focus-ring: hsl(217.2, 91.2%, 59.8%)
+  sidebar: hsl(0, 0%, 96%)
+  on-sidebar: hsl(0, 0%, 0%)
+  selected: hsl(0, 0%, 94%)
 rolesDark:
-  primary: "{colors.structure-dark}"
-  on-primary: "{colors.on-structure-dark}"
-  secondary-container: "{colors.selection-dark}"
-  on-secondary-container: "{colors.structure-dark}"
-  tertiary: "{colors.ok-dark}"
-  error: "{colors.accent-dark}"
-  on-error: "{colors.on-structure-dark}"
-  error-container: "{colors.accent-soft-dark}"
-  on-error-container: "{colors.accent-dark}"
-  background: "{colors.surface-dark}"
-  surface: "{colors.surface-dark}"
-  surface-container-lowest: "{colors.raised-dark}"
-  on-surface: "{colors.ink-dark}"
-  on-surface-variant: "{colors.muted-dark}"
-  outline: "{colors.control-dark}"
-  outline-variant: "{colors.line-dark}"
+  primary: hsl(67, 78%, 68%)
+  primary-ink: hsl(67, 78%, 68%)
+  on-primary: hsl(154, 25%, 9%)
+  primary-container: hsl(67, 78%, 68%)
+  on-primary-container: hsl(154, 25%, 9%)
+  secondary-container: hsl(0, 0%, 18%)
+  on-secondary-container: hsl(0, 0%, 100%)
+  tertiary: hsl(145, 58%, 55%)
+  error: hsl(0, 70%, 88%)
+  on-error: hsl(0, 0%, 10.1960784314%)
+  error-container: hsl(0, 35%, 22%)
+  on-error-container: hsl(0, 70%, 88%)
+  background: hsl(0, 0%, 10.1960784314%)
+  on-background: hsl(0, 0%, 100%)
+  surface: hsl(0, 0%, 10.1960784314%)
+  surface-container-lowest: hsl(0, 0%, 9.0196078431%)
+  surface-container-low: hsl(0, 0%, 11.7647058824%)
+  surface-container: hsl(0, 0%, 14.5098039216%)
+  surface-container-high: hsl(0, 0%, 17.2549019608%)
+  on-surface: hsl(0, 0%, 100%)
+  on-surface-variant: hsl(20, 4.7619047619%, 83.6470588235%)
+  outline: hsl(60, 0.826446281%, 23.7254901961%)
+  outline-variant: hsl(60, 0.826446281%, 23.7254901961%)
+  input: hsl(20, 4.7619047619%, 87.6470588235%)
+  focus-ring: hsl(213.1, 93.9%, 67.8%)
+  sidebar: hsl(0, 0%, 14.9019607843%)
+  on-sidebar: hsl(0, 0%, 100%)
+  selected: hsl(0, 0%, 18%)
 typography:
   body:
-    fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif'
+    fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      sans-serif'
     fontSize: "15px"
     fontWeight: 400
-    lineHeight: "24px"
+    lineHeight: "22px"
   small:
     fontSize: "13px"
-    lineHeight: "20px"
+    lineHeight: "18px"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+    fontWeight: 400
   caption:
-    fontSize: "12px"
-    lineHeight: "16px"
+    fontSize: "13px"
+    lineHeight: "18px"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+    fontWeight: 400
   overline:
     fontSize: "12px"
     fontWeight: 600
     lineHeight: "16px"
     letterSpacing: "0.025em"
     textTransform: uppercase
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   label:
     fontSize: "13px"
-    fontWeight: 600
+    fontWeight: 400
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+    lineHeight: 18px
   action:
-    fontSize: "14px"
-    fontWeight: 600
-    lineHeight: 1.4
-  control:
     fontSize: "13px"
     fontWeight: 500
-    lineHeight: "20px"
+    lineHeight: 18px
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+  control:
+    fontSize: "13px"
+    fontWeight: 400
+    lineHeight: "18px"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   page-title:
-    fontSize: "24px"
-    fontWeight: 600
-    lineHeight: "32px"
+    fontSize: "22px"
+    fontWeight: 500
+    lineHeight: "28px"
     letterSpacing: "-0.025em"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   section-title:
     fontSize: "17px"
-    fontWeight: 600
+    fontWeight: 500
     lineHeight: "24px"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   figure:
     fontSize: "24px"
     fontWeight: 600
     lineHeight: "32px"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   display:
     fontSize: "clamp(40px, 5.3vw, 74px)"
     fontWeight: 550
     lineHeight: 1.1
     letterSpacing: "-.035em"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   headline:
     fontSize: "48px"
     fontWeight: 550
     lineHeight: 1.1
     letterSpacing: "-.035em"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   title:
     fontSize: "30px"
     fontWeight: 550
     lineHeight: 1.25
     letterSpacing: "-.03em"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   public-body:
     fontSize: "15px"
     lineHeight: 1.65
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   editorial:
-    fontFamily: "Georgia, serif"
+    fontFamily: "\"Source Serif 4\", Georgia, serif"
     fontWeight: 400
   wordmark:
     fontSize: "22px"
     fontWeight: 700
     lineHeight: 1
     letterSpacing: "-.025em"
+    fontFamily: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
   mono:
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation
+      Mono", "Courier New", monospace'
 rounded:
-  default: "4px"
-  tag: "4px"
-  field: "5px"
-  control: "6px"
+  default: "8px"
+  tag: "8px"
+  field: "8px"
+  control: "8px"
   context: "8px"
-  form: "10px"
-  feature: "14px"
+  form: "8px"
+  feature: "8px"
   circle: "50%"
 spacing:
-  unit: "3.75px"
+  unit: "4px"
   gutter: "30px"
   rail: "225px"
   rail-compact: "52.5px"
@@ -209,25 +253,26 @@ components:
   button-primary:
     material: Button:contained
     selector: '[data-part="button-primary"]'
-    backgroundColor: "var(--ds-role-primary)"
-    textColor: "var(--ds-role-on-primary)"
+    backgroundColor: "{roles.primary}"
+    textColor: "{roles.on-primary}"
     border: "1px solid var(--ds-role-primary)"
     rounded: "{rounded.default}"
     padding: "0 7.5px"
     minHeight: "30px"
     typography: "{typography.control}"
   button-primary-hover:
-    backgroundColor: "var(--ds-role-primary)"
+    backgroundColor: "color-mix(in srgb, {roles.primary} 92%, {roles.on-primary})"
     opacity: "0.9"
   button-primary-disabled:
-    textColor: "inherit"
+    textColor: "{roles.on-primary}"
     opacity: "0.6"
+    backgroundColor: "{roles.primary}"
   button-secondary:
     material: Button:outlined
     selector: '[data-part="button-secondary"]'
     backgroundColor: "var(--ds-role-surface-container-lowest)"
     textColor: "var(--ds-role-on-surface)"
-    border: "1px solid var(--ds-role-outline)"
+    border: "1px solid var(--ds-role-input)"
     rounded: "{rounded.default}"
     padding: "0 7.5px"
     minHeight: "30px"
@@ -241,7 +286,7 @@ components:
   button-quiet:
     material: Button:text
     selector: '[data-part="button-quiet"]'
-    textColor: "var(--ds-role-primary)"
+    textColor: "var(--ds-role-primary-ink)"
     border: "1px solid transparent"
     rounded: "{rounded.default}"
     padding: "0 7.5px"
@@ -255,7 +300,7 @@ components:
   text-link:
     material: Link
     selector: '[data-part="text-link"]'
-    textColor: "var(--ds-role-primary)"
+    textColor: "var(--ds-role-primary-ink)"
     textDecoration: underline
     textUnderlineOffset: "2px"
   text-link-small:
@@ -268,14 +313,14 @@ components:
     textColor: "var(--ds-role-on-surface)"
     textDecoration: "none"
   text-link-quiet-hover:
-    textColor: "var(--ds-role-primary)"
+    textColor: "var(--ds-role-primary-ink)"
     textDecoration: underline
   control-input:
     material: none
     selector: '[data-part="control-input"]'
     backgroundColor: "var(--ds-role-surface-container-lowest)"
     textColor: "var(--ds-role-on-surface)"
-    border: "1px solid var(--ds-role-outline)"
+    border: "1px solid var(--ds-role-input)"
     rounded: "{rounded.default}"
     minHeight: "30px"
     typography: "{typography.small}"
@@ -312,7 +357,7 @@ components:
     backgroundColor: "var(--ds-role-secondary-container)"
   nav-link-selected:
     backgroundColor: "var(--ds-role-secondary-container)"
-    textColor: "var(--ds-role-primary)"
+    textColor: "var(--ds-role-primary-ink)"
     fontWeight: "600"
   nav-link-compact:
     material: ListItemButton
@@ -430,31 +475,35 @@ components:
   public-button:
     material: Button:contained
     selector: '[data-part="public-button"]'
-    backgroundColor: "{colors.bw-navy}"
-    textColor: "{colors.white}"
+    backgroundColor: "{roles.primary}"
+    textColor: "{roles.on-primary}"
     rounded: "{rounded.control}"
     padding: "12px 22px"
     minHeight: "48px"
     typography: "{typography.action}"
     textDecoration: "none"
   public-button-hover:
-    backgroundColor: "{colors.button-hover}"
+    backgroundColor: "color-mix(in srgb, {roles.primary} 92%, {roles.on-primary})"
   public-button-disabled:
     opacity: "0.6"
+    backgroundColor: "{roles.primary}"
+    textColor: "{roles.on-primary}"
   public-button-small:
     material: Button:contained
     selector: '[data-part="public-button-small"]'
-    backgroundColor: "{colors.bw-navy}"
-    textColor: "{colors.white}"
+    backgroundColor: "{roles.primary}"
+    textColor: "{roles.on-primary}"
     rounded: "{rounded.control}"
     padding: "10px 18px"
     minHeight: "42px"
     typography: "{typography.action}"
     textDecoration: "none"
   public-button-small-hover:
-    backgroundColor: "{colors.button-hover}"
+    backgroundColor: "color-mix(in srgb, {roles.primary} 92%, {roles.on-primary})"
   public-button-small-disabled:
     opacity: "0.6"
+    backgroundColor: "{roles.primary}"
+    textColor: "{roles.on-primary}"
   public-button-light:
     material: Button:contained
     selector: '[data-part="public-button-light"]'
@@ -644,7 +693,7 @@ components:
   brand-local:
     material: Link
     selector: '[data-part~="brand-local"]'
-    textColor: "var(--ds-role-primary)"
+    textColor: "var(--ds-role-primary-ink)"
   public-header:
     material: none
     selector: '[data-part="public-header"]'
@@ -657,24 +706,26 @@ components:
 
 # Design System: Bev Watch
 
+Modified adaptation of the public [Intent tokens](https://github.com/intent-hq/cloudlands-fe/blob/c22a314adf6a8d796eb59f92bf389e5d82ea18fb/src/lib/styles/tokens.css), pinned at c22a314adf6a8d796eb59f92bf389e5d82ea18fb. Neutral surfaces, chartreuse actions with paired dark ink, Inter UI typography, Source Serif 4 editorial typography, 8px corners and a 4px spacing unit are shared defaults. Product layouts, interaction sizes and semantic severity labels remain intact. The source is Apache-2.0, and fonts use the SIL Open Font License; redistribution notices are served under web/public/licenses/intent/. The existing public design compiler remains in use, so roles are expanded here rather than adding a private package dependency.
+
 This document records the Bev Watch tokens, component patterns, and responsive behavior. The frontmatter above is the source the shared design framework reads: `ds sync` in `web/` turns it into the CSS variables, the Material UI theme and the component styles the pages use.
 
 ## Overview
 
-Bev Watch extends the existing application's blue and neutral interface with a compact red beverage mark. The implemented system combines large, tightly tracked public headings with a denser workspace built from lists, restrained panels, visible labels, and source context.
+Bev Watch uses the Intent visual system with neutral surfaces, chartreuse primary actions and the existing compact red beverage mark. The implemented system combines large, tightly tracked public headings with a denser workspace built from lists, restrained panels, visible labels, and source context.
 
 This record captures the public website, five-step onboarding, browser-local preview, and the local application behind `regwatch ui`. The public surfaces explicitly use a light color scheme. The local application follows the light and dark roles in the frontmatter, which switch with the system setting.
 
 **Key Characteristics:**
 
-- Navy actions and selection treatments on pale blue-gray surfaces.
-- System sans typography with Georgia emphasis on public headings and briefing paper.
+- Chartreuse actions with dark ink and neutral selection surfaces.
+- Self-hosted Inter typography with Source Serif 4 emphasis on public headings and briefing paper.
 - Thin dividers, compact tags, and modest corner radii.
 - Larger public composition and compact task-oriented workspace density.
 
 ## Tokens
 
-Colors carry Material roles for the local application: `roles` holds the light scheme and `rolesDark` the dark one, and every local component refers to a role through its `--ds-role-*` variable so it follows the system setting. The public website and preview refer to fixed `colors` only. Spacing has an explicit unit of 3.75px, the 0.25rem step at the application's 15px root size, so a spacing of 2 in a component is 7.5px. Each component names the Material UI component it renders as (`material`) and the selector that finds it in the built pages (`selector`); every rendered part carries a matching `data-part` attribute.
+Colors carry Material roles for the local application: `roles` holds the light scheme and `rolesDark` the dark one, and every local component refers to a role through its `--ds-role-*` variable so it follows the system setting. The public website and preview refer to fixed `colors` only. Spacing has an explicit 4px unit, so a spacing of 2 in a component is 8px. Each component names the Material UI component it renders as (`material`) and the selector that finds it in the built pages (`selector`); every rendered part carries a matching `data-part` attribute.
 
 These components are the only source of each part's look: colors, fill, border, radius, typography, padding, shadow and opacity, with their hover, selected and disabled states. Every part renders through `Piece` in [the shared parts](web/src/components/ui.tsx), which applies its component's style, so a component edited here changes the rendered pages after `ds sync` and a build. A part that differs from its component by more than layout names a second component as its `modifier` (for example `panel-compact`, `text-link-quiet` or `brand-local`); the modifier's style and states apply over the component's, and its name joins the element's `data-part`, which is why a modifier's selector matches with `~=`. The sx a page passes beside a part keeps only what a component cannot express: display, grid and flex layout, position, sizing, margins and overflow; breakpoint overrides; descendant rules for a part's children; transitions and the cursor. [Application Styles](web/styles/app.css) hold no component style, only the focus ring, tabular numbers, print and reduced-motion rules, all from `--ds-*` variables. The local application ships prebuilt in `regwatch/web/`, so a change runs `ds sync` and the build, and its pull request carries the rebuilt pages that CI compares with a fresh build.
 
@@ -682,7 +733,7 @@ These components are the only source of each part's look: colors, fill, border, 
 
 ### Primary
 
-Muted navy carries primary actions, active navigation, progress markers, and the closing public section. The primary button hover color is a lighter blue. The focus token supplies a visible keyboard outline across controls.
+Chartreuse carries primary actions with paired dark ink. Neutral selection surfaces and dark text carry navigation; the closing public section retains an inverse neutral surface. The focus token supplies a visible keyboard outline across controls.
 
 ### Secondary
 
@@ -694,7 +745,7 @@ Paper is the page background; raised white holds forms, the sidebar, and preview
 
 ## Typography
 
-The body uses the system sans stack defined in the token block. Georgia supplies italic emphasis in public and onboarding headings and the company heading on exported briefing paper. There is no downloaded font; identifiers and commands use the system monospace stack.
+The body uses self-hosted Inter. Self-hosted Source Serif 4 supplies italic emphasis in public and onboarding headings and the company heading on exported briefing paper. Identifiers and commands retain the system monospace stack.
 
 | Role | Implemented Use |
 | --- | --- |
@@ -731,9 +782,9 @@ Tags have the smallest rounded corners; fields and navigation use slightly large
 
 ### Buttons
 
-Primary buttons pair navy with white text, a minimum height of (48px), (14px) semibold type, and a (12px) internal gap. Small buttons use a minimum height of (42px); the narrow header variant becomes (40px) at (540px). The light variant is used against the navy closing section. Outline buttons have a transparent background and a (1px) border. Disabled primary and outline buttons use (.6) opacity and a not-allowed cursor. Text actions use a blue label and an underline that appears on hover. The local application uses compact (30px) buttons in three tones: primary, secondary and quiet.
+Primary buttons pair chartreuse with dark ink, a minimum height of (48px), (14px) semibold type, and a (12px) internal gap. Small buttons use a minimum height of (42px); the narrow header variant becomes (40px) at (540px). The light variant is used against the navy closing section. Outline buttons have a transparent background and a (1px) border. Disabled primary and outline buttons use (.6) opacity and a not-allowed cursor. Text actions use primary-ink and an underline that appears on hover. The local application uses compact (30px) buttons in three tones: primary, secondary and quiet.
 
-All interactive elements retain the global keyboard focus treatment: a (2px) outline with a (2px) offset.
+All interactive elements retain the global keyboard focus treatment: a (1px) outline with a (2px) offset.
 
 ### Inputs And Choices
 
@@ -757,7 +808,7 @@ The mark is an inline vector with the red fill token and white (2px) strokes. â€
 
 ## Do's and Don'ts
 
-- **Do** reuse the navy action, pale selection, and neutral surface roles.
+- **Do** reuse the chartreuse action, paired dark ink, neutral selection, and surface roles.
 - **Do** preserve visible labels, keyboard focus, semantic selection states, and synthetic-preview labeling.
 - **Do** follow the implemented responsive changes for progress, navigation, lists, and forms.
 - **Don't** apply the local application's dark roles to the explicitly light public and preview surfaces.
