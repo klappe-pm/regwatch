@@ -37,10 +37,24 @@ after(async () => {
 });
 
 const origin = (server) => `http://127.0.0.1:${server.address().port}`;
-const rgb = (hex) => {
-  const n = parseInt(hex.slice(1, 7), 16);
-  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-};
+async function rgb(page, color) {
+  return page.evaluate((sourceColor) => {
+    if (!CSS.supports("color", sourceColor)) throw new Error(`Invalid source color: ${sourceColor}`);
+    const host = document.createElement("span");
+    const shadow = host.attachShadow({ mode: "closed" });
+    const probe = document.createElement("span");
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(`span { color: ${sourceColor}; }`);
+    shadow.adoptedStyleSheets = [sheet];
+    shadow.append(probe);
+    document.body.append(host);
+    try {
+      return getComputedStyle(probe).color;
+    } finally {
+      host.remove();
+    }
+  }, color);
+}
 
 /** Open a page and report what the policy refused, script errors, and how it is styled. */
 async function open(url, colorScheme = "light", viewport = { width: 1280, height: 900 }) {
@@ -75,7 +89,7 @@ for (const path of LOCAL_PAGES) {
       const { context, problems, state, page } = await open(`${origin(servers.local)}${path}`, scheme);
       assert.deepEqual(problems, [], `${path} ${scheme}`);
       assert.ok(state.adopted > 10, `${path} has no Material UI styles applied`);
-      assert.equal(state.background, rgb(surface), `${path} ${scheme} background`);
+      assert.equal(state.background, await rgb(page, surface), `${path} ${scheme} background`);
       assert.ok(state.heading.length > 0, `${path} has no heading`);
       assert.ok(await page.locator('[data-part="nav-rail"]').isVisible(), `${path} navigation`);
       await context.close();
@@ -86,14 +100,36 @@ for (const path of LOCAL_PAGES) {
 for (const path of PUBLIC_PAGES) {
   test(`public ${path} renders styled under the policy and stays light`, async (t) => {
     if (!servers.site) return t.skip("run npm run build:site first");
-    const { context, problems, state } = await open(`${origin(servers.site)}${path}`, "dark");
+    const { context, problems, state, page } = await open(`${origin(servers.site)}${path}`, "dark");
     assert.deepEqual(problems, [], path);
     assert.ok(state.adopted > 10, `${path} has no Material UI styles applied`);
     assert.equal(state.theme, "light");
-    assert.notEqual(state.background, rgb(spec.colors["surface-dark"]), `${path} turned dark`);
+    assert.notEqual(state.background, await rgb(page, spec.colors["surface-dark"]), `${path} turned dark`);
     await context.close();
   });
 }
+
+test("source colors normalize hex and HSL while wrong rendered colors still fail", async () => {
+  const { context, page, problems, state } = await open(origin(servers.local));
+  assert.equal(await rgb(page, "#ffffff"), "rgb(255, 255, 255)");
+  assert.equal(await rgb(page, "hsl(0, 0%, 100%)"), "rgb(255, 255, 255)");
+  await assert.rejects(rgb(page, "not-a-color"), /Invalid source color/);
+  const expected = await rgb(page, spec.colors.surface);
+  assert.equal(state.background, expected);
+  const wrong = expected === "rgb(255, 0, 255)" ? "rgb(0, 255, 0)" : "rgb(255, 0, 255)";
+  await page.evaluate((color) => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(`body { background-color: ${color} !important; }`);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  }, wrong);
+  const actual = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const sourceAfterMutation = await rgb(page, spec.colors.surface);
+  assert.equal(sourceAfterMutation, expected);
+  assert.notEqual(actual, sourceAfterMutation);
+  assert.throws(() => assert.equal(actual, sourceAfterMutation), { code: "ERR_ASSERTION" });
+  assert.deepEqual(problems, []);
+  await context.close();
+});
 
 test("onboarding checks each step and saves the watchlist in the browser", async (t) => {
   if (!servers.site) return t.skip("run npm run build:site first");
