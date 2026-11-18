@@ -22,6 +22,7 @@ from test_fetch import make, web
 from test_llm import FACTS, KEY, FakePoster, FakeProvider, answer
 from test_newsletter import FakePoster as NewsletterPoster
 from test_newsletter import append, make_png
+from test_web_build import reviewed_notice
 
 import regwatch.cli
 import regwatch.llm
@@ -565,6 +566,14 @@ WEB_EXPORT = Path(regwatch.webapi.__file__).resolve().parent / "web"
 PLURAL_HEDGE = re.compile(r"\b[a-z]{2,}\(s\)(?= [a-z]|\.(?:\s|$|\"|<))")
 
 
+def assert_authored_web_prose(path: Path, root: Path) -> None:
+    if reviewed_notice(path, root):
+        return
+    if path.suffix in (".html", ".txt", ".js"):
+        hits = PLURAL_HEDGE.findall(path.read_text(encoding="utf-8", errors="replace"))
+        assert hits == [], f"{path.name}: {hits}"
+
+
 def test_count_writes_small_numbers_in_words_and_the_right_plural() -> None:
     assert count(1, "source") == "one source"
     assert count(4, "source") == "four sources"
@@ -688,9 +697,31 @@ def test_no_rendered_output_says_s_in_brackets(project: Path, tmp_path: Path) ->
     for path in written:
         assert "(s)" not in path.read_text(encoding="utf-8", errors="replace"), path.name
     for path in WEB_EXPORT.rglob("*"):
-        if path.suffix in (".html", ".txt", ".js"):
-            hits = PLURAL_HEDGE.findall(path.read_text(encoding="utf-8", errors="replace"))
-            assert hits == [], f"{path.name}: {hits}"
+        if path.is_file():
+            assert_authored_web_prose(path, WEB_EXPORT)
+
+
+def test_notice_exception_keeps_the_authored_prose_policy(tmp_path: Path) -> None:
+    relative = Path("licenses/intent/inter-license.txt")
+    notice = tmp_path / relative
+    notice.parent.mkdir(parents=True)
+    original = (WEB_EXPORT / relative).read_bytes()
+    notice.write_bytes(original)
+    assert_authored_web_prose(notice, tmp_path)
+
+    authored = tmp_path / "authored.txt"
+    authored.write_text("An authored statement(s).", encoding="utf-8")
+    with pytest.raises(AssertionError, match=r"statement\(s\)"):
+        assert_authored_web_prose(authored, tmp_path)
+
+    notice.write_bytes(original + b"changed")
+    with pytest.raises(AssertionError, match="modified notice"):
+        assert_authored_web_prose(notice, tmp_path)
+
+    unexpected = notice.with_name("unexpected.txt")
+    unexpected.write_bytes(original)
+    with pytest.raises(AssertionError, match="unexpected notice"):
+        assert_authored_web_prose(unexpected, tmp_path)
 
 
 # --- C11: Word prints the design footer once, in the page footer -----------------------

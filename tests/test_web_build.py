@@ -10,6 +10,7 @@ make a browser load anything from another origin.
 from __future__ import annotations
 
 import re
+from hashlib import sha256
 from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -85,10 +86,69 @@ def allowed(url: str) -> bool:
     return "." not in host
 
 
+# These exact public notice texts name license URLs without loading remote resources.
+# Pin their bytes so the exception cannot conceal modified or unexpected files.
+NOTICE_DIGESTS = {
+    "licenses/intent/LICENSE": ("cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"),
+    "licenses/intent/NOTICE": ("779c9b5a30c05099b12def9cb89e86d0bd7975f1bd3cedc64be02086fbb7c2f8"),
+    "licenses/intent/inter-license.txt": (
+        "3b0a5fca3d17942cde889069889dedbbbd075e9b599968c82a95f4d944e9b345"
+    ),
+    "licenses/intent/source-serif-license.txt": (
+        "18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3"
+    ),
+}
+
+
+def reviewed_notice(path: Path, root: Path = WEB) -> bool:
+    relative = path.relative_to(root).as_posix()
+    if not relative.startswith("licenses/"):
+        return False
+    assert relative in NOTICE_DIGESTS, f"unexpected notice: {relative}"
+    assert sha256(path.read_bytes()).hexdigest() == NOTICE_DIGESTS[relative], (
+        f"modified notice: {relative}"
+    )
+    return True
+
+
+@pytest.mark.repo_only
+def test_notice_digests_match_the_reviewed_public_source() -> None:
+    for relative, digest in NOTICE_DIGESTS.items():
+        assert sha256((ROOT / "web" / "public" / relative).read_bytes()).hexdigest() == digest
+
+
+@pytest.mark.parametrize("relative", NOTICE_DIGESTS)
+def test_modified_notice_is_rejected(relative: str, tmp_path: Path) -> None:
+    notice = tmp_path / relative
+    notice.parent.mkdir(parents=True)
+    notice.write_bytes((WEB / relative).read_bytes())
+    assert reviewed_notice(notice, tmp_path)
+    notice.write_bytes(notice.read_bytes() + b"changed")
+    with pytest.raises(AssertionError, match="modified notice"):
+        reviewed_notice(notice, tmp_path)
+
+
+def test_unexpected_notice_is_rejected(tmp_path: Path) -> None:
+    notice = tmp_path / "licenses" / "intent" / "unexpected.txt"
+    notice.parent.mkdir(parents=True)
+    notice.write_text("https://external.example/runtime.js", encoding="utf-8")
+    with pytest.raises(AssertionError, match="unexpected notice"):
+        reviewed_notice(notice, tmp_path)
+
+
+def test_notice_exception_does_not_cover_runtime_files(tmp_path: Path) -> None:
+    script = tmp_path / "runtime.js"
+    script.write_bytes((WEB / "licenses" / "intent" / "NOTICE").read_bytes())
+    assert not reviewed_notice(script, tmp_path)
+    assert not allowed("https://github.com/intent-hq")
+    assert not allowed("http://www.apache.org/licenses/LICENSE-2.0")
+
+
 def test_no_built_file_refers_to_another_origin() -> None:
     found = {
         url: path.relative_to(WEB).as_posix()
         for path in built_files()
+        if not reviewed_notice(path)
         for url in URL.findall(path.read_bytes().decode("utf-8", errors="replace"))
     }
     assert found, "the scan found nothing at all, so it is not reading the files"
@@ -172,7 +232,9 @@ def test_every_web_dependency_is_pinned_exactly() -> None:
     for name, entry in packages.items():
         if not name:
             continue
-        if name == "design-system" or (name == "node_modules/regwatch-design" and entry.get("link")):
+        if name == "design-system" or (
+            name == "node_modules/regwatch-design" and entry.get("link")
+        ):
             # The in-repository design system is source under version control, not a
             # downloaded tarball, so there is nothing to hash.
             continue
